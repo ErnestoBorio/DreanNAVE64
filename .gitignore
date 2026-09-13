@@ -1,0 +1,11 @@
+# Reference assets directory
+refes/
+
+# macOS metadata
+.DS_Store
+
+# Build output binaries & map files
+bin/
+*.prg
+*.vs
+*.map
