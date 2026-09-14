@@ -1,0 +1,8 @@
+{
+    "nave0.png": {
+        "type": "sprite",
+        "multicolor": true,
+        "frame_width": 24,
+        "frame_height": 21
+    }
+}

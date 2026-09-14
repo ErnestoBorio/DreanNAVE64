@@ -20,6 +20,7 @@
 #define VIC_IRQ_ENABLE      (*(volatile uint8_t*)0xD01A)
 #define VIC_BORDER_COLOR    (*(volatile uint8_t*)0xD020)
 #define VIC_BG_COLOR0       (*(volatile uint8_t*)0xD021)
+#define VIC_SPR_MULTICOLOR  (*(volatile uint8_t*)0xD01C)
 #define VIC_SPR_MC0         (*(volatile uint8_t*)0xD025)
 #define VIC_SPR_MC1         (*(volatile uint8_t*)0xD026)
 #define VIC_SPR0_COLOR      (*(volatile uint8_t*)0xD027)

@@ -1,36 +1,11 @@
 #include "player.h"
 #include "c64_hardware.h"
+#include "gfx_player.h"
 
 Player g_player;
 
 #define SPRITE_RAM_ADDR ((volatile uint8_t*)0x0E00)
 #define PLAYER_SPRITE_BLOCK 56
-
-// Placeholder 8x8 tiny ship sprite pattern (facing right)
-static const uint8_t g_tiny_ship_sprite[64] = {
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0xC0, 0x00, 0x00, // Top wing:   ##
-    0xF0, 0x00, 0x00, // Cockpit:   ####
-    0xFC, 0x00, 0x00, // Main body: ######
-    0xFF, 0x00, 0x00, // Nose tip:  ########
-    0xFC, 0x00, 0x00, // Main body: ######
-    0xF0, 0x00, 0x00, // Cockpit:   ####
-    0xC0, 0x00, 0x00, // Bottom wing:##
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00,
-    0x00
-};
 
 void player_init(void) {
     g_player.x = 60;
@@ -38,19 +13,26 @@ void player_init(void) {
     g_player.power_level = 0;
     g_player.alive = true;
 
-    // Load sprite pattern into VIC-II sprite block RAM (0x0E00)
+    // Copy converted assets/nave0.png multicolor sprite bytes into VIC-II sprite block RAM (0x0E00)
     for (uint8_t i = 0; i < 64; i++) {
-        SPRITE_RAM_ADDR[i] = g_tiny_ship_sprite[i];
+        SPRITE_RAM_ADDR[i] = g_player_nave0_sprite[i];
     }
 
     // Set Sprite 0 pointer to block 56 (0x0E00 / 64 = 56)
     SPRITE_PTRS[0] = PLAYER_SPRITE_BLOCK;
 
-    // Enable Sprite 0 and set color to White
+    // Enable Sprite 0
     VIC_SPR_ENABLE |= 0x01;
-    VIC_SPR0_COLOR = COLOR_WHITE;
 
-    // Disable Y-expansion for tiny 8x8 ship
+    // Enable Multicolor Mode for Sprite 0
+    VIC_SPR_MULTICOLOR |= 0x01;
+
+    // Configure Sprite Colors for Multicolor Mode
+    VIC_SPR0_COLOR = COLOR_WHITE;       // %10 = White (Main ship highlight)
+    VIC_SPR_MC0 = COLOR_MEDIUM_GRAY;    // %01 = Medium Gray (Outline / Details)
+    VIC_SPR_MC1 = COLOR_LIGHT_BLUE;     // %11 = Light Blue (Cockpit / Accent)
+
+    // Disable Y-expansion for tiny ship
     VIC_SPR_EXP_Y &= ~0x01;
 }
 
