@@ -40,3 +40,4 @@ void starfield_update(void) {
         SCREEN_RAM[row_offset + 39] = leftmost_char;
     }
 }
+

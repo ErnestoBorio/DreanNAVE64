@@ -16,3 +16,4 @@ void input_init(void);
 void input_update(InputState* state);
 
 #endif // INPUT_H
+
