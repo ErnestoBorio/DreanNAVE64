@@ -11,3 +11,4 @@ void enemies_update(void) {
 void enemies_render(void) {
     // Phase 0 stub
 }
+

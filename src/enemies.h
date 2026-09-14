@@ -6,3 +6,4 @@ void enemies_update(void);
 void enemies_render(void);
 
 #endif // ENEMIES_H
+

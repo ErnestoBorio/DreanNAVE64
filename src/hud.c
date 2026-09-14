@@ -11,3 +11,4 @@ void hud_update(void) {
 void hud_render(void) {
     // Phase 0 stub
 }
+

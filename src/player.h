@@ -12,6 +12,8 @@ typedef struct {
     bool alive;
 } Player;
 
+extern Player g_player;
+
 void player_init(void);
 void player_update(const InputState* input);
 void player_render(void);

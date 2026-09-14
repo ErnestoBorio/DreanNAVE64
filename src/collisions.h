@@ -5,3 +5,4 @@ void collisions_init(void);
 void collisions_check(void);
 
 #endif // COLLISIONS_H
+

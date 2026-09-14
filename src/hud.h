@@ -6,3 +6,4 @@ void hud_update(void);
 void hud_render(void);
 
 #endif // HUD_H
+

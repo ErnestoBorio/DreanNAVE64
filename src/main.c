@@ -1,39 +1,51 @@
 #include "c64_hardware.h"
 #include "input.h"
 #include "player.h"
+#include "starfield.h"
 #include "enemies.h"
 #include "collisions.h"
 #include "hud.h"
 
+// 50 Hz PAL Frame Synchronization Helper
+static void wait_vsync(void) {
+    // Wait until VIC-II raster line reaches line 248
+    while (VIC_RASTER != 0xF8);
+    while (VIC_RASTER == 0xF8);
+}
+
 int main(void) {
-    // Phase 0: Initialize VIC-II screen & clear state
+    // Set screen border and background to high-contrast black
     VIC_BORDER_COLOR = COLOR_BLACK;
     VIC_BG_COLOR0 = COLOR_BLACK;
 
-    // Clear Screen RAM (0x0400) and Color RAM (0xD800)
-    for (uint16_t i = 0; i < 1000; i++) {
-        SCREEN_RAM[i] = 0x20; // Space
-        COLOR_RAM[i] = COLOR_WHITE;
-    }
-
-    // Initialize placeholder modules
+    // Initialize subsystems
     input_init();
+    starfield_init();
     player_init();
     enemies_init();
     collisions_init();
     hud_init();
 
-    // Stable main frame loop (Phase 0 Skeleton)
-    while (1) {
-        // Wait for raster line to maintain stable loop
-        while (VIC_RASTER != 0xF8);
-        while (VIC_RASTER == 0xF8);
+    InputState input;
 
-        input_update(0);
-        player_update(0);
+    // Main 50 Hz Game Loop
+    while (1) {
+        wait_vsync();
+
+        // 1. Read Input (Joystick 2, R-D-F-G, U-H-J-K)
+        input_update(&input);
+
+        // 2. Update Game Entities & World Motion
+        player_update(&input);
+        starfield_update();
         enemies_update();
         collisions_check();
         hud_update();
+
+        // 3. Render Graphics & Hardware Sprites
+        player_render();
+        enemies_render();
+        hud_render();
     }
 
     return 0;
