@@ -272,24 +272,23 @@ Acceptance:
 
 ## Phase 9: Background And Scrolling
 
-Goal: sell the left-to-right movement without blocking gameplay.
+Goal: sell the left-to-right movement without blocking gameplay using smooth pixel scrolling.
 
 Tasks:
 
 - Add a starfield scrolling from right to left, opposite the player's forward direction.
-- Use character-based scrolling as the first approach.
+- Implement Option 1: VIC-II hardware smooth pixel scrolling using `$D016` (VIC_CONTROL2 fine scroll 7..0 combined with 38-column mode and Screen RAM character shifts on wrap).
 - Define 8 reusable star characters for different densities and shapes.
 - Define 4-character, 2x2-cell graphics for each power-up or bonus type.
 - Place power-ups directly in the scrolling background map so they cost no sprites.
-- Use layered star speeds only if affordable after the basic character scroll is stable.
-- Add occasional mechanical/space debris character patterns inspired by the references if charset space allows.
 - Make sure background brightness does not hide missiles or bullets.
 
 Acceptance:
 
+- The background scrolls smoothly at 1-pixel granular steps via VIC-II hardware `$D016` register manipulation without 8-pixel jitter.
 - The screen clearly feels like forward motion through space.
 - Gameplay objects remain readable over the background.
-- Character scrolling cost is predictable.
+- Hardware smooth scrolling cost and raster timing remain within PAL 50 Hz frame budget.
 
 ## Phase 10: HUD And Game State
 
