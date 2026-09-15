@@ -1,6 +1,6 @@
 #include "player.h"
 #include "c64_hardware.h"
-#include "gfx_player.h"
+#include "sprites_data.h"
 
 Player g_player;
 
@@ -13,9 +13,9 @@ void player_init(void) {
     g_player.power_level = 0;
     g_player.alive = true;
 
-    // Copy converted assets/nave0.png multicolor sprite bytes into VIC-II sprite block RAM (0x0E00)
+    // Copy official Sprite 1 (Player ship multicolor sprite bytes) into VIC-II sprite block RAM (0x0E00)
     for (uint8_t i = 0; i < 64; i++) {
-        SPRITE_RAM_ADDR[i] = g_player_nave0_sprite[i];
+        SPRITE_RAM_ADDR[i] = g_sprite_player_ship[i];
     }
 
     // Set Sprite 0 pointer to block 56 (0x0E00 / 64 = 56)

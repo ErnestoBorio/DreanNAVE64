@@ -23,6 +23,6 @@ fi
 mkdir -p bin
 
 # Build PRG and VICE symbol label map
-"$OSCAR64_BIN" -o=bin/drean_nave_64.prg -tf=prg -g src/main.c src/input.c src/player.c src/gfx_assets.c src/starfield.c src/enemies.c src/collisions.c src/hud.c
+"$OSCAR64_BIN" -o=bin/drean_nave_64.prg -tf=prg -g src/main.c src/input.c src/player.c src/sprites_data.c src/gfx_assets.c src/starfield.c src/enemies.c src/collisions.c src/hud.c
 
 echo "==> Build successful: bin/drean_nave_64.prg"
