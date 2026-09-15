@@ -8,9 +8,10 @@
 
 // 50 Hz PAL Frame Synchronization Helper
 static void wait_vsync(void) {
-    // Wait until VIC-II raster line reaches line 248
-    while (VIC_RASTER != 0xF8);
-    while (VIC_RASTER == 0xF8);
+    // 1. Wait until raster leaves bottom VBLANK region (< 240) if currently in VBLANK
+    while (VIC_RASTER >= 240);
+    // 2. Wait until raster reaches line 240 (beginning of VBLANK)
+    while (VIC_RASTER < 240);
 }
 
 int main(void) {

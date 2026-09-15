@@ -4,7 +4,8 @@
 
 #define CHARSET_RAM ((volatile uint8_t*)0x2800)
 
-static uint8_t g_scroll_timer = 0;
+static int8_t g_xscroll = 7;
+static uint8_t g_scroll_speed = 4; // High-speed arcade scrolling: 4 pixels per frame (200px/sec)
 static uint16_t g_lfsr16 = 0xACE1;
 
 // Power-of-two 64-entry weighted table matching exact user frequency rules:
@@ -60,7 +61,12 @@ void starfield_init(void) {
     // 2. Configure VIC-II Memory Setup ($D018): Screen RAM @ 0x0400, Charset RAM @ 0x2800
     VIC_MEM_SETUP = 0x1A;
 
-    // 3. Clear Screen RAM and populate initial non-repeating starfield distribution
+    // 3. Initialize fine scroll position (7) & enable 38-column window mode ($D016)
+    g_xscroll = 7;
+    g_scroll_speed = 4; // 4 pixels per frame (200px/sec)
+    VIC_CTRL2 = (VIC_CTRL2 & ~0x0F) | ((uint8_t)g_xscroll & 0x07);
+
+    // 4. Clear Screen RAM and populate initial non-repeating starfield distribution
     g_lfsr16 = 0xACE1;
     for (uint8_t row = 0; row < 25; row++) {
         uint16_t row_offset = row * 40;
@@ -71,22 +77,31 @@ void starfield_init(void) {
     }
 }
 
+void starfield_set_speed(uint8_t speed_pixels_per_frame) {
+    g_scroll_speed = speed_pixels_per_frame;
+}
+
 void starfield_update(void) {
-    g_scroll_timer++;
+    // 1. Check if the upcoming scroll step will underflow below 0
+    if (g_xscroll < (int8_t)g_scroll_speed) {
+        // Shift SCREEN_RAM 1 column left BEFORE fine scroll wraps around 8
+        volatile uint8_t* p_dst = SCREEN_RAM;
+        volatile uint8_t* p_src = SCREEN_RAM + 1;
 
-    // Scroll stars left every 3 frames for smooth readable movement
-    if (g_scroll_timer < 3) return;
-    g_scroll_timer = 0;
-
-    // Shift character row data leftwards across playfield (lines 0 to 24)
-    for (uint8_t row = 0; row < 25; row++) {
-        uint16_t row_offset = row * 40;
-
-        for (uint8_t col = 0; col < 39; col++) {
-            SCREEN_RAM[row_offset + col] = SCREEN_RAM[row_offset + col + 1];
+        for (uint8_t row = 0; row < 25; row++) {
+            for (uint8_t col = 0; col < 39; col++) {
+                *p_dst++ = *p_src++;
+            }
+            *p_dst++ = get_next_star(row);
+            p_src++; // Skip col 39 of previous row to start col 0 of next row
         }
 
-        // Spawn incoming star or blank cell at column 39 based on 16-bit PRNG & weighted frequencies
-        SCREEN_RAM[row_offset + 39] = get_next_star(row);
+        g_xscroll += 8;
     }
+
+    // 2. Advance fine scroll position by g_scroll_speed
+    g_xscroll -= (int8_t)g_scroll_speed;
+
+    // 3. Write VIC_CTRL2 ($D016) immediately in VBLANK (100% synchronized with SCREEN_RAM shift)
+    VIC_CTRL2 = (VIC_CTRL2 & ~0x0F) | ((uint8_t)g_xscroll & 0x07);
 }
