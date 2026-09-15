@@ -1,7 +1,7 @@
 #include "sprites_data.h"
 
-// Sprite 1: Player Ship (Multicolor)
-const uint8_t g_sprite_player_ship[64] = {
+// Sprite 1: Player Ship Stage 1 (Multicolor)
+const uint8_t g_sprite_player_ship_1[64] = {
     0x30, 0x00, 0x00,
     0xDC, 0x00, 0x00,
     0x57, 0x00, 0x00,
@@ -26,8 +26,8 @@ const uint8_t g_sprite_player_ship[64] = {
     0x00 // Padding byte to fill 64-byte VIC-II block
 };
 
-// Sprite 2: Enemy Ship 1 (Multicolor)
-const uint8_t g_sprite_enemy_1[64] = {
+// Sprite 2: Player Ship Stage 2 (Multicolor)
+const uint8_t g_sprite_player_ship_2[64] = {
     0x1D, 0x5C, 0x00,
     0x10, 0x00, 0x00,
     0x14, 0x00, 0x00,
@@ -52,8 +52,8 @@ const uint8_t g_sprite_enemy_1[64] = {
     0x00 // Padding byte to fill 64-byte VIC-II block
 };
 
-// Sprite 3: Enemy Ship 2 (Multicolor)
-const uint8_t g_sprite_enemy_2[64] = {
+// Sprite 3: Enemy Ship 1 (Multicolor)
+const uint8_t g_sprite_enemy_1[64] = {
     0x00, 0x33, 0x00,
     0x00, 0xDD, 0xC0,
     0x0D, 0x54, 0x00,
@@ -78,8 +78,8 @@ const uint8_t g_sprite_enemy_2[64] = {
     0x00 // Padding byte to fill 64-byte VIC-II block
 };
 
-// Sprite 4: Enemy Ship 3 (Multicolor)
-const uint8_t g_sprite_enemy_3[64] = {
+// Sprite 4: Enemy Ship 2 (Multicolor)
+const uint8_t g_sprite_enemy_2[64] = {
     0x00, 0x03, 0x70,
     0x00, 0x0D, 0x5C,
     0x00, 0x0D, 0x57,
@@ -104,8 +104,8 @@ const uint8_t g_sprite_enemy_3[64] = {
     0x00 // Padding byte to fill 64-byte VIC-II block
 };
 
-// Sprite 5: Enemy Ship 4 (Multicolor)
-const uint8_t g_sprite_enemy_4[64] = {
+// Sprite 5: Enemy Ship 3 (Multicolor)
+const uint8_t g_sprite_enemy_3[64] = {
     0x00, 0x00, 0x10,
     0x00, 0xF5, 0xDC,
     0x00, 0x00, 0x10,
@@ -130,8 +130,8 @@ const uint8_t g_sprite_enemy_4[64] = {
     0x00 // Padding byte to fill 64-byte VIC-II block
 };
 
-// Sprite 6: Enemy Ship 5 (Multicolor)
-const uint8_t g_sprite_enemy_5[64] = {
+// Sprite 6: Enemy Ship 4 (Multicolor)
+const uint8_t g_sprite_enemy_4[64] = {
     0x00, 0xDD, 0x57,
     0x00, 0x00, 0x10,
     0x00, 0x00, 0x10,
@@ -156,8 +156,8 @@ const uint8_t g_sprite_enemy_5[64] = {
     0x00 // Padding byte to fill 64-byte VIC-II block
 };
 
-// Sprite 7: Enemy Ship 6 (Multicolor)
-const uint8_t g_sprite_enemy_6[64] = {
+// Sprite 7: Enemy Ship 5 (Multicolor)
+const uint8_t g_sprite_enemy_5[64] = {
     0x00, 0x3F, 0x00,
     0x03, 0x55, 0x70,
     0x0D, 0x55, 0x5C,
@@ -182,8 +182,8 @@ const uint8_t g_sprite_enemy_6[64] = {
     0x00 // Padding byte to fill 64-byte VIC-II block
 };
 
-// Sprite 8: Enemy Ship 7 (Multicolor)
-const uint8_t g_sprite_enemy_7[64] = {
+// Sprite 8: Enemy Ship 6 (Multicolor)
+const uint8_t g_sprite_enemy_6[64] = {
     0x0D, 0x04, 0x30,
     0x03, 0x8E, 0x08,
     0x00, 0x61, 0x04,
@@ -208,8 +208,8 @@ const uint8_t g_sprite_enemy_7[64] = {
     0x00 // Padding byte to fill 64-byte VIC-II block
 };
 
-// Sprite 9: Enemy Ship 8 (Multicolor)
-const uint8_t g_sprite_enemy_8[64] = {
+// Sprite 9: Enemy Ship 7 (Multicolor)
+const uint8_t g_sprite_enemy_7[64] = {
     0x00, 0x3C, 0x00,
     0x03, 0x3C, 0xC0,
     0x03, 0x55, 0xC0,
@@ -234,8 +234,8 @@ const uint8_t g_sprite_enemy_8[64] = {
     0x00 // Padding byte to fill 64-byte VIC-II block
 };
 
-// Sprite 10: Enemy Ship 9 (Multicolor)
-const uint8_t g_sprite_enemy_9[64] = {
+// Sprite 10: Enemy Ship 8 (Multicolor)
+const uint8_t g_sprite_enemy_8[64] = {
     0x00, 0x00, 0x00,
     0x00, 0x00, 0x04,
     0x04, 0x00, 0x07,
@@ -391,7 +391,8 @@ const uint8_t g_sprite_enemy_shot_2[64] = {
 };
 
 const uint8_t* const g_all_game_sprites[NUM_GAME_SPRITES] = {
-    g_sprite_player_ship,
+    g_sprite_player_ship_1,
+    g_sprite_player_ship_2,
     g_sprite_enemy_1,
     g_sprite_enemy_2,
     g_sprite_enemy_3,
@@ -400,7 +401,6 @@ const uint8_t* const g_all_game_sprites[NUM_GAME_SPRITES] = {
     g_sprite_enemy_6,
     g_sprite_enemy_7,
     g_sprite_enemy_8,
-    g_sprite_enemy_9,
     g_sprite_player_shot_1,
     g_sprite_player_shot_2,
     g_sprite_player_shot_3,

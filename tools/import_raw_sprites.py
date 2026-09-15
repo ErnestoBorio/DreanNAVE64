@@ -357,16 +357,16 @@ RAW_SPRITE_DATA = """
 """
 
 SPRITE_NAMES = [
-    ("g_sprite_player_ship", "Sprite 1: Player Ship (Multicolor)", True),
-    ("g_sprite_enemy_1", "Sprite 2: Enemy Ship 1 (Multicolor)", True),
-    ("g_sprite_enemy_2", "Sprite 3: Enemy Ship 2 (Multicolor)", True),
-    ("g_sprite_enemy_3", "Sprite 4: Enemy Ship 3 (Multicolor)", True),
-    ("g_sprite_enemy_4", "Sprite 5: Enemy Ship 4 (Multicolor)", True),
-    ("g_sprite_enemy_5", "Sprite 6: Enemy Ship 5 (Multicolor)", True),
-    ("g_sprite_enemy_6", "Sprite 7: Enemy Ship 6 (Multicolor)", True),
-    ("g_sprite_enemy_7", "Sprite 8: Enemy Ship 7 (Multicolor)", True),
-    ("g_sprite_enemy_8", "Sprite 9: Enemy Ship 8 (Multicolor)", True),
-    ("g_sprite_enemy_9", "Sprite 10: Enemy Ship 9 (Multicolor)", True),
+    ("g_sprite_player_ship_1", "Sprite 1: Player Ship Stage 1 (Multicolor)", True),
+    ("g_sprite_player_ship_2", "Sprite 2: Player Ship Stage 2 (Multicolor)", True),
+    ("g_sprite_enemy_1", "Sprite 3: Enemy Ship 1 (Multicolor)", True),
+    ("g_sprite_enemy_2", "Sprite 4: Enemy Ship 2 (Multicolor)", True),
+    ("g_sprite_enemy_3", "Sprite 5: Enemy Ship 3 (Multicolor)", True),
+    ("g_sprite_enemy_4", "Sprite 6: Enemy Ship 4 (Multicolor)", True),
+    ("g_sprite_enemy_5", "Sprite 7: Enemy Ship 5 (Multicolor)", True),
+    ("g_sprite_enemy_6", "Sprite 8: Enemy Ship 6 (Multicolor)", True),
+    ("g_sprite_enemy_7", "Sprite 9: Enemy Ship 7 (Multicolor)", True),
+    ("g_sprite_enemy_8", "Sprite 10: Enemy Ship 8 (Multicolor)", True),
     ("g_sprite_player_shot_1", "Sprite 11: Player Shot 1 (Monochrome Hi-Res)", False),
     ("g_sprite_player_shot_2", "Sprite 12: Player Shot 2 (Monochrome Hi-Res)", False),
     ("g_sprite_player_shot_3", "Sprite 13: Player Shot 3 (Monochrome Hi-Res)", False),
@@ -409,6 +409,7 @@ def generate_c_files(sprites):
         h_content += f"// {desc}\n"
         h_content += f"extern const uint8_t {var_name}[64];\n\n"
 
+    h_content += "// Alias for default stage 1 player ship\n#define g_sprite_player_ship g_sprite_player_ship_1\n\n"
     h_content += """// Table of all 15 sprite blocks indexed 0..14 (matching 1-based sprites 1..15)
 extern const uint8_t* const g_all_game_sprites[NUM_GAME_SPRITES];
 
@@ -445,3 +446,4 @@ extern const uint8_t* const g_all_game_sprites[NUM_GAME_SPRITES];
 if __name__ == "__main__":
     sprites = parse_sprites()
     generate_c_files(sprites)
+
