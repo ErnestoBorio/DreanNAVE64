@@ -1,46 +1,33 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Build PRG",
-            "type": "shell",
-            "command": "${workspaceFolder}/build.sh",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared"
-            },
-            "problemMatcher": []
-        },
-        {
-            "label": "Convert / Reimport Assets",
-            "type": "shell",
-            "command": "python3 ${workspaceFolder}/tools/convert_assets.py",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared"
-            },
-            "problemMatcher": []
-        },
-        {
-            "label": "Run Retro Debugger",
-            "type": "shell",
-            "command": "${workspaceFolder}/run_debugger.sh",
-            "group": "test",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared"
-            },
-            "problemMatcher": []
-        }
-    ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build & Run Debugger",
+			"type": "shell",
+			"command": "${workspaceFolder}/run_debugger.sh",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Build PRG Only",
+			"type": "shell",
+			"command": "${workspaceFolder}/build.sh",
+			"presentation": {
+				"echo": true,
+				"reveal": "always",
+				"focus": false,
+				"panel": "shared"
+			},
+			"problemMatcher": []
+		}
+	]
 }

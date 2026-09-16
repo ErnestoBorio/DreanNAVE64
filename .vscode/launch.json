@@ -1,13 +1,13 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Build & Launch Retro Debugger",
-            "type": "node",
-            "request": "launch",
-            "preLaunchTask": "Build PRG",
-            "runtimeExecutable": "${workspaceFolder}/run_debugger.sh",
-            "console": "integratedTerminal"
-        }
-    ]
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Build & Launch Retro Debugger",
+			"type": "node",
+			"request": "launch",
+			"preLaunchTask": "Build PRG Only",
+			"runtimeExecutable": "${workspaceFolder}/run_debugger.sh",
+			"console": "integratedTerminal"
+		}
+	]
 }
