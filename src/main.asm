@@ -60,7 +60,9 @@ start:
     lda #<raster_isr
     sta IRQ_VECTOR + 0
     lda #>raster_isr
-    sta IRQ_VECTOR + 1
+    ; Acknowledge any pending VIC-II raster interrupt flags
+    lda #$ff
+    sta VIC_IRQ_FLAGS
 
     ; 6. Re-enable 6502 Maskable Interrupts
     cli
@@ -148,7 +150,7 @@ raster_isr:
     pla
     tax                         ; Restore X register from stack
     pla                         ; Restore Accumulator from stack
-    jmp $ea31                    ; Return via Kernal IRQ handler / RTI
+    rti                         ; Return from interrupt directly (Zero CIA/Kernal bus contention)
 
 ; ==============================================================================
 ; Include Subsystem Assembly Source Files

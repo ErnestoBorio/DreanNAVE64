@@ -135,15 +135,20 @@ weapons_update:
     adc #0
     sta g_missile_x + 1
 
-    ; Check if missile reached or exited right playfield border (X >= 320 -> MSB=1, LSB >= 64)
+    ; Check if missile reached or exited right playfield border (X >= 320)
+    ; 320 in 16-bit is $0140 (High byte = 1, Low byte = 64)
     lda g_missile_x + 1
     cmp #1
-    bcc @check_fire_request     ; If MSB == 0, X < 256, still active
+    bcc @check_fire_request     ; High byte == 0 -> X < 256, active
+    bne @despawn_missile        ; High byte > 1 -> X >= 512, despawn immediately!
+
+    ; High byte == 1 (256 <= X < 512): check low byte >= 64
     lda g_missile_x
-    cmp #64                     ; 320 - 256 = 64
-    bcc @check_fire_request
-    
-    ; Despawn missile when reaching right border
+    cmp #64
+    bcc @check_fire_request     ; Low byte < 64 -> X < 320, active
+
+@despawn_missile:
+    ; Despawn missile when reaching or exceeding right border
     lda #0
     sta g_missile_active
 
