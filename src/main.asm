@@ -125,12 +125,7 @@ main_loop:
 g_vsync_flag: !byte 0
 
 raster_isr:
-    pha                         ; Save Accumulator on stack
-    txa
-    pha                         ; Save X register on stack
-    tya
-    pha                         ; Save Y register on stack
-
+    ; (Note: A, X, Y registers are automatically pushed onto stack by Kernal $FF48 before $0314 vector call)
     ; Check if VIC-II Raster IRQ triggered
     lda VIC_IRQ_FLAGS
     and #$01
