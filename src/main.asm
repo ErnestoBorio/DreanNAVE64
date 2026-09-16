@@ -117,6 +117,8 @@ nmi_isr:
 ; Include Subsystem Assembly Source Files
 ; ==============================================================================
 !src "src/c64_hardware.asm"
+!src "src/sprites_data.asm"
+!src "src/charset_data.asm"
 !src "src/input.asm"
 !src "src/player.asm"
 !src "src/weapons.asm"
