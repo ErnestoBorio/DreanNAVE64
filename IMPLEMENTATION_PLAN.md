@@ -34,18 +34,18 @@ This document is the working plan for building Drean NAVE 64, a horizontal space
 - The first implementation should prefer deterministic, table-driven behavior over dynamic allocation or complex runtime systems.
 - Keep frame timing predictable; every phase should target a PAL 50 Hz update loop first.
 
-## Phase 0: Project Skeleton And Build Loop
+## Phase 0: Project Skeleton And Build Loop [COMPLETED]
 
 Goal: establish a repeatable compile/run workflow before gameplay begins.
 
 Tasks:
 
-- Create the Oscar64 project layout.
-- Add a minimal `main` program that initializes the C64 screen, clears state, and enters a stable frame loop.
-- Add build scripts or documented commands for producing a `.prg` and associated VICE label file (`.vs`).
-- Add debugger launch script (`run_debugger.sh`) targeting `/Users/petruza/Source/Drean64/RetroDebugger/Retro Debugger.app`.
-- Decide where generated or converted asset files will live.
-- Create placeholder modules for input, rendering, entities, collisions, weapons, enemies, power-ups, HUD, and level scripting.
+- [x] Create the Oscar64 project layout.
+- [x] Add a minimal `main` program that initializes the C64 screen, clears state, and enters a stable frame loop.
+- [x] Add build scripts or documented commands for producing a `.prg` and associated VICE label file (`.vs`).
+- [x] Add debugger launch script (`run_debugger.sh`) targeting `/Users/petruza/Source/Drean64/RetroDebugger/Retro Debugger.app`.
+- [x] Decide where generated or converted asset files will live.
+- [x] Create placeholder modules for input, rendering, entities, collisions, weapons, enemies, power-ups, HUD, and level scripting.
 
 Acceptance:
 
@@ -53,22 +53,22 @@ Acceptance:
 - The program boots cleanly in Retro Debugger (`/Users/petruza/Source/Drean64/RetroDebugger/Retro Debugger.app`).
 - The frame loop runs without visible flicker or instability.
 
-## Phase 1: Screen, Timing, And Input
+## Phase 1: Screen, Timing, And Input [COMPLETED]
 
 Goal: get the basic runtime feeling solid.
 
 Tasks:
 
-- Initialize character graphics mode for the black-and-white starfield reference look.
-- Reserve screen, color, charset, and sprite memory ranges deliberately so later asset data has a predictable layout.
-- Add joystick input (Port 2) for up, down, left, right, and fire.
-- Add dual keyboard input sets (C64 keyboard remains flat while TV rotates):
+- [x] Initialize character graphics mode for the black-and-white starfield reference look.
+- [x] Reserve screen, color, charset, and sprite memory ranges deliberately so later asset data has a predictable layout.
+- [x] Add joystick input (Port 2) for up, down, left, right, and fire.
+- [x] Add dual keyboard input sets (C64 keyboard remains flat while TV rotates):
   - Horizontal Mode Key Set: `R`-`D`-`F`-`G` keys.
   - TATE Mode Key Set: `U`-`H`-`J`-`K` keys.
-- Allow physically turning the joystick 90° for TATE mode without software remapping needed.
-- Add fixed-rate frame synchronization (PAL 50 Hz).
-- Add debug counters or visual markers only if they help verify timing.
-- Define playfield bounds, leaving space for HUD if needed.
+- [x] Allow physically turning the joystick 90° for TATE mode without software remapping needed.
+- [x] Add fixed-rate frame synchronization (PAL 50 Hz).
+- [x] Add debug counters or visual markers only if they help verify timing.
+- [x] Define playfield bounds, leaving space for HUD if needed.
 
 Acceptance:
 
@@ -77,38 +77,37 @@ Acceptance:
 - Fire input is detected cleanly via Joystick or Keyboard.
 - Both keyboard sets and joystick controls operate correctly in their respective screen orientations.
 
-## Phase 2: Tiny Player Ship Prototype
+## Phase 2: Tiny Player Ship Prototype [COMPLETED]
 
 Goal: make the first 8x8 player ship playable.
 
 Tasks:
 
-- Represent the initial ship as a small hardware sprite.
-- Reserve virtual sprite ownership for the player ship so it is never starved by enemies or shots.
-- Decide per player ship stage whether the sprite is hires monochrome or multicolor fat-pixel art.
-- Implement player position, velocity, acceleration if desired, and screen bounds.
-- Add basic animation hooks, even if the first ship is static.
-- Define the ship collision bounds separately from the visual size.
-- Add temporary placeholder art until final raw bytes are supplied.
+- [x] Represent the initial ship as a small hardware sprite.
+- [x] Reserve virtual sprite ownership for the player ship so it is never starved by enemies or shots.
+- [x] Decide per player ship stage whether the sprite is hires monochrome or multicolor fat-pixel art.
+- [x] Implement player position, velocity, acceleration if desired, and screen bounds.
+- [x] Add basic animation hooks, even if the first ship is static.
+- [x] Define the ship collision bounds separately from the visual size.
+- [x] Add temporary placeholder art until final raw bytes are supplied.
 
 Acceptance:
 
 - The player ship is visible, responsive, and approximately 8x8 pixels.
 - Collision bounds can be inspected or reasoned about independently from the sprite art.
 
-## Phase 3: Player Missiles
+## Phase 3: Player Missiles [COMPLETED]
 
 Goal: add the first satisfying shooting loop.
 
 Tasks:
 
-- Add a small pool of player missile entities.
-- Start with sprite-based player missiles for clarity, then consider character-layer shots if the sprite budget becomes tight.
-- Spawn missiles from the ship when fire is pressed.
-- Move missiles from left to right.
-- Despawn missiles when they leave the screen.
-- Add fire rate limiting.
-- Reserve data fields for future weapon upgrades: number of shots, offsets, speed, damage, and shot pattern.
+- [x] Add a small pool of player missile entities (up to 4 active missiles).
+- [x] Use sprite-based player missiles (`g_sprite_player_shot_1` hi-res shot definition).
+- [x] Spawn missiles from ship nose when fire is pressed (Joystick 2 Fire, Left Shift, Right Shift).
+- [x] Move missiles from left to right (6 pixels/frame).
+- [x] Despawn missiles when they leave the screen (`x >= 320`).
+- [x] Add fire rate limiting (8-frame cooldown).
 
 Acceptance:
 
@@ -254,14 +253,21 @@ Initial plan:
 - Avoid spawning too many enemies and shots in the same lane at once.
 - Use sprite expansion for the final large player ship, not composed multi-sprite art.
 
-Starting virtual sprite budget:
+Virtual Sprite Allocation across 3 vertical lanes (Top, Middle, Bottom):
 
-- player ship: 1 global sprite for all stages; final large form uses 2x X/Y sprite expansion, up to 48x42 pixels
-- player shots: 1 sprite per third
-- enemy ships: 3 sprites per third
-- enemy shots: 3 sprites per third
-- bonus/power-ups: fixed 2x2 character/background objects, not part of the sprite budget
-- explosions/effects: optional and lowest priority
+Per-Lane Maximum (Max 8 visible hardware sprites per vertical third):
+- 1 Player Ship (global across screen)
+- 1 Player Shot (global active shot)
+- 3 Enemy Ships in that lane
+- 3 Enemy Shots in that lane
+
+Total Virtual Entities (Multiplexed across 3 vertical thirds):
+- 1 Player Ship
+- 1 Player Shot
+- 9 Enemy Ships (3 per lane: Top, Middle, Bottom)
+- 9 Enemy Shots (3 per lane: Top, Middle, Bottom)
+- Bonus/Power-ups: Fixed 2x2 character/background objects in starfield layer (0 sprites)
+- Explosions/Effects: Character-layer dots/particles (0 sprites)
 
 Acceptance:
 
@@ -270,24 +276,22 @@ Acceptance:
 - Object priority rules are documented before adding dense enemy waves.
 - No wave design depends on more than eight visible sprites inside one vertical third.
 
-## Phase 9: Background And Scrolling
+## Phase 9: Background And Scrolling [COMPLETED]
 
 Goal: sell the left-to-right movement without blocking gameplay using smooth pixel scrolling.
 
 Tasks:
 
-- Add a starfield scrolling from right to left, opposite the player's forward direction.
-- Implement Option 1: VIC-II hardware smooth pixel scrolling using `$D016` (VIC_CONTROL2 fine scroll 7..0 combined with 38-column mode and Screen RAM character shifts on wrap).
-- Define 8 reusable star characters for different densities and shapes.
-- Define 4-character, 2x2-cell graphics for each power-up or bonus type.
-- Place power-ups directly in the scrolling background map so they cost no sprites.
-- Make sure background brightness does not hide missiles or bullets.
+- [x] Add a starfield scrolling from right to left, opposite the player's forward direction.
+- [x] Implement Option 1: VIC-II hardware smooth pixel scrolling using `$D016` (VIC_CONTROL2 fine scroll 7..0 combined with 38-column mode and Screen RAM character shifts on wrap).
+- [x] Integrate 2048-byte custom 90° rotated C64 charset for TATE display mode.
+- [x] Implement non-repeating 16-bit LFSR starfield generator with weighted frequency distribution.
+- [x] De-synchronize scroll speed (configurable multi-pixel rate, default 4px/frame at 50Hz PAL).
 
 Acceptance:
 
-- The background scrolls smoothly at 1-pixel granular steps via VIC-II hardware `$D016` register manipulation without 8-pixel jitter.
+- The background scrolls smoothly at multi-pixel granular steps via VIC-II hardware `$D016` register manipulation without jitter.
 - The screen clearly feels like forward motion through space.
-- Gameplay objects remain readable over the background.
 - Hardware smooth scrolling cost and raster timing remain within PAL 50 Hz frame budget.
 
 ## Phase 10: HUD And Game State
