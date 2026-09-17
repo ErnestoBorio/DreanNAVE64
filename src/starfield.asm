@@ -7,10 +7,11 @@
 ; Features:
 ; - 2048-byte custom character set loaded to VIC-II RAM at $2800-$2FFF
 ; - VIC-II memory configuration ($D018 = $1A: Screen $0400, Charset $2800)
-; - User-specified star character probability hierarchy (Chars 117-127, rare to frequent)
+; - Sparse star density (~4.7% = ~40 stars across 960 playfield characters)
+; - User-specified star character hierarchy (Chars 117-127, rare to frequent)
+; - Dynamic randomized White & Gray shades (White, Light Gray, Med Gray, Dark Gray)
 ; - 16-bit Galois LFSR pseudo-random generator (65,535 cycle period)
 ; - 3-layer parallax row shifting (Fast: every 2 frames, Med: every 4, Slow: every 8)
-; - Deterministic CPU budget (~7,000 cycles/frame max, leaving 12,000+ for game entities)
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
@@ -19,6 +20,15 @@
 g_starfield_frame:  !byte 0   ; Frame counter for multi-speed parallax cadence
 s_lfsr_lo:          !byte $ac ; 16-bit Galois LFSR low byte
 s_lfsr_hi:          !byte $e1 ; 16-bit Galois LFSR high byte
+
+; ------------------------------------------------------------------------------
+; Star Gray & White Palette Shades (4 shades)
+; ------------------------------------------------------------------------------
+g_star_gray_shades:
+    !byte COLOR_DARK_GRAY     ; 11 ($0B) - Faint distant star
+    !byte COLOR_MEDIUM_GRAY   ; 12 ($0C) - Mid-distance star
+    !byte COLOR_LIGHT_GRAY    ; 15 ($0F) - Bright near star
+    !byte COLOR_WHITE         ; 1  ($01) - Brilliant foreground star
 
 ; ==============================================================================
 ; Subroutine: starfield_rand
@@ -36,6 +46,32 @@ starfield_rand:
     sta s_lfsr_hi
 +   lda s_lfsr_lo
     eor s_lfsr_hi       ; Mix high and low bytes for maximum 8-bit entropy
+    rts
+
+; ==============================================================================
+; Subroutine: starfield_gen_star
+; Purpose: Generates a random star tile with random White or Gray shade.
+; Returns: Character code in A, Color RAM value in Y.
+; ==============================================================================
+starfield_gen_star:
+    jsr starfield_rand
+    tax
+    lda g_star_prob_table, x
+    cmp #32             ; Empty space ($20)?
+    beq .is_space
+
+    ; It IS a star (Chars 117-127): select random White or Gray shade
+    ldy s_lfsr_hi
+    tya
+    and #$03            ; 2 random bits -> index 0..3
+    tay
+    lda g_star_gray_shades, y
+    tay                 ; Y = random shade (Dark Gray, Med Gray, Light Gray, White)
+    lda g_star_prob_table, x ; A = star character code (117..127)
+    rts
+
+.is_space:
+    ldy #COLOR_BLACK    ; Empty space color is black
     rts
 
 ; ==============================================================================
@@ -81,44 +117,36 @@ starfield_init:
     ; Page 1 of playfield: $0428 to $0527 (256 bytes)
     ldx #0
 @seed_page0:
-    jsr starfield_rand
-    tay
-    lda g_star_prob_table, y
+    jsr starfield_gen_star
     sta $0428, x
-    lda g_star_color_table, y
+    tya
     sta $d828, x
     inx
     bne @seed_page0
 
     ; Page 2 of playfield: $0528 to $0627 (256 bytes)
 @seed_page1:
-    jsr starfield_rand
-    tay
-    lda g_star_prob_table, y
+    jsr starfield_gen_star
     sta $0528, x
-    lda g_star_color_table, y
+    tya
     sta $d928, x
     inx
     bne @seed_page1
 
     ; Page 3 of playfield: $0628 to $0727 (256 bytes)
 @seed_page2:
-    jsr starfield_rand
-    tay
-    lda g_star_prob_table, y
+    jsr starfield_gen_star
     sta $0628, x
-    lda g_star_color_table, y
+    tya
     sta $da28, x
     inx
     bne @seed_page2
 
     ; Remaining 192 bytes of playfield: $0728 to $07E7
 @seed_page3:
-    jsr starfield_rand
-    tay
-    lda g_star_prob_table, y
+    jsr starfield_gen_star
     sta $0728, x
-    lda g_star_color_table, y
+    tya
     sta $db28, x
     inx
     cpx #192
@@ -140,11 +168,9 @@ starfield_init:
     cpx #39
     bne .shift_loop
 
-    jsr starfield_rand
-    tax
-    lda g_star_prob_table, x
+    jsr starfield_gen_star
     sta .screen_addr + 39
-    lda g_star_color_table, x
+    tya
     sta .color_addr + 39
 }
 
@@ -216,56 +242,36 @@ starfield_update:
 
 ; ==============================================================================
 ; Star Probability Distribution Table (256 entries)
+; Sparse density (~4.7% stars, 95.3% empty space).
 ; Characters 117 to 127 ordered from least probable to most probable:
 ; - 117 ($75): 1 entry  (0.39%) [Rarest 2-pixel bright star]
 ; - 118 ($76): 1 entry  (0.39%) [Rare 2-pixel star]
 ; - 119 ($77): 1 entry  (0.39%) [Rare 2-pixel star]
-; - 120 ($78): 2 entries (0.78%) [Cross cluster]
-; - 121 ($79): 2 entries (0.78%) [Bright 4-point star]
-; - 122 ($7A): 3 entries (1.17%) [Triple dot]
-; - 123 ($7B): 3 entries (1.17%) [Dual dot]
-; - 124 ($7C): 4 entries (1.56%) [Dual dot]
-; - 125 ($7D): 4 entries (1.56%) [Single dot]
-; - 126 ($7E): 5 entries (1.95%) [Single dot]
-; - 127 ($7F): 5 entries (1.95%) [Most frequent single center dot]
-; -  32 ($20): 225 entries (87.89%) [Empty space / Black void]
+; - 120 ($78): 1 entry  (0.39%) [Cross cluster]
+; - 121 ($79): 1 entry  (0.39%) [Bright 4-point star]
+; - 122 ($7A): 1 entry  (0.39%) [Triple dot]
+; - 123 ($7B): 1 entry  (0.39%) [Dual dot]
+; - 124 ($7C): 1 entry  (0.39%) [Dual dot]
+; - 125 ($7D): 1 entry  (0.39%) [Single dot]
+; - 126 ($7E): 1 entry  (0.39%) [Single dot]
+; - 127 ($7F): 2 entries (0.78%) [Most frequent single center dot]
+; -  32 ($20): 244 entries (95.31%) [Empty space / Black void]
 ; ==============================================================================
 g_star_prob_table:
-    !byte $75, $20, $7b, $20, $7d, $20, $7f, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $7a, $20, $7d, $20, $7f
+    !byte $75, $20, $7f, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
+    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $7c, $20, $20, $20, $20
     !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $78, $20, $7c, $20, $7e, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $76, $20, $7b
-    !byte $20, $7e, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $7a, $20, $7d, $20, $7f, $20, $20, $20
+    !byte $20, $20, $20, $20, $79, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
+    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $76, $20, $7f
     !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $79, $20, $7c, $20, $7e, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $77, $20, $7b, $20, $7e, $20
+    !byte $20, $20, $20, $20, $20, $20, $20, $20, $7d, $20, $20, $20, $20, $20, $20, $20
     !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $7a, $20, $7d, $20, $7f, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $79, $20
-    !byte $7c, $20, $7f, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $78, $20, $7c, $20, $7e, $20, $20, $20, $20
+    !byte $20, $7a, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
+    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $77, $20, $20, $20, $20, $20
     !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-
-; ==============================================================================
-; Star Color Mapping Table (256 entries, 1-to-1 matching g_star_prob_table)
-; ==============================================================================
-g_star_color_table:
-    !byte COLOR_WHITE, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_DARK_GRAY
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_WHITE, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_CYAN, COLOR_BLACK, COLOR_LIGHT_GRAY
-    !byte COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_YELLOW, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_YELLOW, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_YELLOW, COLOR_BLACK
-    !byte COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_WHITE, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte $20, $20, $20, $20, $20, $7e, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
+    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $7b, $20
+    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
+    !byte $20, $20, $20, $20, $20, $20, $20, $78, $20, $20, $20, $20, $20, $20, $20, $20
+    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
 
