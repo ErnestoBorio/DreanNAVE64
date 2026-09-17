@@ -16,9 +16,9 @@
 ;    - J = Move Left (Column 4, Row PB2)
 ;    - K = Move Down (Column 4, Row PB5)
 ;    - U = Move Right (Column 3, Row PB6)
-; 4. Fire Keys:
-;    - 'Z' (Column 1, Row PB4)
-;    - 'P' (Column 5, Row PB1)
+; 4. Fire Keys (Left & Right Handed Controls):
+;    - 'Z' (Column 1, Row PB4) - Left side (pairs naturally with right hand steering U-H-J-K)
+;    - 'P' (Column 5, Row PB1) - Right side (pairs naturally with left hand steering R-D-F-G)
 ;
 ; SINGLE-SHOT (EDGE-DETECTION) FIRING LOGIC:
 ; - g_input_fire: Level-triggered (1 as long as fire key/button is held down)
@@ -156,7 +156,7 @@ input_update:
     inc g_input_right
 +
 
-    ; --- Column 1 ($FD = %11111101): Fire Key 'Z' (Row PB4) ---
+    ; --- Column 1 ($FD = %11111101): Fire Key 'Z' (Row PB4) [Left Side Fire] ---
     lda #$fd
     sta CIA1_DATA_A     ; Pull Column 1 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
@@ -165,7 +165,7 @@ input_update:
     inc g_input_fire
 +
 
-    ; --- Column 5 ($DF = %11011111): Fire Key 'P' (Row PB1) ---
+    ; --- Column 5 ($DF = %11011111): Fire Key 'P' (Row PB1) [Right Side Fire] ---
     lda #$df
     sta CIA1_DATA_A     ; Pull Column 5 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
