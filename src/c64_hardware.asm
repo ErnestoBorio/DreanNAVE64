@@ -111,3 +111,28 @@ SPRITE_MAX_X        = 320       ; Right visible border edge (16-bit: High=1, Low
 SPRITE_MIN_Y        = 50        ; Top visible border edge
 SPRITE_MAX_Y        = 240       ; Bottom visible border edge
 
+; ------------------------------------------------------------------------------
+; KERNAL Jump Table & Operating System Variables
+; ------------------------------------------------------------------------------
+KERNAL_SCNKEY       = $ff9f     ; Scan keyboard matrix
+KERNAL_GETIN        = $ffe4     ; Get character from keyboard buffer
+KERNAL_LAST_KEY     = $00c5     ; Matrix code of current pressed key ($40 = none)
+KERNAL_KEY_BUF_LEN  = $00c6     ; Number of characters currently in keyboard buffer
+KERNAL_SHIFT_FLAGS  = $028d     ; Shift/Ctrl/C= modifier flags (Bit 0 = Shift)
+
+; ------------------------------------------------------------------------------
+; KERNAL Keyboard Matrix Codes ($00C5)
+; ------------------------------------------------------------------------------
+KEY_CODE_NONE       = $40       ; 64: No key held
+KEY_CODE_R          = $11       ; 17: 'R' key (Move Up)
+KEY_CODE_D          = $12       ; 18: 'D' key (Move Left)
+KEY_CODE_F          = $15       ; 21: 'F' key (Move Down)
+KEY_CODE_G          = $1a       ; 26: 'G' key (Move Right)
+KEY_CODE_H          = $1d       ; 29: 'H' key (TATE Up)
+KEY_CODE_J          = $22       ; 34: 'J' key (TATE Left)
+KEY_CODE_K          = $25       ; 37: 'K' key (TATE Down)
+KEY_CODE_U          = $1e       ; 30: 'U' key (TATE Right)
+KEY_CODE_SPACE      = $3c       ; 60: Spacebar (Fire)
+KEY_CODE_LSHIFT     = $0f       ; 15: Left Shift (Fire)
+KEY_CODE_RSHIFT     = $34       ; 52: Right Shift (Fire)
+

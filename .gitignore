@@ -10,3 +10,6 @@ bin/
 *.vs
 *.map
 
+# Development helper scripts
+tools/
+

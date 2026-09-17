@@ -24,6 +24,10 @@ start:
     ; 1. Disable 6502 Maskable Interrupts during all setup
     sei
 
+    ; Ensure standard C64 Memory Configuration ($0001 = $37: KERNAL ROM + BASIC + I/O)
+    lda #$37
+    sta $0001
+
     ; 2. Stop CIA Timers
     lda #$00
     sta CIA1_CRA
@@ -38,13 +42,26 @@ start:
     bit CIA1_ICR                ; Acknowledge any pending CIA1 IRQs
     bit CIA2_ICR                ; Acknowledge any pending CIA2 NMIs
 
-    ; 4. Point RAM NMI vector ($0318) to a safe RTI stub (prevents RESTORE crashes)
-    lda #<nmi_isr
+    ; 4. Disable all VIC-II hardware interrupts and acknowledge flags
+    lda #$00
+    sta VIC_IRQ_ENABLE          ; Disable raster, sprite-sprite, sprite-bg interrupts ($D01A = 0)
+    lda #$ff
+    sta VIC_IRQ_FLAGS           ; Acknowledge any pending VIC-II IRQ flags ($D019 = $FF)
+    bit VIC_SPR_COLL_SPR        ; Clear Sprite-Sprite collision latch ($D01E)
+    bit VIC_SPR_COLL_BG         ; Clear Sprite-Background collision latch ($D01F)
+
+    ; 5. Point RAM IRQ ($0314) and NMI ($0318) vectors to safe stubs
+    lda #<safe_irq
+    sta IRQ_VECTOR + 0
+    lda #>safe_irq
+    sta IRQ_VECTOR + 1
+
+    lda #<safe_nmi
     sta NMI_VECTOR + 0
-    lda #>nmi_isr
+    lda #>safe_nmi
     sta NMI_VECTOR + 1
 
-    ; 5. Set screen border and background to high-contrast black
+    ; 6. Set screen border and background to high-contrast black
     lda #COLOR_BLACK
     sta VIC_BORDER_COLOR
     sta VIC_BG_COLOR0
@@ -75,18 +92,19 @@ start:
     jsr hud_init
 
 ; ==============================================================================
-; Main 50 Hz PAL Game Loop (Hardware Scanline 240 VBLANK Synchronization)
+; Main 50 Hz PAL Game Loop (Hardware Vertical Blank Synchronization)
 ; ==============================================================================
 main_loop:
-    ; 1. Synchronize to VIC-II scanline 240 (Beginning of VBLANK period)
-@wait_vblank:
-    lda VIC_RASTER
-    cmp #240
-    bne @wait_vblank
-@wait_line_end:
-    lda VIC_RASTER
-    cmp #240
-    beq @wait_line_end
+    ; Synchronize to the start of Vertical Blank (Scanline 256 / Bottom Border)
+    ; Step 1: Wait for any remaining VBLANK/bottom border lines (256..311) from previous frame to wrap
+@wait_top:
+    lda VIC_CTRL1
+    bmi @wait_top       ; Loop while Bit 7 = 1 (lines 256..311)
+
+    ; Step 2: Wait until raster reaches line 256 (Bit 7 becomes 1, bottom border start)
+@wait_bottom:
+    lda VIC_CTRL1
+    bpl @wait_bottom    ; Loop while Bit 7 = 0 (lines 0..255)
 
     ; 2. Read & Update Input
     jsr input_update
@@ -108,9 +126,23 @@ main_loop:
     jmp main_loop
 
 ; ==============================================================================
-; Safe NMI Interrupt Handler (Safely ignores RESTORE key and CIA2 NMIs)
+; Safe Interrupt Handlers
 ; ==============================================================================
-nmi_isr:
+; safe_irq: Handled via RAM vector ($0314). Kernal $FF48 entry automatically pushes
+; A, X, Y onto stack before calling ($0314). We must pull Y, X, A to keep stack
+; perfectly balanced before RTI.
+safe_irq:
+    pla
+    tay
+    pla
+    tax
+    pla
+    rti
+
+; safe_nmi: Handled via RAM vector ($0318). Kernal $FE43 jumps directly to ($0318)
+; without pushing registers. We acknowledge CIA2 ICR ($DD0D) and return via RTI.
+safe_nmi:
+    bit CIA2_ICR
     rti
 
 ; ==============================================================================
