@@ -1,180 +1,243 @@
 ; ==============================================================================
-; PLAYER.ASM - Phase 1 Visual Marker & Bounds Verification Subsystem
+; PLAYER.ASM - Player Ship Entity & Hardware Sprite Subsystem (Phase 2)
 ; ==============================================================================
-; Provides an interactive, visible on-screen marker to verify Phase 1:
-; - 8-way movement via Joystick Port 2, R-D-F-G, and U-H-J-K
-; - Playfield boundary clamping
-; - Single-shot and continuous fire detection (Left/Right Shift, Spacebar, Joy Fire)
+; Target: Commodore 64 (50 Hz PAL)
+; Assembler: ACME 6502 Assembler
+;
+; Manages the player ship state, 8-way directional motion, screen boundary
+; clamping, and VIC-II Hardware Sprite 0 configuration in multicolor mode.
 ; ==============================================================================
 
+PLAYER_SPRITE_BLOCK = 128       ; Base sprite block in VIC-II RAM ($2000 / 64 = 128)
+
 ; ------------------------------------------------------------------------------
-; Player Marker RAM Variables
+; Player Entity Data RAM Variables
 ; ------------------------------------------------------------------------------
-g_marker_x:         !byte 20    ; Screen column (1..38)
-g_marker_y:         !byte 12    ; Screen row (1..23)
-s_prev_marker_x:    !byte 20    ; Previous frame column
-s_prev_marker_y:    !byte 12    ; Previous frame row
-s_move_delay:       !byte 0     ; Movement speed divider counter
+g_player_x:         !word 60    ; 16-bit X coordinate in VIC-II raster space (24..320)
+g_player_y:         !byte 120   ; 8-bit Y coordinate in VIC-II raster space (50..240)
+g_player_alive:     !byte 1     ; Player life state (1 = Alive, 0 = Destroyed)
+g_player_power:     !byte 0     ; Power-up stage (0 = Ship 1, 1 = Ship 2, 2 = Ship 3)
 
 ; ==============================================================================
 ; Subroutine: player_init
-; Purpose: Sets starting coordinates for the verification marker.
+; Purpose: Initializes player state, copies sprite data to VIC-II RAM ($2000),
+;          and configures VIC-II Hardware Sprite 0 registers.
 ; ==============================================================================
 player_init:
-    lda #20
-    sta g_marker_x
-    sta s_prev_marker_x
-    lda #12
-    sta g_marker_y
-    sta s_prev_marker_y
+    ; 1. Initialize player state variables
+    lda #60
+    sta g_player_x + 0
     lda #0
-    sta s_move_delay
+    sta g_player_x + 1
+    lda #120
+    sta g_player_y
+    lda #1
+    sta g_player_alive
+    lda #0
+    sta g_player_power
+
+    ; 2. Copy all 16 sprite blocks (1,024 bytes = 4 pages) from g_sprite_player_ship_1
+    ;    to VIC-II Sprite RAM ($2000 - $23FF).
+    ldx #0
+@copy_sprites_loop:
+    lda g_sprite_player_ship_1 + 0, x
+    sta $2000 + 0, x
+    lda g_sprite_player_ship_1 + 256, x
+    sta $2000 + 256, x
+    lda g_sprite_player_ship_1 + 512, x
+    sta $2000 + 512, x
+    lda g_sprite_player_ship_1 + 768, x
+    sta $2000 + 768, x
+    inx
+    bne @copy_sprites_loop
+
+    ; 3. Set Sprite 0 pointer at $07F8 to point to Player Ship Stage 1 (Block 128)
+    lda #PLAYER_SPRITE_BLOCK
+    sta SPRITE_PTRS + 0
+
+    ; 4. Enable Hardware Sprite 0 in VIC-II ($D015)
+    lda VIC_SPR_ENABLE
+    ora #$01
+    sta VIC_SPR_ENABLE
+
+    ; 5. Enable Multicolor mode for Sprite 0 ($D01C)
+    lda VIC_SPR_MULTICOLOR
+    ora #$01
+    sta VIC_SPR_MULTICOLOR
+
+    ; 6. Disable X and Y expansion for Sprite 0 ($D017, $D01D)
+    lda VIC_SPR_EXP_X
+    and #$fe
+    sta VIC_SPR_EXP_X
+    lda VIC_SPR_EXP_Y
+    and #$fe
+    sta VIC_SPR_EXP_Y
+
+    ; 7. Set Sprite 0 priority in front of background ($D01B)
+    lda VIC_SPR_PRIORITY
+    and #$fe
+    sta VIC_SPR_PRIORITY
+
+    ; 8. Configure VIC-II Sprite Colors:
+    ;    %10 (Individual Color) = Cyan ($03)
+    ;    %01 (Shared MC0 Color) = White ($01)
+    ;    %11 (Shared MC1 Color) = Dark Gray ($0B)
+    lda #COLOR_CYAN
+    sta VIC_SPR0_COLOR
+    lda #COLOR_WHITE
+    sta VIC_SPR_MC0
+    lda #COLOR_DARK_GRAY
+    sta VIC_SPR_MC1
+
     rts
 
 ; ==============================================================================
 ; Subroutine: player_update
-; Purpose: Updates marker position based on g_input_* variables and clamps to bounds.
+; Purpose: Applies 8-way directional input vectors to player coordinates
+;          and enforces strict playfield screen boundaries.
 ; ==============================================================================
 player_update:
-    ; Update every 4 frames so character-cell motion is smooth and readable
-    inc s_move_delay
-    lda s_move_delay
-    cmp #4
-    bcc @skip_move
-    lda #0
-    sta s_move_delay
+    ; If player is dead, skip motion processing
+    lda g_player_alive
+    bne +
+    rts
++
+    ; Movement speed: 2 pixels per frame (smooth 50 Hz arcade motion)
 
-    ; Check Move Up
+    ; --------------------------------------------------------------------------
+    ; Check Move Up (Y decrements towards top border: SPRITE_MIN_Y = 50)
+    ; --------------------------------------------------------------------------
     lda g_input_up
     beq @check_down
-    lda g_marker_y
-    cmp #1                      ; Top border clamp
-    beq @check_down
-    dec g_marker_y
+    lda g_player_y
+    sec
+    sbc #2
+    cmp #SPRITE_MIN_Y
+    bcs +
+    lda #SPRITE_MIN_Y           ; Clamp to top visible border
++   sta g_player_y
 
 @check_down:
-    ; Check Move Down
+    ; --------------------------------------------------------------------------
+    ; Check Move Down (Y increments towards bottom border: SPRITE_MAX_Y = 240)
+    ; --------------------------------------------------------------------------
     lda g_input_down
     beq @check_left
-    lda g_marker_y
-    cmp #23                     ; Bottom border clamp
-    beq @check_left
-    inc g_marker_y
+    lda g_player_y
+    clc
+    adc #2
+    cmp #SPRITE_MAX_Y
+    bcc +
+    lda #SPRITE_MAX_Y           ; Clamp to bottom visible border
++   sta g_player_y
 
 @check_left:
-    ; Check Move Left
+    ; --------------------------------------------------------------------------
+    ; Check Move Left (16-bit X decrements towards left border: SPRITE_MIN_X = 24)
+    ; --------------------------------------------------------------------------
     lda g_input_left
     beq @check_right
-    lda g_marker_x
-    cmp #1                      ; Left border clamp
-    beq @check_right
-    dec g_marker_x
+    lda g_player_x + 0
+    sec
+    sbc #2
+    sta g_player_x + 0
+    lda g_player_x + 1
+    sbc #0
+    sta g_player_x + 1
+
+    ; Clamp to left boundary: if MSB == 0 and LSB < 24, clamp to 24
+    lda g_player_x + 1
+    bne @check_right            ; If MSB > 0, X >= 256 (safe)
+    lda g_player_x + 0
+    cmp #SPRITE_MIN_X
+    bcs @check_right
+    lda #SPRITE_MIN_X
+    sta g_player_x + 0
+    lda #0
+    sta g_player_x + 1
 
 @check_right:
-    ; Check Move Right
+    ; --------------------------------------------------------------------------
+    ; Check Move Right (16-bit X increments towards right border: SPRITE_MAX_X = 320)
+    ; 320 = $0140 (MSB = 1, LSB = 64)
+    ; --------------------------------------------------------------------------
     lda g_input_right
-    beq @done_move
-    lda g_marker_x
-    cmp #38                     ; Right border clamp
-    beq @done_move
-    inc g_marker_x
+    beq @update_done
+    lda g_player_x + 0
+    clc
+    adc #2
+    sta g_player_x + 0
+    lda g_player_x + 1
+    adc #0
+    sta g_player_x + 1
 
-@done_move:
-@skip_move:
+    ; Clamp to right boundary: if MSB >= 1 and LSB >= 64, clamp to (1, 64)
+    lda g_player_x + 1
+    cmp #1
+    bcc @update_done            ; If MSB == 0, X < 256 (safe)
+    lda g_player_x + 0
+    cmp #64                     ; 320 - 256 = 64
+    bcc @update_done
+    lda #64
+    sta g_player_x + 0
+    lda #1
+    sta g_player_x + 1
+
+@update_done:
     rts
 
 ; ==============================================================================
 ; Subroutine: player_render
-; Purpose: Clears previous character on Screen RAM and renders the marker at new position.
+; Purpose: Updates Sprite 0 hardware registers (X, Y, MSB, Pointer).
 ; ==============================================================================
 player_render:
-    ; 1. Erase previous marker position from Screen RAM ($0400)
-    jsr compute_screen_addr_prev ; Returns pointer in $fb/$fc
-    ldy s_prev_marker_x
-    lda #$20                    ; Space ($20 = blank)
-    sta ($fb), y
+    ; 1. Check player life state
+    lda g_player_alive
+    bne @render_active
 
-    ; 2. Update previous position tracking
-    lda g_marker_x
-    sta s_prev_marker_x
-    lda g_marker_y
-    sta s_prev_marker_y
+    ; Player destroyed: disable Hardware Sprite 0
+    lda VIC_SPR_ENABLE
+    and #$fe
+    sta VIC_SPR_ENABLE
+    rts
 
-    ; 3. Draw marker character at current position
-    jsr compute_screen_addr_curr ; Returns pointer in $fb/$fc
-    ldy g_marker_x
+@render_active:
+    ; Ensure Hardware Sprite 0 is enabled
+    lda VIC_SPR_ENABLE
+    ora #$01
+    sta VIC_SPR_ENABLE
 
-    ; Choose character and color based on fire state:
-    ; - Fire newly pressed: Star/Burst char ($53) in Yellow
-    ; - Fire held: Triangle/Arrow ($3E) in Cyan
-    ; - Normal: Triangle/Arrow ($3E) in White
-    lda g_input_fire_pressed
-    beq @check_fire_held
-    lda #$53                    ; Shifted asterism/burst symbol
-    sta ($fb), y
-    lda #COLOR_YELLOW
-    jmp @write_color
-
-@check_fire_held:
-    lda g_input_fire
-    beq @draw_normal
-    lda #$3e                    ; '>' arrow character
-    sta ($fb), y
-    lda #COLOR_CYAN
-    jmp @write_color
-
-@draw_normal:
-    lda #$3e                    ; '>' arrow character
-    sta ($fb), y
-    lda #COLOR_WHITE
-
-@write_color:
-    ; Write color into Color RAM ($D800)
-    ; $fc high byte for screen is $04..$07, for color RAM is $D8..$DB
-    pha
-    lda $fc
+    ; 2. Select Sprite 0 Pointer based on current power level:
+    ;    Stage 1: Block 128
+    ;    Stage 2: Block 129
+    ;    Stage 3: Block 130
+    lda #PLAYER_SPRITE_BLOCK
     clc
-    adc #($d8 - $04)            ; Adjust page from $04 to $D8
-    sta $fd
-    lda $fb
-    sta $fe
-    pla
-    sta ($fe), y
+    adc g_player_power
+    sta SPRITE_PTRS + 0
+
+    ; 3. Write X coordinate low byte to VIC-II Sprite 0 X Register ($D000)
+    lda g_player_x + 0
+    sta VIC_SPR0_X
+
+    ; 4. Write Y coordinate byte to VIC-II Sprite 0 Y Register ($D001)
+    lda g_player_y
+    sta VIC_SPR0_Y
+
+    ; 5. Set or clear Bit 0 of VIC_SPR_MSB ($D010) based on 16-bit X MSB
+    lda g_player_x + 1
+    beq @clear_msb
+
+    ; Set Bit 0 (X >= 256)
+    lda VIC_SPR_MSB
+    ora #$01
+    sta VIC_SPR_MSB
     rts
 
-; ------------------------------------------------------------------------------
-; Helper: Computes base screen row pointer in $fb/$fc for s_prev_marker_y
-; ------------------------------------------------------------------------------
-compute_screen_addr_prev:
-    ldx s_prev_marker_y
-    lda g_screen_row_lo, x
-    sta $fb
-    lda g_screen_row_hi, x
-    sta $fc
+@clear_msb:
+    ; Clear Bit 0 (X < 256)
+    lda VIC_SPR_MSB
+    and #$fe
+    sta VIC_SPR_MSB
     rts
 
-; ------------------------------------------------------------------------------
-; Helper: Computes base screen row pointer in $fb/$fc for g_marker_y
-; ------------------------------------------------------------------------------
-compute_screen_addr_curr:
-    ldx g_marker_y
-    lda g_screen_row_lo, x
-    sta $fb
-    lda g_screen_row_hi, x
-    sta $fc
-    rts
-
-; ------------------------------------------------------------------------------
-; 25-Row Screen RAM Low and High Address Tables ($0400 + row * 40)
-; ------------------------------------------------------------------------------
-g_screen_row_lo:
-    !byte <$0400, <$0428, <$0450, <$0478, <$04a0, <$04c8, <$04f0, <$0518
-    !byte <$0540, <$0568, <$0590, <$05b8, <$05e0, <$0608, <$0630, <$0658
-    !byte <$0680, <$06a8, <$06d0, <$06f8, <$0720, <$0748, <$0770, <$0798
-    !byte <$07c0
-
-g_screen_row_hi:
-    !byte >$0400, >$0428, >$0450, >$0478, >$04a0, >$04c8, >$04f0, >$0518
-    !byte >$0540, >$0568, >$0590, >$05b8, >$05e0, >$0608, >$0630, >$0658
-    !byte >$0680, >$06a8, >$06d0, >$06f8, >$0720, >$0748, >$0770, >$0798
-    !byte >$07c0
