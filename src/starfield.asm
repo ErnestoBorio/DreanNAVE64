@@ -1,5 +1,5 @@
 ; ==============================================================================
-; STARFIELD.ASM - High-Speed Multi-Layer Parallax Starfield Subsystem (Phase 4)
+; STARFIELD.ASM - Single-Layer Uniform Scrolling Starfield Subsystem (Phase 4)
 ; ==============================================================================
 ; Target: Commodore 64 (50 Hz PAL)
 ; Assembler: ACME 6502 Assembler
@@ -7,16 +7,15 @@
 ; Features:
 ; - 2048-byte custom character set loaded to VIC-II RAM at $2800-$2FFF
 ; - VIC-II memory configuration ($D018 = $1A: Screen $0400, Charset $2800)
-; - User-specified star character probability hierarchy (Chars 117-127, rare to frequent)
-; - 16-bit Galois LFSR pseudo-random generator (65,535 cycle period)
-; - 3-layer parallax row shifting (Fast: every 2 frames, Med: every 4, Slow: every 8)
-; - Deterministic CPU budget (~7,000 cycles/frame max, leaving 12,000+ for game entities)
+; - Clean, robust uniform scrolling across all 24 playfield rows
+; - Star Chars 117..127 generated with strict probability hierarchy
+; - Colors randomly chosen from grayscale palette (Dark, Med, Light Gray, White)
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
 ; Starfield RAM State Variables
 ; ------------------------------------------------------------------------------
-g_starfield_frame:  !byte 0   ; Frame counter for multi-speed parallax cadence
+g_starfield_frame:  !byte 0   ; Frame counter for scroll timing
 s_lfsr_lo:          !byte $ac ; 16-bit Galois LFSR low byte
 s_lfsr_hi:          !byte $e1 ; 16-bit Galois LFSR high byte
 
@@ -150,122 +149,104 @@ starfield_init:
 
 ; ==============================================================================
 ; Subroutine: starfield_update
-; Purpose: Shifts parallax starfield layers on alternating frames.
+; Purpose: Shifts all playfield background rows left by 1 column every 2 frames.
 ; ==============================================================================
 starfield_update:
     inc g_starfield_frame
-
-    ; Fast Layer: Shift every 2 frames (when Bit 0 == 0)
     lda g_starfield_frame
-    and #$01
-    bne @check_med
-    jsr @shift_fast_rows
+    and #$01            ; Scroll every 2 frames (25 FPS smooth scroll)
+    beq @do_update
     rts
 
-@check_med:
-    ; Medium Layer: Shift every 4 frames (when Frame % 4 == 1)
-    lda g_starfield_frame
-    and #$03
-    cmp #$01
-    bne @check_slow
-    jsr @shift_med_rows
-    rts
+@do_update:
 
-@check_slow:
-    ; Slow Layer: Shift every 8 frames (when Frame % 8 == 3)
-    lda g_starfield_frame
-    and #$07
-    cmp #$03
-    bne @done_shift
-    jsr @shift_slow_rows
-@done_shift:
-    rts
-
-@shift_fast_rows:
+    ; Shift all 24 playfield rows ($0428 to $07E7)
     +SHIFT_ROW $0428, $d828
-    +SHIFT_ROW $04a0, $d8a0
-    +SHIFT_ROW $0518, $d918
-    +SHIFT_ROW $0590, $d990
-    +SHIFT_ROW $0608, $da08
-    +SHIFT_ROW $0680, $da80
-    +SHIFT_ROW $06f8, $daf8
-    +SHIFT_ROW $0770, $db70
-    rts
-
-@shift_med_rows:
     +SHIFT_ROW $0450, $d850
-    +SHIFT_ROW $04c8, $d8c8
-    +SHIFT_ROW $0540, $d940
-    +SHIFT_ROW $05b8, $d9b8
-    +SHIFT_ROW $0630, $da30
-    +SHIFT_ROW $06a8, $daa8
-    +SHIFT_ROW $0720, $db20
-    +SHIFT_ROW $0798, $db98
-    rts
-
-@shift_slow_rows:
     +SHIFT_ROW $0478, $d878
+
+    +SHIFT_ROW $04a0, $d8a0
+    +SHIFT_ROW $04c8, $d8c8
     +SHIFT_ROW $04f0, $d8f0
+
+    +SHIFT_ROW $0518, $d918
+    +SHIFT_ROW $0540, $d940
     +SHIFT_ROW $0568, $d968
+
+    +SHIFT_ROW $0590, $d990
+    +SHIFT_ROW $05b8, $d9b8
     +SHIFT_ROW $05e0, $d9e0
+
+    +SHIFT_ROW $0608, $da08
+    +SHIFT_ROW $0630, $da30
     +SHIFT_ROW $0658, $da58
+
+    +SHIFT_ROW $0680, $da80
+    +SHIFT_ROW $06a8, $daa8
     +SHIFT_ROW $06d0, $dad0
+
+    +SHIFT_ROW $06f8, $daf8
+    +SHIFT_ROW $0720, $db20
     +SHIFT_ROW $0748, $db48
+
+    +SHIFT_ROW $0770, $db70
+    +SHIFT_ROW $0798, $db98
     +SHIFT_ROW $07c0, $dbc0
+@done:
     rts
 
 ; ==============================================================================
-; Star Probability Distribution Table (256 entries)
-; Characters 117 to 127 ordered from least probable to most probable:
-; - 117 ($75): 1 entry  (0.39%) [Rarest 2-pixel bright star]
-; - 118 ($76): 1 entry  (0.39%) [Rare 2-pixel star]
-; - 119 ($77): 1 entry  (0.39%) [Rare 2-pixel star]
-; - 120 ($78): 2 entries (0.78%) [Cross cluster]
-; - 121 ($79): 2 entries (0.78%) [Bright 4-point star]
-; - 122 ($7A): 3 entries (1.17%) [Triple dot]
-; - 123 ($7B): 3 entries (1.17%) [Dual dot]
-; - 124 ($7C): 4 entries (1.56%) [Dual dot]
-; - 125 ($7D): 4 entries (1.56%) [Single dot]
-; - 126 ($7E): 5 entries (1.95%) [Single dot]
-; - 127 ($7F): 5 entries (1.95%) [Most frequent single center dot]
-; -  32 ($20): 225 entries (87.89%) [Empty space / Black void]
+; Star Probability Distribution Table (256 entries = 16 rows x 16 bytes)
+; All user star characters 117 to 127 in strict ascending probability hierarchy:
+; - 117 ($75): 1 entry  (0.39%) [Rarest star]
+; - 118 ($76): 1 entry  (0.39%)
+; - 119 ($77): 1 entry  (0.39%)
+; - 120 ($78): 2 entries (0.78%)
+; - 121 ($79): 2 entries (0.78%)
+; - 122 ($7A): 2 entries (0.78%)
+; - 123 ($7B): 3 entries (1.17%)
+; - 124 ($7C): 3 entries (1.17%)
+; - 125 ($7D): 4 entries (1.56%)
+; - 126 ($7E): 5 entries (1.95%)
+; - 127 ($7F): 6 entries (2.34%) [Most frequent star]
+; -  32 ($20): 226 entries (88.28%) [Empty space void]
 ; ==============================================================================
 g_star_prob_table:
-    !byte $75, $20, $7b, $20, $7d, $20, $7f, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $7a, $20, $7d, $20, $7f
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $78, $20, $7c, $20, $7e, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $76, $20, $7b
-    !byte $20, $7e, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $7a, $20, $7d, $20, $7f, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $79, $20, $7c, $20, $7e, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $77, $20, $7b, $20, $7e, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $7a, $20, $7d, $20, $7f, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $79, $20
-    !byte $7c, $20, $7f, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
-    !byte $20, $20, $20, $20, $20, $20, $20, $78, $20, $7c, $20, $7e, $20, $20, $20, $20
+    !byte $75, $20, $20, $20, $20, $20, $20, $20, $7f, $20, $20, $20, $20, $20, $20, $20
+    !byte $7e, $20, $20, $20, $20, $20, $20, $20, $7b, $20, $20, $20, $20, $20, $20, $20
+    !byte $7d, $20, $20, $20, $20, $20, $20, $20, $7f, $20, $20, $20, $20, $20, $20, $20
+    !byte $7a, $20, $20, $20, $20, $20, $20, $20, $7c, $20, $20, $20, $20, $20, $20, $20
+    !byte $7e, $20, $20, $20, $20, $20, $20, $20, $76, $20, $20, $20, $20, $20, $20, $20
+    !byte $7f, $20, $20, $20, $20, $20, $20, $20, $79, $20, $20, $20, $20, $20, $20, $20
+    !byte $7d, $20, $20, $20, $20, $20, $20, $20, $7e, $20, $20, $20, $20, $20, $20, $20
+    !byte $78, $20, $20, $20, $20, $20, $20, $20, $7b, $20, $20, $20, $20, $20, $20, $20
+    !byte $7f, $20, $20, $20, $20, $20, $20, $20, $77, $20, $20, $20, $20, $20, $20, $20
+    !byte $7c, $20, $20, $20, $20, $20, $20, $20, $7e, $20, $20, $20, $20, $20, $20, $20
+    !byte $7d, $20, $20, $20, $20, $20, $20, $20, $7a, $20, $20, $20, $20, $20, $20, $20
+    !byte $7f, $20, $20, $20, $20, $20, $20, $20, $79, $20, $20, $20, $20, $20, $20, $20
+    !byte $7c, $20, $20, $20, $20, $20, $20, $20, $7e, $20, $20, $20, $20, $20, $20, $20
+    !byte $78, $20, $20, $20, $20, $20, $20, $20, $7b, $20, $20, $20, $20, $20, $20, $20
+    !byte $7d, $20, $20, $20, $20, $20, $20, $20, $7f, $20, $20, $20, $20, $20, $20, $20
     !byte $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20, $20
 
 ; ==============================================================================
-; Star Color Mapping Table (256 entries, 1-to-1 matching g_star_prob_table)
+; Star Color Mapping Table (256 entries = 16 rows x 16 bytes, 1-to-1 matching)
+; All colors strictly white or one of 3 shades of gray
 ; ==============================================================================
 g_star_color_table:
-    !byte COLOR_WHITE, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_DARK_GRAY
+    !byte COLOR_WHITE, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_WHITE, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_WHITE, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_WHITE, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_WHITE, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_WHITE, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_WHITE, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
+    !byte COLOR_WHITE, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
     !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_WHITE, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_CYAN, COLOR_BLACK, COLOR_LIGHT_GRAY
-    !byte COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_YELLOW, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_YELLOW, COLOR_BLACK, COLOR_LIGHT_GRAY, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_YELLOW, COLOR_BLACK
-    !byte COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_DARK_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_WHITE, COLOR_BLACK, COLOR_LIGHT_BLUE, COLOR_BLACK, COLOR_MEDIUM_GRAY, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-    !byte COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK, COLOR_BLACK
-
