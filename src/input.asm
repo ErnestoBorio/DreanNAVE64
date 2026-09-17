@@ -16,8 +16,9 @@
 ;    - J = Move Left (Column 4, Row PB2)
 ;    - K = Move Down (Column 4, Row PB5)
 ;    - U = Move Right (Column 3, Row PB6)
-; 4. Fire Key:
-;    - 'Z' (Column 1, Row PB4 ONLY)
+; 4. Fire Keys:
+;    - 'Z' (Column 1, Row PB4)
+;    - 'P' (Column 5, Row PB1)
 ;
 ; SINGLE-SHOT (EDGE-DETECTION) FIRING LOGIC:
 ; - g_input_fire: Level-triggered (1 as long as fire key/button is held down)
@@ -155,11 +156,20 @@ input_update:
     inc g_input_right
 +
 
-    ; --- Column 1 ($FD = %11111101): Dedicated Fire Key 'Z' (Row PB4) ---
+    ; --- Column 1 ($FD = %11111101): Fire Key 'Z' (Row PB4) ---
     lda #$fd
     sta CIA1_DATA_A     ; Pull Column 1 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
     and #$10            ; Bit 4: Key 'Z' (0 = pressed)
+    bne +
+    inc g_input_fire
++
+
+    ; --- Column 5 ($DF = %11011111): Fire Key 'P' (Row PB1) ---
+    lda #$df
+    sta CIA1_DATA_A     ; Pull Column 5 low
+    lda CIA1_DATA_B     ; Read Rows (Port B)
+    and #$02            ; Bit 1: Key 'P' (0 = pressed)
     bne +
     inc g_input_fire
 +
