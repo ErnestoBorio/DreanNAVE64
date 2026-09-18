@@ -1,7 +1,7 @@
 ; ==============================================================================
-; SPRITES_DATA.ASM - Complete 16 Hardware Sprite Definitions
+; SPRITES_DATA.ASM - Complete 19 Hardware Sprite Definitions
 ; ==============================================================================
-; Total: 16 Sprites x 64 bytes = 1,024 bytes ($0400)
+; Total: 19 Sprites x 64 bytes = 1,216 bytes ($04C0)
 ; Each sprite consists of 63 data bytes (21 rows x 3 bytes) + 1 padding byte.
 ; ==============================================================================
 
@@ -24,6 +24,9 @@ SPRITE_PTR_PLAYER_SHOT_2   = 140  ; Sprite 13: Player Shot Level 2 (Monochrome H
 SPRITE_PTR_PLAYER_SHOT_3   = 141  ; Sprite 14: Player Shot Level 3 (Monochrome Hi-Res Triple)
 SPRITE_PTR_ENEMY_SHOT_1    = 142  ; Sprite 15: Enemy Shot 1 (Monochrome Hi-Res Single)
 SPRITE_PTR_ENEMY_SHOT_2    = 143  ; Sprite 16: Enemy Shot 2 (Monochrome Hi-Res Spread)
+SPRITE_PTR_EXPLOSION_1     = 144  ; Sprite 17: Explosion Frame 1 (Multicolor)
+SPRITE_PTR_EXPLOSION_2     = 145  ; Sprite 18: Explosion Frame 2 (Multicolor)
+SPRITE_PTR_EXPLOSION_3     = 146  ; Sprite 19: Explosion Frame 3 (Multicolor)
 
 ; Default alias for primary player ship
 SPRITE_PTR_PLAYER_SHIP     = 128
@@ -66,16 +69,16 @@ g_sprite_player_ship_2:
     !byte $15, $00, $00
     !byte $35, $4d, $00
     !byte $03, $f5, $5c
-    !byte $14, $75, $40
+    !byte $d4, $75, $40
     !byte $55, $5c, $40
     !byte $d7, $67, $10
-    !byte $03, $69, $c7
+    !byte $03, $69, $d7
     !byte $d7, $67, $10
     !byte $55, $5c, $40
-    !byte $14, $75, $40
+    !byte $d4, $75, $40
     !byte $03, $f5, $5c
-    !byte $05, $4d, $00
-    !byte $35, $00, $00
+    !byte $35, $4d, $00
+    !byte $15, $00, $00
     !byte $14, $00, $00
     !byte $14, $00, $00
     !byte $10, $00, $00
@@ -86,27 +89,27 @@ g_sprite_player_ship_2:
 ; Sprite 3: Player Ship Stage 3 (Multicolor)
 ; ------------------------------------------------------------------------------
 g_sprite_player_ship_3:
-    !byte $00, $75, $70
+    !byte $00, $75, $c0
     !byte $1c, $40, $00
     !byte $57, $50, $00
-    !byte $57, $53, $57
+    !byte $57, $53, $5c
     !byte $1c, $55, $c0
     !byte $00, $d5, $30
     !byte $00, $0f, $d0
     !byte $50, $d1, $d4
-    !byte $d4, $55, $71
+    !byte $d4, $55, $70
     !byte $55, $dd, $9c
-    !byte $dd, $0d, $a7
+    !byte $dd, $0d, $a5
     !byte $55, $dd, $9c
-    !byte $d4, $55, $71
+    !byte $d4, $55, $70
     !byte $50, $d1, $d4
     !byte $00, $0f, $d0
     !byte $00, $d5, $30
     !byte $1c, $55, $c0
-    !byte $57, $53, $57
+    !byte $57, $53, $5c
     !byte $57, $50, $00
     !byte $1c, $40, $00
-    !byte $00, $75, $70
+    !byte $00, $75, $c0
     !byte $00                  ; 64th padding byte
 
 ; ------------------------------------------------------------------------------
@@ -115,13 +118,13 @@ g_sprite_player_ship_3:
 g_sprite_enemy_1:
     !byte $00, $33, $00
     !byte $00, $dd, $c0
-    !byte $0d, $54, $00
-    !byte $00, $34, $70
+    !byte $0d, $57, $00
+    !byte $00, $37, $70
     !byte $03, $59, $c0
     !byte $d5, $a9, $00
     !byte $03, $59, $c0
-    !byte $00, $34, $70
-    !byte $0d, $54, $00
+    !byte $00, $37, $70
+    !byte $0d, $57, $00
     !byte $00, $dd, $c0
     !byte $00, $33, $00
     !byte $00, $00, $00
@@ -140,33 +143,6 @@ g_sprite_enemy_1:
 ; Sprite 5: Enemy Ship 2 (Multicolor)
 ; ------------------------------------------------------------------------------
 g_sprite_enemy_2:
-    !byte $00, $03, $70
-    !byte $00, $0d, $5c
-    !byte $00, $0d, $57
-    !byte $d7, $01, $5c
-    !byte $05, $00, $40
-    !byte $d7, $40, $40
-    !byte $00, $73, $70
-    !byte $00, $11, $c0
-    !byte $00, $15, $00
-    !byte $0d, $d9, $c0
-    !byte $36, $6a, $5f
-    !byte $0d, $d9, $c0
-    !byte $00, $15, $00
-    !byte $00, $11, $c0
-    !byte $00, $73, $70
-    !byte $d7, $40, $40
-    !byte $05, $00, $40
-    !byte $d7, $01, $5c
-    !byte $00, $0d, $57
-    !byte $00, $0d, $5c
-    !byte $00, $03, $70
-    !byte $00                  ; 64th padding byte
-
-; ------------------------------------------------------------------------------
-; Sprite 6: Enemy Ship 3 (Multicolor)
-; ------------------------------------------------------------------------------
-g_sprite_enemy_3:
     !byte $00, $00, $10
     !byte $00, $f5, $dc
     !byte $00, $00, $10
@@ -188,6 +164,33 @@ g_sprite_enemy_3:
     !byte $00, $00, $10
     !byte $00, $00, $00
     !byte $00, $00, $00
+    !byte $00                  ; 64th padding byte
+
+; ------------------------------------------------------------------------------
+; Sprite 6: Enemy Ship 3 (Multicolor)
+; ------------------------------------------------------------------------------
+g_sprite_enemy_3:
+    !byte $00, $03, $70
+    !byte $00, $0d, $5c
+    !byte $00, $0d, $57
+    !byte $d7, $01, $5c
+    !byte $05, $00, $40
+    !byte $d7, $40, $40
+    !byte $00, $73, $70
+    !byte $00, $11, $c0
+    !byte $00, $15, $00
+    !byte $0d, $d9, $c0
+    !byte $36, $6a, $5f
+    !byte $0d, $d9, $c0
+    !byte $00, $15, $00
+    !byte $00, $11, $c0
+    !byte $00, $73, $70
+    !byte $d7, $40, $40
+    !byte $05, $00, $40
+    !byte $d7, $01, $5c
+    !byte $00, $0d, $57
+    !byte $00, $0d, $5c
+    !byte $00, $03, $70
     !byte $00                  ; 64th padding byte
 
 ; ------------------------------------------------------------------------------
@@ -231,10 +234,10 @@ g_sprite_enemy_5:
     !byte $00, $d5, $70
     !byte $d5, $55, $c0
     !byte $03, $69, $70
-    !byte $01, $aa, $57
+    !byte $0d, $aa, $57
     !byte $03, $69, $70
     !byte $d5, $55, $c0
-    !byte $00, $15, $70
+    !byte $00, $d5, $70
     !byte $00, $37, $00
     !byte $00, $04, $00
     !byte $30, $d5, $c3
@@ -302,26 +305,26 @@ g_sprite_enemy_7:
 ; Sprite 11: Enemy Ship 8 (Multicolor)
 ; ------------------------------------------------------------------------------
 g_sprite_enemy_8:
+    !byte $00, $00, $10
+    !byte $10, $00, $1c
+    !byte $d0, $00, $d4
+    !byte $5c, $03, $40
+    !byte $07, $05, $c0
+    !byte $03, $d5, $70
+    !byte $3d, $5a, $5c
+    !byte $d7, $59, $5c
+    !byte $5d, $55, $54
+    !byte $57, $75, $54
+    !byte $5d, $55, $54
+    !byte $d7, $59, $5c
+    !byte $3d, $5a, $5c
+    !byte $03, $d5, $70
+    !byte $07, $05, $c0
+    !byte $5c, $03, $40
+    !byte $d0, $00, $d4
+    !byte $10, $00, $1c
+    !byte $00, $00, $10
     !byte $00, $00, $00
-    !byte $00, $00, $04
-    !byte $04, $00, $07
-    !byte $34, $00, $35
-    !byte $17, $00, $d0
-    !byte $01, $c1, $70
-    !byte $00, $f5, $5c
-    !byte $0f, $56, $97
-    !byte $35, $d6, $55
-    !byte $17, $55, $55
-    !byte $15, $dd, $55
-    !byte $17, $55, $55
-    !byte $35, $d6, $55
-    !byte $0f, $56, $97
-    !byte $00, $f5, $5c
-    !byte $01, $c1, $70
-    !byte $17, $00, $d0
-    !byte $34, $00, $35
-    !byte $04, $00, $07
-    !byte $00, $00, $04
     !byte $00, $00, $00
     !byte $00                  ; 64th padding byte
 
@@ -410,13 +413,13 @@ g_sprite_player_shot_3:
 ; Sprite 15: Enemy Shot 1 (Monochrome Hi-Res Single)
 ; ------------------------------------------------------------------------------
 g_sprite_enemy_shot_1:
-    !byte $38, $00, $00
-    !byte $74, $00, $00
-    !byte $fa, $00, $00
-    !byte $fe, $00, $00
-    !byte $be, $00, $00
-    !byte $5c, $00, $00
-    !byte $38, $00, $00
+    !byte $70, $00, $00
+    !byte $f8, $00, $00
+    !byte $f8, $00, $00
+    !byte $f8, $00, $00
+    !byte $70, $00, $00
+    !byte $00, $00, $00
+    !byte $00, $00, $00
     !byte $00, $00, $00
     !byte $00, $00, $00
     !byte $00, $00, $00
@@ -437,31 +440,112 @@ g_sprite_enemy_shot_1:
 ; Sprite 16: Enemy Shot 2 (Monochrome Hi-Res Spread)
 ; ------------------------------------------------------------------------------
 g_sprite_enemy_shot_2:
-    !byte $00, $1c, $00
-    !byte $00, $3a, $00
-    !byte $00, $7d, $00
-    !byte $00, $7f, $00
-    !byte $00, $5f, $00
-    !byte $00, $2e, $00
-    !byte $38, $1c, $00
-    !byte $74, $00, $00
-    !byte $fa, $00, $00
-    !byte $fe, $00, $00
-    !byte $be, $00, $00
-    !byte $5c, $00, $00
-    !byte $38, $1c, $00
-    !byte $00, $3a, $00
-    !byte $00, $7d, $00
-    !byte $00, $7f, $00
-    !byte $00, $5f, $00
-    !byte $00, $2e, $00
-    !byte $00, $1c, $00
+    !byte $00, $38, $00
+    !byte $00, $7c, $00
+    !byte $00, $7c, $00
+    !byte $00, $7c, $00
+    !byte $00, $38, $00
+    !byte $00, $00, $00
+    !byte $00, $00, $00
+    !byte $00, $00, $00
+    !byte $70, $00, $00
+    !byte $f8, $00, $00
+    !byte $f8, $00, $00
+    !byte $f8, $00, $00
+    !byte $70, $00, $00
+    !byte $00, $00, $00
+    !byte $00, $00, $00
+    !byte $00, $00, $00
+    !byte $00, $38, $00
+    !byte $00, $7c, $00
+    !byte $00, $7c, $00
+    !byte $00, $7c, $00
+    !byte $00, $38, $00
+    !byte $00                  ; 64th padding byte
+
+; ------------------------------------------------------------------------------
+; Sprite 17: Explosion Frame 1 (Multicolor)
+; ------------------------------------------------------------------------------
+g_sprite_explosion_1:
+    !byte $00, $00, $00
+    !byte $00, $00, $00
+    !byte $00, $00, $00
+    !byte $00, $06, $00
+    !byte $00, $07, $80
+    !byte $00, $ae, $c0
+    !byte $01, $ec, $40
+    !byte $03, $c4, $c0
+    !byte $03, $e0, $80
+    !byte $01, $80, $00
+    !byte $00, $a1, $80
+    !byte $00, $00, $c0
+    !byte $00, $80, $e0
+    !byte $01, $a5, $e0
+    !byte $01, $e7, $e0
+    !byte $00, $e1, $80
+    !byte $00, $00, $00
+    !byte $00, $00, $00
+    !byte $00, $00, $00
     !byte $00, $00, $00
     !byte $00, $00, $00
     !byte $00                  ; 64th padding byte
 
 ; ------------------------------------------------------------------------------
-; Table of pointers to all 16 sprite blocks (low/high bytes)
+; Sprite 18: Explosion Frame 2 (Multicolor)
+; ------------------------------------------------------------------------------
+g_sprite_explosion_2:
+    !byte $00, $00, $00
+    !byte $00, $c3, $c0
+    !byte $0f, $e7, $f0
+    !byte $0f, $77, $b0
+    !byte $1f, $df, $f8
+    !byte $1f, $ba, $68
+    !byte $1e, $1c, $38
+    !byte $0f, $0c, $70
+    !byte $06, $24, $00
+    !byte $00, $80, $00
+    !byte $00, $80, $00
+    !byte $00, $08, $6c
+    !byte $02, $02, $3c
+    !byte $07, $58, $38
+    !byte $0d, $9a, $94
+    !byte $0f, $de, $fc
+    !byte $0f, $ef, $ec
+    !byte $07, $e7, $f8
+    !byte $01, $47, $f0
+    !byte $00, $01, $00
+    !byte $00, $00, $00
+    !byte $00                  ; 64th padding byte
+
+; ------------------------------------------------------------------------------
+; Sprite 19: Explosion Frame 3 (Multicolor)
+; ------------------------------------------------------------------------------
+g_sprite_explosion_3:
+    !byte $3c, $00, $38
+    !byte $7e, $30, $fc
+    !byte $ff, $30, $be
+    !byte $ff, $11, $df
+    !byte $db, $81, $3f
+    !byte $ec, $c0, $ef
+    !byte $7e, $41, $9f
+    !byte $2f, $00, $0e
+    !byte $02, $43, $3c
+    !byte $40, $02, $00
+    !byte $00, $20, $08
+    !byte $19, $c0, $00
+    !byte $23, $50, $00
+    !byte $6e, $82, $66
+    !byte $fd, $81, $bf
+    !byte $ff, $20, $ff
+    !byte $ef, $43, $1b
+    !byte $fe, $c1, $bf
+    !byte $f5, $c0, $fe
+    !byte $7f, $80, $f6
+    !byte $3f, $00, $78
+    !byte $00                  ; 64th padding byte
+
+; ------------------------------------------------------------------------------
+; Table of pointers to all 19 sprite blocks (low/high bytes)
 ; ------------------------------------------------------------------------------
 g_all_sprites_lo:
     !byte <g_sprite_player_ship_1
@@ -480,6 +564,9 @@ g_all_sprites_lo:
     !byte <g_sprite_player_shot_3
     !byte <g_sprite_enemy_shot_1
     !byte <g_sprite_enemy_shot_2
+    !byte <g_sprite_explosion_1
+    !byte <g_sprite_explosion_2
+    !byte <g_sprite_explosion_3
 
 g_all_sprites_hi:
     !byte >g_sprite_player_ship_1
@@ -498,3 +585,6 @@ g_all_sprites_hi:
     !byte >g_sprite_player_shot_3
     !byte >g_sprite_enemy_shot_1
     !byte >g_sprite_enemy_shot_2
+    !byte >g_sprite_explosion_1
+    !byte >g_sprite_explosion_2
+    !byte >g_sprite_explosion_3

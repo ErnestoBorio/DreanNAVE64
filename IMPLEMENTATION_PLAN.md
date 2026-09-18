@@ -78,13 +78,17 @@ This document is the master technical roadmap for **Drean NAVE 64**, a horizonta
 - 16-bit Galois LFSR pseudo-random generator with a 64-entry weighted frequency distribution table.
 - Smooth fine-scrolling (4 pixels/frame) and leftward 40x25 Screen RAM array shifting on underflow.
 
-### Phase 5: Enemy Waves & AI Motion Subsystem
-**Goal**: Support multiple enemy alien ships spawning from the right border with distinct wave trajectories.
-- Multicolor alien enemy ship sprite data loaded into VIC-II RAM (`$2300`, Block 140).
-- Active enemy pool supporting simultaneous enemies using VIC-II Hardware Sprites 2..5.
-- Sinusoidal wave motion using signed delta lookup tables (`g_sine_table`).
-- Enemy spawn timer, off-screen right entry (`X = 340`, `Y = random 60..210`), and left-border recycling (`X < 16`).
-- Hardware sprite allocation and MSB handling for active enemies.
+### Phase 5: 3-Lane Enemy Waves & AI Motion Subsystem
+**Goal**: Support up to 3 enemies in each vertical third (lane) of the screen (up to 9 simultaneous active enemies) using a lightweight raster multiplexer on Hardware Sprites 2..4.
+- 3 non-overlapping vertical lanes:
+  - Lane 0 (Top Third): `Y = 50 .. 110` (Rows 1–8).
+  - Lane 1 (Middle Third): `Y = 115 .. 175` (Rows 9–16).
+  - Lane 2 (Bottom Third): `Y = 180 .. 240` (Rows 17–24).
+- 9-slot active enemy pool in RAM (Slots 0..2 for Lane 0, Slots 3..5 for Lane 1, Slots 6..8 for Lane 2).
+- Pre-loaded multicolor enemy ship sprite blocks (`131`–`138` in `sprites_data.asm`).
+- Linear horizontal flight and lane-bounded sinusoidal wave trajectories.
+- Hardware Sprites 2, 3, 4 raster-multiplexed across the 3 vertical lanes (raster splits at lines 0, 112, 177).
+- Left-border recycling (`X < 16`) and independent lane spawn timers.
 
 ### Phase 6: Collision Detection & Explosions Subsystem
 **Goal**: Detect missile-to-enemy and player-to-enemy impacts, spawn visual explosions, and handle player lives.
@@ -107,6 +111,14 @@ This document is the master technical roadmap for **Drean NAVE 64**, a horizonta
 - Top status line in Screen RAM displaying `SCORE`, `LIVES`, and `HIGH SCORE`.
 - Title Screen, Active Play, and Game Over / Restart state machine.
 - Game reset handling to restart a fresh session without rebooting.
+
+### Phase 9: Powerups Subsystem (Background Grid Items)
+**Goal**: Spawn, scroll, and collect powerup items using custom character set tiles 0–7 and 16–23.
+- Visuals: Base tiles `$00`–`$07` and animated 2nd-phase tiles `$10`–`$17` spawned into Screen RAM (`$0400`) and Color RAM (`$D800`) at Column 39.
+- Movement: Automatically scrolls leftward with the 25 FPS background starfield scroll.
+- Collection & Buffs: Bounding box collision check between player ship and powerup grid cells.
+- Buff types: Weapon upgrade (Single -> Dual -> Triple), speed boost, shields, bonus points.
+- Audio: SID sound effect / pickup chime on collection.
 
 ---
 

@@ -42,29 +42,8 @@ starfield_rand:
 ; Purpose: Installs charset at $2800, sets $D018, and seeds initial starfield.
 ; ==============================================================================
 starfield_init:
-    ; 1. Copy 2,048 bytes (8 pages) of g_custom_charset to $2800-$2FFF
-    ldx #0
-@copy_charset_loop:
-    lda g_custom_charset + 0, x
-    sta $2800 + 0, x
-    lda g_custom_charset + 256, x
-    sta $2800 + 256, x
-    lda g_custom_charset + 512, x
-    sta $2800 + 512, x
-    lda g_custom_charset + 768, x
-    sta $2800 + 768, x
-    lda g_custom_charset + 1024, x
-    sta $2800 + 1024, x
-    lda g_custom_charset + 1280, x
-    sta $2800 + 1280, x
-    lda g_custom_charset + 1536, x
-    sta $2800 + 1536, x
-    lda g_custom_charset + 1792, x
-    sta $2800 + 1792, x
-    inx
-    bne @copy_charset_loop
-
-    ; 2. Point VIC-II to Screen RAM ($0400) and Charset ($2800) ($D018 = $1A)
+    ; 1. Point VIC-II to Screen RAM ($0400) and Charset ($2800) ($D018 = $1A)
+    ;    (Charset data is assembled directly at VIC-II Charset RAM $2800 - $2FFF)
     lda #$1a
     sta VIC_MEM_SETUP
 

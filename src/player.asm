@@ -36,22 +36,8 @@ player_init:
     lda #0
     sta g_player_power
 
-    ; 2. Copy all 16 sprite blocks (1,024 bytes = 4 pages) from g_sprite_player_ship_1
-    ;    to VIC-II Sprite RAM ($2000 - $23FF).
-    ldx #0
-@copy_sprites_loop:
-    lda g_sprite_player_ship_1 + 0, x
-    sta $2000 + 0, x
-    lda g_sprite_player_ship_1 + 256, x
-    sta $2000 + 256, x
-    lda g_sprite_player_ship_1 + 512, x
-    sta $2000 + 512, x
-    lda g_sprite_player_ship_1 + 768, x
-    sta $2000 + 768, x
-    inx
-    bne @copy_sprites_loop
-
-    ; 3. Set Sprite 0 pointer at $07F8 to point to Player Ship Stage 1 (Block 128)
+    ; 2. Set Sprite 0 pointer at $07F8 to point to Player Ship Stage 1 (Block 128)
+    ;    (Sprite data is assembled directly at VIC-II Sprite RAM $2000 - $23FF)
     lda #PLAYER_SPRITE_BLOCK
     sta SPRITE_PTRS + 0
 
@@ -196,16 +182,20 @@ player_render:
     bne @render_active
 
     ; Player destroyed: disable Hardware Sprite 0
+    sei
     lda VIC_SPR_ENABLE
     and #$fe
     sta VIC_SPR_ENABLE
+    cli
     rts
 
 @render_active:
     ; Ensure Hardware Sprite 0 is enabled
+    sei
     lda VIC_SPR_ENABLE
     ora #$01
     sta VIC_SPR_ENABLE
+    cli
 
     ; 2. Select Sprite 0 Pointer based on current power level:
     ;    Stage 1: Block 128
@@ -229,15 +219,19 @@ player_render:
     beq @clear_msb
 
     ; Set Bit 0 (X >= 256)
+    sei
     lda VIC_SPR_MSB
     ora #$01
     sta VIC_SPR_MSB
+    cli
     rts
 
 @clear_msb:
     ; Clear Bit 0 (X < 256)
+    sei
     lda VIC_SPR_MSB
     and #$fe
     sta VIC_SPR_MSB
+    cli
     rts
 

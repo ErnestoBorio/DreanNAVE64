@@ -201,22 +201,24 @@ weapons_render:
     lda g_missile_active
     bne @render_active
 
-    ; Missile inactive: disable Sprite 1 ($D015 Bit 1 = 0)
+    ; Missile inactive: disable Sprite 1 ($D015 Bit 1 = 0) and clear Sprite 1 MSB ($D010 Bit 1 = 0)
+    sei
     lda VIC_SPR_ENABLE
     and #$fd
     sta VIC_SPR_ENABLE
-
-    ; Clear Sprite 1 MSB ($D010 Bit 1 = 0) when inactive
     lda VIC_SPR_MSB
     and #$fd
     sta VIC_SPR_MSB
+    cli
     rts
 
 @render_active:
     ; 1. Enable Sprite 1 in VIC-II ($D015 Bit 1 = 1)
+    sei
     lda VIC_SPR_ENABLE
     ora #$02
     sta VIC_SPR_ENABLE
+    cli
 
     ; 2. Select Sprite 1 Pointer based on player power stage:
     ;    Stage 1: Block 139 (SPRITE_PTR_PLAYER_SHOT_1)
@@ -243,14 +245,18 @@ weapons_render:
     beq @clear_msb1
 
     ; Set Bit 1 (X >= 256)
+    sei
     lda VIC_SPR_MSB
     ora #$02
     sta VIC_SPR_MSB
+    cli
     rts
 
 @clear_msb1:
     ; Clear Bit 1 (X < 256)
+    sei
     lda VIC_SPR_MSB
     and #$fd
     sta VIC_SPR_MSB
+    cli
     rts
