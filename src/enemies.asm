@@ -76,6 +76,7 @@ g_enemy_reload_timer: !fill MAX_ENEMIES, 60
 
 ; Free-roaming wave spawn timer
 g_wave_spawn_timer: !byte 20
+g_first_spawn_force: !byte 0    ; 0 = timeline progression, 1..8 = force Enemy 1..8 on next spawn only
 
 ; ------------------------------------------------------------------------------
 ; Enemy Bullet State Variables (4 slots: 0..3)
@@ -302,6 +303,8 @@ enemies_init:
     sta g_sort_count
     lda #20
     sta g_wave_spawn_timer
+    lda #0
+    sta g_first_spawn_force
 
     ; Disable physical Sprites 2..7 initially ($D015 Bits 2..7 = 0)
     lda VIC_SPR_ENABLE
@@ -338,67 +341,35 @@ enemies_spawn:
     cpx #MAX_ENEMIES
     bne -
 
-    ; Max allowed active enemies:
-    lda g_debug_force_enemy
-    bne @density_ok             ; In debug mode: allow all MAX_ENEMIES (12)
-
-    ; Timeline progression:
+    ; Max allowed active enemies (driven by elapsed game timeline):
+    ldy #4                      ; Default max 4 (T < 30s)
     lda g_game_time_total_sec + 1
+    bne @density_high           ; T >= 256s
+    lda g_game_time_total_sec + 0
+    cmp #30
+    bcc @check_density_limit
+    ldy #6
+    cmp #90
+    bcc @check_density_limit
+    ldy #8
+    cmp #180
+    bcc @check_density_limit
+    ldy #10
+    jmp @check_density_limit
+
+@density_high:
+    ldy #10
     cmp #>360
     bne +
     lda g_game_time_total_sec + 0
     cmp #<360
-+   bcs @density_ok             ; T >= 360s: up to 12
++   bcc @check_density_limit
+    ldy #MAX_ENEMIES            ; T >= 360s: up to 12
 
-    lda g_game_time_total_sec + 1
-    cmp #>180
-    bne +
-    lda g_game_time_total_sec + 0
-    cmp #<180
-+   bcs @check_10               ; T >= 180s: up to 10
-
-    lda g_game_time_total_sec + 1
-    cmp #>90
-    bne +
-    lda g_game_time_total_sec + 0
-    cmp #<90
-+   bcs @check_8                ; T >= 90s: up to 8
-
-    lda g_game_time_total_sec + 1
-    cmp #>30
-    bne +
-    lda g_game_time_total_sec + 0
-    cmp #<30
-+   bcs @check_6                ; T >= 30s: up to 6
-
-    ; T < 30s: max 4
-    lda s_active_count
-    cmp #4
-    bcs @spawn_exit
-    jmp @find_free_slot
-
-@check_6:
-    lda s_active_count
-    cmp #6
-    bcs @spawn_exit
-    jmp @find_free_slot
-
-@check_8:
-    lda s_active_count
-    cmp #8
-    bcs @spawn_exit
-    jmp @find_free_slot
-
-@check_10:
-    lda s_active_count
-    cmp #10
-    bcs @spawn_exit
-    jmp @find_free_slot
-
-@density_ok:
-    lda s_active_count
-    cmp #MAX_ENEMIES
-    bcs @spawn_exit
+@check_density_limit:
+    cpy s_active_count
+    beq @spawn_exit
+    bcc @spawn_exit
 
 @find_free_slot:
     ldx #0
@@ -449,11 +420,13 @@ enemies_spawn:
     and #$01
     sta g_enemy_dir_y, y
 
-    ; Select archetype (via debug key or progression timeline)
-    lda g_debug_force_enemy
+    ; Select archetype (via one-shot debug spawn or progression timeline)
+    lda g_first_spawn_force
     beq @use_timeline
     sec
     sbc #1                      ; 1..8 -> 0..7
+    ldx #0
+    stx g_first_spawn_force     ; Reset one-shot flag after use
     jmp @setup_archetype
 
 @use_timeline:
@@ -614,9 +587,6 @@ enemies_update:
     jsr enemies_spawn
 
     ; Reset timer based on elapsed time:
-    lda g_debug_force_enemy
-    bne @fast_spawn
-
     lda g_game_time_total_sec + 1
     cmp #>360
     bne +
@@ -808,17 +778,14 @@ enemies_update:
     adc enemy_table_reload, y
     sta s_reload_temp
 
-    ; Post-Enemy 8 / Debug 8 cadence acceleration
-    lda g_debug_force_enemy
-    cmp #8
-    beq +
+    ; Post-Enemy 8 cadence acceleration (T >= 360s)
     lda g_game_time_total_sec + 1
     cmp #>360
     bne ++
     lda g_game_time_total_sec + 0
     cmp #<360
 ++  bcc @rearm_done
-+   lda s_reload_temp
+    lda s_reload_temp
     sec
     sbc #12
     cmp #15

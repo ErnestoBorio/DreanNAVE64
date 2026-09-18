@@ -39,22 +39,28 @@ s_prev_fire:          !byte 0   ; Previous frame fire state (used for edge-detec
 s_col2_active:        !byte 0   ; 1 = Horizontal Column 2 active (R, D, F)
 s_col4_active:        !byte 0   ; 1 = TATE Column 4 active (J, K)
 
-; In-Game Debug Hotkey State Variables (Keys 1..8, 0, C)
-g_debug_force_enemy:  !byte 0   ; 0 = Normal timeline progression, 1..8 = Force Enemy 1..8
+; In-Game Debug Hotkey State Variables (SHIFT + Keys 1..8, C)
 g_debug_border_timer: !byte 0   ; Countdown frames for border flash feedback
+s_shift_held:         !byte 0   ; 1 = SHIFT held down, 0 = SHIFT not pressed
+s_current_debug_key:  !byte 0   ; Digit key active in current frame (0 = none, 1..8)
+s_prev_debug_key:     !byte 0   ; Digit key active in previous frame (edge detector)
 s_prev_c_pressed:     !byte 0   ; Edge-trigger tracking for key 'C'
 s_scan_portb:         !byte 0   ; Saved Port B reading to prevent register clobbering
 
 g_debug_enemy_colors:
-    !byte COLOR_BLACK           ; 0: Normal / Timeline mode
-    !byte COLOR_LIGHT_RED       ; 1: Enemy 1
-    !byte COLOR_GREEN           ; 2: Enemy 2
-    !byte COLOR_PURPLE          ; 3: Enemy 3
-    !byte COLOR_YELLOW          ; 4: Enemy 4
-    !byte COLOR_CYAN            ; 5: Enemy 5
-    !byte COLOR_ORANGE          ; 6: Enemy 6
-    !byte COLOR_LIGHT_BLUE      ; 7: Enemy 7
-    !byte COLOR_WHITE           ; 8: Enemy 8
+    !byte COLOR_LIGHT_RED       ; 0: Enemy 1
+    !byte COLOR_GREEN           ; 1: Enemy 2
+    !byte COLOR_PURPLE          ; 2: Enemy 3
+    !byte COLOR_YELLOW          ; 3: Enemy 4
+    !byte COLOR_CYAN            ; 4: Enemy 5
+    !byte COLOR_ORANGE          ; 5: Enemy 6
+    !byte COLOR_LIGHT_BLUE      ; 6: Enemy 7
+    !byte COLOR_WHITE           ; 7: Enemy 8
+
+debug_tier_min:
+    !byte 0, 0, 1, 1, 2, 3, 4, 6
+debug_tier_sec:
+    !byte 0, 30, 0, 40, 30, 30, 40, 0
 
 ; ==============================================================================
 ; Subroutine: input_init
@@ -75,8 +81,10 @@ input_init:
     sta s_col2_active
     sta s_col4_active
 
-    sta g_debug_force_enemy
     sta g_debug_border_timer
+    sta s_shift_held
+    sta s_current_debug_key
+    sta s_prev_debug_key
     sta s_prev_c_pressed
     rts
 
@@ -105,6 +113,8 @@ input_update:
     sta g_input_fire_pressed
     sta s_col2_active
     sta s_col4_active
+    sta s_shift_held
+    sta s_current_debug_key
 
     ; --------------------------------------------------------------------------
     ; Step 1: Scan Keyboard Matrix (Supports Full 8-Way Diagonals & De-Ghosting)
@@ -115,21 +125,40 @@ input_update:
     lda #$00
     sta CIA1_DIR_B
 
+    ; --- Shift Key Detection (Left Shift: Col 1, PB7; Right Shift: Col 6, PB4) ---
+    lda #$fd            ; Column 1 ($FD = %11111101)
+    sta CIA1_DATA_A
+    lda CIA1_DATA_B
+    bpl +               ; Bit 7 = 0 -> Left Shift pressed!
+
+    lda #$bf            ; Column 6 ($BF = %10111111)
+    sta CIA1_DATA_A
+    lda CIA1_DATA_B
+    and #$10            ; Bit 4 = 0 -> Right Shift pressed!
+    bne @no_shift
++   inc s_shift_held
+@no_shift:
+
     ; --- Column 7 ($7F = %01111111): Debug Keys '1' (PB0) and '2' (PB3) ---
     lda #$7f
     sta CIA1_DATA_A     ; Pull Column 7 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
     sta s_scan_portb
+
+    ; When Shift is held, scan debug keys '1' (PB0) and '2' (PB3)
+    lda s_shift_held
+    beq @col7_debug_done
+    lda s_scan_portb
     and #$01            ; Bit 0: '1' (0 = pressed)
     bne +
     lda #1
-    jsr input_set_debug_enemy
+    sta s_current_debug_key
 +   lda s_scan_portb
     and #$08            ; Bit 3: '2' (0 = pressed)
-    bne +
+    bne @col7_debug_done
     lda #2
-    jsr input_set_debug_enemy
-+
+    sta s_current_debug_key
+@col7_debug_done:
 
     ; --- Column 2 ($FB = %11111011): 'R' (PB1), 'D' (PB2), 'F' (PB5), Debug '5' (PB0), '6' (PB3), 'C' (PB4) ---
     lda #$fb
@@ -152,21 +181,25 @@ input_update:
     bne +
     inc g_input_down
     inc s_col2_active   ; Flag Column 2 active
-+   lda s_scan_portb
++
+    ; Debug Keys '5' (PB0), '6' (PB3), 'C' (PB4) - only scanned if Shift held
+    lda s_shift_held
+    beq @col2_debug_done
+    lda s_scan_portb
     and #$01            ; Bit 0: Debug Key '5' (0 = pressed)
     bne +
     lda #5
-    jsr input_set_debug_enemy
+    sta s_current_debug_key
 +   lda s_scan_portb
     and #$08            ; Bit 3: Debug Key '6' (0 = pressed)
     bne +
     lda #6
-    jsr input_set_debug_enemy
+    sta s_current_debug_key
 +   lda s_scan_portb
     and #$10            ; Bit 4: Debug Key 'C' (Clear all enemies)
     bne @c_not_pressed
     lda s_prev_c_pressed
-    bne +
+    bne @col2_debug_done
     lda #1
     sta s_prev_c_pressed
     jsr enemies_clear_all
@@ -176,11 +209,11 @@ input_update:
     sta VIC_BORDER_COLOR
     lda #8
     sta g_debug_border_timer
-    jmp +
+    jmp @col2_debug_done
 @c_not_pressed:
     lda #0
     sta s_prev_c_pressed
-+
+@col2_debug_done:
 
     ; --- Column 4 ($EF = %11101111): TATE Keys 'J' (PB2), 'K' (PB5), Debug '0' (PB3) ---
     lda #$ef
@@ -196,12 +229,15 @@ input_update:
     bne +
     inc g_input_down
     inc s_col4_active   ; Flag Column 4 active
-+   lda s_scan_portb
-    and #$08            ; Bit 3: Debug Key '0' (0 = pressed)
-    bne +
-    lda #0
-    jsr input_set_debug_enemy
 +
+    lda s_shift_held
+    beq @col4_debug_done
+    lda s_scan_portb
+    and #$08            ; Bit 3: Debug Key '0' (0 = pressed) -> Reset to Tier 0 (Enemy 1 at 0s)
+    bne @col4_debug_done
+    lda #1
+    sta s_current_debug_key
+@col4_debug_done:
 
     ; --- Column 3 ($F7 = %11110111): Shared 'G', 'H', 'U', Debug '7' (PB0), '8' (PB3) ---
     ; De-ghosting:
@@ -234,18 +270,21 @@ input_update:
     lda s_col2_active   ; If Horizontal keys (R/D/F) active, suppress 'U'
     bne +
     inc g_input_right
-+   lda s_scan_portb
-    ; Debug Keys '7' (PB0) and '8' (PB3)
++
+    ; Debug Keys '7' (PB0) and '8' (PB3) - only scanned if Shift held
+    lda s_shift_held
+    beq @col3_debug_done
+    lda s_scan_portb
     and #$01            ; Bit 0: '7' (0 = pressed)
     bne +
     lda #7
-    jsr input_set_debug_enemy
+    sta s_current_debug_key
 +   lda s_scan_portb
     and #$08            ; Bit 3: '8' (0 = pressed)
-    bne +
+    bne @col3_debug_done
     lda #8
-    jsr input_set_debug_enemy
-+
+    sta s_current_debug_key
+@col3_debug_done:
 
     ; --- Column 1 ($FD = %11111101): Fire 'Z' (PB4), Debug '3' (PB0), '4' (PB3) ---
     lda #$fd
@@ -255,17 +294,21 @@ input_update:
     and #$10            ; Bit 4: Key 'Z' (0 = pressed)
     bne +
     inc g_input_fire
-+   lda s_scan_portb
++
+    ; Debug Keys '3' (PB0) and '4' (PB3) - only scanned if Shift held
+    lda s_shift_held
+    beq @col1_debug_done
+    lda s_scan_portb
     and #$01            ; Bit 0: Key '3' (0 = pressed)
     bne +
     lda #3
-    jsr input_set_debug_enemy
+    sta s_current_debug_key
 +   lda s_scan_portb
     and #$08            ; Bit 3: Key '4' (0 = pressed)
-    bne +
+    bne @col1_debug_done
     lda #4
-    jsr input_set_debug_enemy
-+
+    sta s_current_debug_key
+@col1_debug_done:
 
     ; --- Column 5 ($DF = %11011111): Fire Key 'P' (Row PB1) [Right Side Fire] ---
     lda #$df
@@ -365,39 +408,61 @@ input_update:
 @done_edge:
     lda g_input_fire
     sta s_prev_fire
+
+    ; --------------------------------------------------------------------------
+    ; Step 5: Evaluate Edge-Triggered Debug Tier Jump (SHIFT + 1..8)
+    ; --------------------------------------------------------------------------
+    lda s_current_debug_key
+    beq @no_debug_key
+    cmp s_prev_debug_key
+    beq @debug_eval_done        ; Same debug key held across frames: suppress re-trigger
+    sta s_prev_debug_key        ; New keypress edge detected
+    jsr input_jump_to_tier      ; Jump to tier corresponding to key in A (1..8)
+    jmp @debug_eval_done
+
+@no_debug_key:
+    lda #0
+    sta s_prev_debug_key        ; Key released
+
+@debug_eval_done:
     rts
 
 ; ==============================================================================
-; Subroutine: input_set_debug_enemy
-; Purpose: Sets forced enemy archetype (0..8), flashes border, clears screen,
-;          and triggers an immediate staggered spawn wave of the chosen archetype.
-; Input: A = 0 (Normal mode), or 1..8 (Force Enemy 1..8)
+; Subroutine: input_jump_to_tier
+; Purpose: Sets game progression parameters to the unlock tier of Enemy N (1..8),
+;          spawns Enemy N immediately by its own archetype rules, and allows
+;          preceding unlocked enemies (1..N-1) to continue spawning under the tier.
+; Input: A = 1..8 (Enemy 1..8)
 ; ==============================================================================
-input_set_debug_enemy:
-    cmp g_debug_force_enemy
-    beq @already_active         ; Already active forced archetype, do not re-clear
-    sta g_debug_force_enemy
-    cmp #0
-    beq @set_normal_mode
+input_jump_to_tier:
+    sta g_first_spawn_force     ; 1..8: Force Enemy N on very first upcoming spawn
+    sec
+    sbc #1                      ; 1..8 -> 0..7
+    tax                         ; X = archetype / tier index (0..7)
 
-    ; Forced enemy 1..8 selected:
-    tax
+    ; 1. Flash border with archetype feedback color
     lda g_debug_enemy_colors, x
     sta VIC_BORDER_COLOR
     lda #8
     sta g_debug_border_timer
 
-    ; Immediately clear existing enemies and trigger instant spawn
-    jsr enemies_clear_all
-    lda #2                      ; Spawn next enemy in 2 frames
-    sta g_wave_spawn_timer
-    rts
-
-@set_normal_mode:
-    lda #COLOR_BLACK
-    sta VIC_BORDER_COLOR
+    ; 2. Set game elapsed time to unlock threshold of Enemy N
+    lda enemy_table_unlock_sec_lo, x
+    sta g_game_time_total_sec + 0
+    lda enemy_table_unlock_sec_hi, x
+    sta g_game_time_total_sec + 1
+    lda debug_tier_min, x
+    sta g_game_time_min
+    lda debug_tier_sec, x
+    sta g_game_time_sec
     lda #0
-    sta g_debug_border_timer
-@already_active:
+    sta g_game_time_frames
+
+    ; 3. Despawn all active enemies and bullets for a clean wave start
+    jsr enemies_clear_all
+
+    ; 4. Trigger immediate wave spawn (2 frames)
+    lda #2
+    sta g_wave_spawn_timer
     rts
 
