@@ -20,8 +20,8 @@ MAX_VIRTUAL_SPRITES = 16        ; 12 enemies + 4 bullets
 
 ; Trajectory Pattern Equates
 PATTERN_STRAIGHT    = 0         ; Linear horizontal patrol
-PATTERN_SINE        = 1         ; Sinusoidal wave oscillation
-PATTERN_DIAGONAL    = 2         ; Full-screen diagonal bounce (Y = 52..226)
+PATTERN_SINE        = 1         ; Wide sinusoidal wave oscillation (±25 px)
+PATTERN_TRACKING    = 2         ; Dynamic vertical hunting & altitude tracking
 
 ; ------------------------------------------------------------------------------
 ; Virtual Sprite Export Table (16 Virtual Sprites: 0..11 Enemies, 12..15 Bullets)
@@ -90,10 +90,11 @@ g_bullet_vel_y:     !fill MAX_ENEMY_BULLETS, 0 ; Signed byte (-2, -1, 0, 1, 2)
 g_bullet_type:      !fill MAX_ENEMY_BULLETS, 0
 g_bullet_color:     !fill MAX_ENEMY_BULLETS, 0
 
-; Bullet energy palette cycling
-NUM_ENEMY_SHOT_COLORS = 7
+; Bullet energy palette cycling (8 vibrant colors)
+NUM_ENEMY_SHOT_COLORS = 8
 g_enemy_shot_colors:
-    !byte COLOR_CYAN, COLOR_PURPLE, COLOR_YELLOW, COLOR_GREEN, COLOR_LIGHT_GREEN, COLOR_LIGHT_BLUE, COLOR_LIGHT_GRAY
+    !byte COLOR_CYAN, COLOR_PURPLE, COLOR_YELLOW, COLOR_GREEN
+    !byte COLOR_LIGHT_GREEN, COLOR_LIGHT_BLUE, COLOR_WHITE, COLOR_ORANGE
 g_enemy_shot_cycle_idx: !byte 0
 
 ; Temporary calculation variables
@@ -120,11 +121,9 @@ s_shot_type_temp:   !byte 0
 ; ------------------------------------------------------------------------------
 ; Enemy Archetype Data Tables (8 Archetypes: Index 0 to 7)
 ; ------------------------------------------------------------------------------
-PATTERN_MODE_STRAIGHT   = 0     ; 100% Straight flight
-PATTERN_MODE_SINE_MIX   = 1     ; 50% Straight, 50% Sine wave
-PATTERN_MODE_DIAG_MIX   = 2     ; 38% Straight, 62% Diagonal bounce
-PATTERN_MODE_SINE_ONLY  = 3     ; 100% Sine wave
-PATTERN_MODE_DIAG_ONLY  = 4     ; 100% Diagonal bounce
+PATTERN_MODE_SINE_MIX   = 0     ; Sometimes straight, sometimes sine (Enemies 1..5)
+PATTERN_MODE_HUNT_MIX   = 1     ; Sometimes sine, sometimes tracking (Enemy 6)
+PATTERN_MODE_HUNT_ONLY  = 2     ; Dynamic unpredictable vertical tracking (Enemies 7..8)
 
 enemy_table_sprite:
     !byte SPRITE_PTR_ENEMY_1    ; 131: Enemy 1 (Scout)
@@ -140,14 +139,14 @@ enemy_table_hp:
     !byte 1, 1, 2, 2, 3, 3, 4, 6
 
 enemy_table_pattern_mode:
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 1: 50% straight, 50% sine
-    !byte PATTERN_MODE_DIAG_MIX     ; Enemy 2: 38% straight, 62% diagonal
-    !byte PATTERN_MODE_DIAG_ONLY    ; Enemy 3: diagonal bounce
-    !byte PATTERN_MODE_STRAIGHT     ; Enemy 4: fast straight sweep
-    !byte PATTERN_MODE_SINE_ONLY    ; Enemy 5: sine wave oscillation
-    !byte PATTERN_MODE_DIAG_ONLY    ; Enemy 6: diagonal bounce
-    !byte PATTERN_MODE_DIAG_MIX     ; Enemy 7: straight/diagonal
-    !byte PATTERN_MODE_STRAIGHT     ; Enemy 8: heavy straight advance
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 1: straight or sine wave
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 2: straight or sine wave
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 3: straight or sine wave
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 4: straight or sine wave
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 5: straight or sine wave
+    !byte PATTERN_MODE_HUNT_MIX     ; Enemy 6: sine wave or unpredictable tracking
+    !byte PATTERN_MODE_HUNT_ONLY    ; Enemy 7: unpredictable vertical tracking
+    !byte PATTERN_MODE_HUNT_ONLY    ; Enemy 8: unpredictable vertical tracking
 
 enemy_table_speed:
     !byte 1, 2, 2, 3, 2, 2, 2, 1
@@ -218,13 +217,13 @@ tier_spawn_table:
     !byte 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7
 
 ; ------------------------------------------------------------------------------
-; 32-Entry Signed Sine Wave Lookup Table (Amplitude ±8 pixels, 1 full cycle)
+; 32-Entry Signed Sine Wave Lookup Table (Amplitude ±25 pixels, 1 full cycle)
 ; ------------------------------------------------------------------------------
 g_enemy_sine_table:
-    !byte   0,   2,   3,   4,   6,   7,   7,   8
-    !byte   8,   8,   7,   7,   6,   4,   3,   2
-    !byte   0,  -2,  -3,  -4,  -6,  -7,  -7,  -8
-    !byte  -8,  -8,  -7,  -7,  -6,  -4,  -3,  -2
+    !byte   0,   5,  10,  14,  18,  22,  24,  25
+    !byte  25,  25,  24,  22,  18,  14,  10,   5
+    !byte   0,  -5, -10, -14, -18, -22, -24, -25
+    !byte -25, -25, -24, -22, -18, -14, -10,  -5
 
 ; ==============================================================================
 ; Subroutine: enemies_clear_all
@@ -506,53 +505,43 @@ enemies_spawn:
     adc #1
     sta g_enemy_speed, y
 +
-    ; Movement pattern
+    ; Movement pattern setup
     lda enemy_table_pattern_mode, x
-    cmp #PATTERN_MODE_STRAIGHT
+    cmp #PATTERN_MODE_HUNT_ONLY
+    beq @set_pat_tracking
+    cmp #PATTERN_MODE_HUNT_MIX
+    beq @set_pat_hunt_mix
+
+    ; PATTERN_MODE_SINE_MIX (Enemies 1..5): 50% straight, 50% wide sine
+    jsr starfield_rand
+    and #$01
     beq @set_pat_straight
-    cmp #PATTERN_MODE_SINE_MIX
-    beq @set_pat_sine_mix
-    cmp #PATTERN_MODE_DIAG_MIX
-    beq @set_pat_diag_mix
-    cmp #PATTERN_MODE_SINE_ONLY
-    beq @set_pat_sine_only
-    jmp @set_pat_diag_only
+    jmp @set_pat_sine
+
+@set_pat_hunt_mix:
+    ; Enemy 6: 50% wide sine, 50% unpredictable tracking
+    jsr starfield_rand
+    and #$01
+    beq @set_pat_sine
+    jmp @set_pat_tracking
 
 @set_pat_straight:
     lda #PATTERN_STRAIGHT
     sta g_enemy_pattern, y
     jmp @setup_color
 
-@set_pat_sine_mix:
-    jsr starfield_rand
-    and #$01
-    sta g_enemy_pattern, y
-    jmp @setup_sine_phase
-
-@set_pat_sine_only:
+@set_pat_sine:
     lda #PATTERN_SINE
     sta g_enemy_pattern, y
-@setup_sine_phase:
     jsr starfield_rand
     and #$1f
     sta g_enemy_phase, y
     jmp @setup_color
 
-@set_pat_diag_mix:
-    jsr starfield_rand
-    and #$07
-    cmp #3
-    bcs @set_pat_diag_only
-    lda #PATTERN_STRAIGHT
+@set_pat_tracking:
+    lda #PATTERN_TRACKING
     sta g_enemy_pattern, y
     jmp @setup_color
-
-@set_pat_diag_only:
-    lda #PATTERN_DIAGONAL
-    sta g_enemy_pattern, y
-    jsr starfield_rand
-    and #$01
-    sta g_enemy_dir_y, y
 
 @setup_color:
     jsr starfield_rand
@@ -571,14 +560,11 @@ enemies_spawn:
 ; Purpose: Updates wave timers, enemies, and free-flying aimed bullets.
 ; ==============================================================================
 enemies_update:
-    ; 1. Advance bullet color cycling index
+    ; 1. Advance bullet color cycling index (8 colors)
     inc g_enemy_shot_cycle_idx
     lda g_enemy_shot_cycle_idx
-    cmp #NUM_ENEMY_SHOT_COLORS
-    bcc +
-    lda #0
+    and #$07
     sta g_enemy_shot_cycle_idx
-+
     ; 2. Wave Spawn Timer
     dec g_wave_spawn_timer
     bne @update_entities
@@ -705,11 +691,41 @@ enemies_update:
 
 @apply_vert:
     lda g_enemy_pattern, x
-    beq @check_shooting
-    cmp #PATTERN_DIAGONAL
-    beq @diag_bounce
+    beq @check_shooting         ; 0 = Straight horizontal flight
+    cmp #PATTERN_SINE
+    beq @apply_sine             ; 1 = Wide sinusoidal wave oscillation
 
-    ; Sine wave: Y = base_y + sine[phase]
+    ; 2 = PATTERN_TRACKING: Unpredictable dynamic vertical tracking (Enemies 6, 7, 8)
+    jsr starfield_rand
+    and #$03                    ; Add natural jitter (75% movement rate)
+    beq @check_shooting
+
+    lda g_enemy_y, x
+    cmp g_player_y
+    beq @check_shooting
+    bcc @track_down
+
+    ; Enemy is below player: drift upwards
+    sec
+    sbc #1
+    cmp #52
+    bcs +
+    lda #52
++   sta g_enemy_y, x
+    jmp @check_shooting
+
+@track_down:
+    ; Enemy is above player: drift downwards
+    clc
+    adc #1
+    cmp #226
+    bcc +
+    lda #226
++   sta g_enemy_y, x
+    jmp @check_shooting
+
+@apply_sine:
+    ; Wide Sine wave: Y = base_y + sine[phase] clamped to 52..226
     inc g_enemy_phase, x
     lda g_enemy_phase, x
     and #$1f
@@ -718,38 +734,13 @@ enemies_update:
     lda g_enemy_sine_table, y
     clc
     adc g_enemy_base_y, x
-    sta g_enemy_y, x
-    jmp @check_shooting
-
-@diag_bounce:
-    lda g_enemy_dir_y, x
-    bne @diag_down
-
-    ; Moving UP across full screen
-    lda g_enemy_y, x
-    sec
-    sbc #1
-    sta g_enemy_y, x
     cmp #52
-    bcs @check_shooting
+    bcs +
     lda #52
-    sta g_enemy_y, x
-    lda #1
-    sta g_enemy_dir_y, x
-    jmp @check_shooting
-
-@diag_down:
-    ; Moving DOWN across full screen
-    lda g_enemy_y, x
-    clc
-    adc #1
-    sta g_enemy_y, x
-    cmp #226
-    bcc @check_shooting
++   cmp #227
+    bcc ++
     lda #226
-    sta g_enemy_y, x
-    lda #0
-    sta g_enemy_dir_y, x
+++  sta g_enemy_y, x
 
 @check_shooting:
     ; Check if within firing range: 60 <= X <= 300
@@ -817,6 +808,15 @@ enemies_update:
     jmp @next_bullet
 
 @bullet_active:
+    ; Cycle energy color one per frame (with per-slot offset for shimmering effect)
+    txa
+    clc
+    adc g_enemy_shot_cycle_idx
+    and #$07
+    tay
+    lda g_enemy_shot_colors, y
+    sta g_bullet_color, x
+
     ; Move X leftward
     lda g_bullet_x_lo, x
     sec
