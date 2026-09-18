@@ -36,6 +36,7 @@ g_missile_active:   !byte 0     ; 1 = In flight, 0 = Inactive
 g_fire_cooldown:    !byte 0     ; Cooldown counter between shots (frames)
 g_energy_cycle_idx: !byte 0     ; Current index in Energy palette sequence (0..6)
 g_fire_requested:   !byte 0     ; Latched fire trigger flag (1 = Pending shot)
+s_shot_spawn_offset: !byte 0    ; Temporary randomized spawn X offset
 
 ; ==============================================================================
 ; Subroutine: weapons_init
@@ -96,10 +97,16 @@ weapons_fire:
     lda #1
     sta g_missile_active
 
-    ; Position missile at ship nose: X = player_x + 22, Y = player_y + 3
+    ; Position missile at ship nose with randomized offset: 8 + (rand & 15) -> 8..23 pixels
+    jsr starfield_rand
+    and #$0f                    ; 0..15
+    clc
+    adc #8                      ; 8..23 pixels forward (tightly emerging from ship)
+    sta s_shot_spawn_offset
+
     lda g_player_x + 0
     clc
-    adc #22
+    adc s_shot_spawn_offset
     sta g_missile_x + 0
     lda g_player_x + 1
     adc #0
