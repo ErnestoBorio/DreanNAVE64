@@ -57,11 +57,6 @@ g_debug_enemy_colors:
     !byte COLOR_LIGHT_BLUE      ; 6: Enemy 7
     !byte COLOR_WHITE           ; 7: Enemy 8
 
-debug_tier_min:
-    !byte 0, 0, 1, 1, 2, 3, 4, 6
-debug_tier_sec:
-    !byte 0, 30, 0, 40, 30, 30, 40, 0
-
 ; ==============================================================================
 ; Subroutine: input_init
 ; Purpose: Initializes CIA1 I/O port direction registers and resets state variables.
@@ -451,12 +446,10 @@ input_jump_to_tier:
     sta g_game_time_total_sec + 0
     lda enemy_table_unlock_sec_hi, x
     sta g_game_time_total_sec + 1
-    lda debug_tier_min, x
-    sta g_game_time_min
-    lda debug_tier_sec, x
-    sta g_game_time_sec
     lda #0
     sta g_game_time_frames
+    sta g_game_time_sec
+    sta g_game_time_min
 
     ; 3. Despawn all active enemies and bullets for a clean wave start
     jsr enemies_clear_all
