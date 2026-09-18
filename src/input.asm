@@ -170,12 +170,8 @@ input_update:
     lda #1
     sta s_prev_c_pressed
     jsr enemies_clear_all
-    lda #2              ; Trigger immediate staggered wave
-    sta g_lane_spawn_timer + 0
-    lda #15
-    sta g_lane_spawn_timer + 1
-    lda #30
-    sta g_lane_spawn_timer + 2
+    lda #2              ; Trigger immediate wave spawn
+    sta g_wave_spawn_timer
     lda #COLOR_LIGHT_RED
     sta VIC_BORDER_COLOR
     lda #8
@@ -391,14 +387,10 @@ input_set_debug_enemy:
     lda #8
     sta g_debug_border_timer
 
-    ; Immediately clear existing enemies and trigger instant staggered spawns
+    ; Immediately clear existing enemies and trigger instant spawn
     jsr enemies_clear_all
-    lda #2                      ; Lane 0 spawns in 2 frames
-    sta g_lane_spawn_timer + 0
-    lda #15                     ; Lane 1 spawns in 15 frames
-    sta g_lane_spawn_timer + 1
-    lda #30                     ; Lane 2 spawns in 30 frames
-    sta g_lane_spawn_timer + 2
+    lda #2                      ; Spawn next enemy in 2 frames
+    sta g_wave_spawn_timer
     rts
 
 @set_normal_mode:
