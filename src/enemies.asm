@@ -48,6 +48,11 @@ g_enemy_phase:      !byte 0, 0, 0,  0, 0, 0,  0, 0, 0 ; Sine angle (0..31) or Di
 g_enemy_speed:      !byte 0, 0, 0,  0, 0, 0,  0, 0, 0 ; Pixels per frame (1, 2, or 3)
 g_enemy_hp:         !byte 0, 0, 0,  0, 0, 0,  0, 0, 0 ; HP / Hits to destroy
 g_enemy_archetype:  !byte 0, 0, 0,  0, 0, 0,  0, 0, 0 ; Archetype index (0..7)
+g_enemy_dir_x:      !byte 0, 0, 0,  0, 0, 0,  0, 0, 0 ; 0 = Moving Left, 1 = Moving Right
+g_enemy_min_x:      !byte 0, 0, 0,  0, 0, 0,  0, 0, 0 ; Left turnaround limit (pass-specific)
+g_enemy_exploding:  !byte 0, 0, 0,  0, 0, 0,  0, 0, 0 ; Explosion animation timer (12..0)
+g_enemy_flash:      !byte 0, 0, 0,  0, 0, 0,  0, 0, 0 ; Damage flash timer (3..0)
+g_enemy_base_color: !byte 0, 0, 0,  0, 0, 0,  0, 0, 0 ; Preserved base color for flash restore
 
 ; Per-lane wave spawn timers (Lanes 0, 1, 2)
 g_lane_spawn_timer: !byte 25, 75, 125
@@ -95,6 +100,7 @@ s_enable_mask:      !byte 0
 s_reload_temp:      !byte 0
 s_tier_offset_temp: !byte 0
 s_shot_lane_temp:   !byte 0
+s_min_x_temp:       !byte 0
 
 ; ------------------------------------------------------------------------------
 ; Enemy Archetype Data Tables (8 Archetypes: Index 0 to 7)
@@ -147,6 +153,9 @@ enemy_table_shot_type:
     !byte SPRITE_PTR_ENEMY_SHOT_1   ; 142: Single shot
     !byte SPRITE_PTR_ENEMY_SHOT_2   ; 143: Spread shot
     !byte SPRITE_PTR_ENEMY_SHOT_2   ; 143: Spread shot
+
+enemy_table_min_x:
+    !byte 75, 70, 60, 55, 90, 85, 120, 160
 
 ; Unlock thresholds in total elapsed seconds (16-bit)
 enemy_table_unlock_sec_lo:
@@ -213,6 +222,8 @@ enemies_clear_all:
     ldx #0
 -   lda #0
     sta g_enemy_active, x
+    sta g_enemy_exploding, x
+    sta g_enemy_flash, x
     inx
     cpx #MAX_ENEMIES
     bne -
@@ -242,6 +253,11 @@ enemies_init:
     sta g_enemy_phase, x
     sta g_enemy_archetype, x
     sta g_enemy_hp, x
+    sta g_enemy_dir_x, x
+    sta g_enemy_min_x, x
+    sta g_enemy_exploding, x
+    sta g_enemy_flash, x
+    sta g_enemy_base_color, x
     lda #60
     sta g_enemy_reload_timer, x
     inx
@@ -493,6 +509,21 @@ enemies_spawn_lane:
     sta g_enemy_archetype, y
     tax                     ; X = archetype index (0..7)
 
+    ; Initialize roaming & status variables
+    lda #0
+    sta g_enemy_dir_x, y    ; Initial movement direction: Left (inward)
+    sta g_enemy_exploding, y
+    sta g_enemy_flash, y
+
+    ; Calculate randomized left turnaround depth for this pass
+    lda enemy_table_min_x, x
+    sta s_min_x_temp
+    jsr starfield_rand
+    and #$1f                ; 0..31
+    clc
+    adc s_min_x_temp
+    sta g_enemy_min_x, y
+
     ; Set sprite pointer (Blocks 131..138)
     lda enemy_table_sprite, x
     sta g_enemy_type, y
@@ -577,6 +608,7 @@ enemies_spawn_lane:
     tax
     lda @color_palette, x
     sta g_enemy_color, y
+    sta g_enemy_base_color, y
     rts
 
 @color_palette:
@@ -712,26 +744,101 @@ enemies_update:
     jmp @skip_enemy
 
 @enemy_is_active:
-    ; Move horizontally left by speed (1 or 2 px)
+    ; 1. Handle damage flash timer
+    lda g_enemy_flash, x
+    beq +
+    dec g_enemy_flash, x
+    bne @flash_white
+    ; Flash finished: restore base color
+    lda g_enemy_base_color, x
+    sta g_enemy_color, x
+    jmp +
+@flash_white:
+    lda #COLOR_WHITE
+    sta g_enemy_color, x
++
+    ; 2. Handle explosion animation if destroying
+    lda g_enemy_exploding, x
+    beq @not_exploding
+    dec g_enemy_exploding, x
+    beq @explosion_finished
+
+    lda g_enemy_exploding, x
+    cmp #8
+    bcs @exp_frame_1
+    cmp #4
+    bcs @exp_frame_2
+    lda #SPRITE_PTR_EXPLOSION_3
+    sta g_enemy_type, x
+    jmp @skip_enemy
+@exp_frame_2:
+    lda #SPRITE_PTR_EXPLOSION_2
+    sta g_enemy_type, x
+    jmp @skip_enemy
+@exp_frame_1:
+    lda #SPRITE_PTR_EXPLOSION_1
+    sta g_enemy_type, x
+    jmp @skip_enemy
+
+@explosion_finished:
+    lda #0
+    sta g_enemy_active, x
+    jmp @skip_enemy
+
+@not_exploding:
+    ; 3. Horizontal Roaming Movement
+    lda g_enemy_dir_x, x
+    bne @move_right
+
+    ; --- Moving LEFT (Inward towards player) ---
     lda g_enemy_x_lo, x
     sec
     sbc g_enemy_speed, x
     sta g_enemy_x_lo, x
     bcs +
-    ; Borrow from X MSB
     dec g_enemy_x_hi, x
-
-+   ; Despawn check: if X_hi == 0 and X_lo < 16 (fully exited left visible border)
++
+    ; Check if reached left turnaround bound
     lda g_enemy_x_hi, x
     bne @apply_trajectory
     lda g_enemy_x_lo, x
-    cmp #16
+    cmp g_enemy_min_x, x
     bcs @apply_trajectory
+    ; Reached left bound: clamp and reverse direction to RIGHT
+    lda g_enemy_min_x, x
+    sta g_enemy_x_lo, x
+    lda #1
+    sta g_enemy_dir_x, x
+    jmp @apply_trajectory
 
-    ; Deactivate enemy slot
+@move_right:
+    ; --- Moving RIGHT (Hovering retreat at 1 px/frame) ---
+    lda g_enemy_x_lo, x
+    clc
+    adc #1
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++
+    ; Check if reached right turnaround bound: X >= 295 (MSB >= 1 and LSB >= 39)
+    lda g_enemy_x_hi, x
+    beq @apply_trajectory
+    lda g_enemy_x_lo, x
+    cmp #39
+    bcc @apply_trajectory
+    ; Reached right bound: clamp and reverse direction to LEFT
+    lda #39
+    sta g_enemy_x_lo, x
     lda #0
-    sta g_enemy_active, x
-    jmp @skip_enemy
+    sta g_enemy_dir_x, x
+
+    ; Re-randomize left turnaround bound for next inward pass
+    ldy g_enemy_archetype, x
+    jsr starfield_rand
+    and #$1f                    ; 0..31
+    clc
+    adc enemy_table_min_x, y
+    sta g_enemy_min_x, x
 
 @apply_trajectory:
     ; If pattern == 0 (straight), Y stays at base_y
