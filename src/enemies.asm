@@ -61,7 +61,14 @@ g_enemy_y:          !fill MAX_ENEMIES, 0
 g_enemy_base_y:     !fill MAX_ENEMIES, 0
 g_enemy_type:       !fill MAX_ENEMIES, 0
 g_enemy_color:      !fill MAX_ENEMIES, 0
-g_enemy_base_color: !fill MAX_ENEMIES, 0
+s_enemy_color_timer: !byte 25   ; Half-second timer (25 frames @ 50 Hz PAL)
+s_enemy_color_idx:   !byte 0    ; Current index in enemy energy sequence (0..5)
+enemy_energy_colors:
+    !byte COLOR_CYAN, COLOR_ORANGE, COLOR_LIGHT_BLUE, COLOR_LIGHT_GREEN
+    !byte COLOR_GREEN, COLOR_PURPLE
+    !byte COLOR_CYAN, COLOR_ORANGE, COLOR_LIGHT_BLUE, COLOR_LIGHT_GREEN
+    !byte COLOR_GREEN, COLOR_PURPLE
+    !byte COLOR_CYAN, COLOR_ORANGE
 g_enemy_pattern:    !fill MAX_ENEMIES, 0
 g_enemy_phase:      !fill MAX_ENEMIES, 0
 g_enemy_roam_timer: !fill MAX_ENEMIES, 0 ; 0 = Entering screen, >0 = Countdown to roam decision
@@ -106,8 +113,6 @@ s_mask_temp:        !byte 0
 s_active_count:     !byte 0
 s_spawn_y_temp:     !byte 0
 s_shot_slot_temp:   !byte 0
-s_shot_speed_temp:  !byte 0
-s_shot_type_temp:   !byte 0
 
 ; ------------------------------------------------------------------------------
 ; Enemy Archetype Data Tables (8 Archetypes: Index 0 to 7)
@@ -262,7 +267,6 @@ enemies_init:
     sta g_enemy_dir_x, x
     sta g_enemy_exploding, x
     sta g_enemy_flash, x
-    sta g_enemy_base_color, x
     lda #60
     sta g_enemy_reload_timer, x
     inx
@@ -286,10 +290,9 @@ enemies_init:
     lda #0
     sta g_multiplexer_active
     sta g_sort_count
+    sta g_first_spawn_force
     lda #20
     sta g_wave_spawn_timer
-    lda #0
-    sta g_first_spawn_force
 
     ; Disable physical Sprites 2..7 initially ($D015 Bits 2..7 = 0)
     lda VIC_SPR_ENABLE
@@ -515,25 +518,24 @@ enemies_spawn:
     sta g_enemy_phase, y
     lda #PATTERN_SINE
 +   sta g_enemy_pattern, y
-
-@setup_color:
-    jsr starfield_rand
-    and #$03
-    tax
-    lda @color_palette, x
-    sta g_enemy_color, y
-    sta g_enemy_base_color, y
     rts
-
-@color_palette:
-    !byte COLOR_LIGHT_RED, COLOR_LIGHT_GREEN, COLOR_PURPLE, COLOR_YELLOW
 
 ; ==============================================================================
 ; Subroutine: enemies_update
 ; Purpose: Updates wave timers, enemies, and free-flying aimed bullets.
 ; ==============================================================================
 enemies_update:
-    ; Wave Spawn Timer
+    ; 1. Enemy color cycling timer (25 frames = 0.5s in 50 Hz PAL)
+    dec s_enemy_color_timer
+    bne +
+    lda #25
+    sta s_enemy_color_timer
+    dec s_enemy_color_idx
+    bpl +
+    lda #5
+    sta s_enemy_color_idx
++
+    ; 2. Wave Spawn Timer
     dec g_wave_spawn_timer
     bne @update_entities
 
@@ -577,14 +579,25 @@ enemies_update:
     lda g_enemy_flash, x
     beq +
     dec g_enemy_flash, x
-    bne @flash_white
-    lda g_enemy_base_color, x
-    sta g_enemy_color, x
-    jmp +
-@flash_white:
     lda #COLOR_WHITE
     sta g_enemy_color, x
-+
+    bne @skip_color
+
++   ; Spider (Archetype 5) always has main color = Light Gray ($0F)
+    lda #COLOR_LIGHT_GRAY
+    ldy g_enemy_archetype, x
+    cpy #5
+    beq @store_color
+
+    txa
+    clc
+    adc s_enemy_color_idx
+    tay
+    lda enemy_energy_colors, y
+
+@store_color:
+    sta g_enemy_color, x
+@skip_color:
     ; Explosion timer
     lda g_enemy_exploding, x
     beq @not_exploding
@@ -934,15 +947,12 @@ enemies_fire_aimed_bullet:
     ; Speed & Type from archetype tables
     sty s_shot_slot_temp
     ldy g_enemy_archetype, x
-    lda enemy_table_shot_speed, y
-    sta s_shot_speed_temp
     lda enemy_table_shot_type, y
-    sta s_shot_type_temp
-    ldy s_shot_slot_temp
-
-    lda s_shot_speed_temp
+    tax                         ; X = shot type
+    lda enemy_table_shot_speed, y ; A = shot speed
+    ldy s_shot_slot_temp        ; Y = bullet slot
     sta g_bullet_vel_x, y
-    lda s_shot_type_temp
+    txa
     sta g_bullet_type, y
 
     ; Cycling energy color

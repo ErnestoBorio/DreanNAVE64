@@ -67,12 +67,12 @@ player_init:
     ; 8. Configure VIC-II Sprite Colors:
     ;    %10 (Individual Color) = Cyan ($03)
     ;    %01 (Shared MC0 Color) = White ($01)
-    ;    %11 (Shared MC1 Color) = Dark Gray ($0B)
+    ;    %11 (Shared MC1 Color) = Medium Gray ($0C)
     lda #COLOR_CYAN
     sta VIC_SPR0_COLOR
     lda #COLOR_WHITE
     sta VIC_SPR_MC0
-    lda #COLOR_DARK_GRAY
+    lda #COLOR_MEDIUM_GRAY
     sta VIC_SPR_MC1
 
     rts
