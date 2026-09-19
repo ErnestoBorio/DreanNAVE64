@@ -6,31 +6,31 @@
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
-; Sprite Block Pointer Indices (Assuming Base $2000 / Block 128)
+; Sprite Block Pointer Indices (Assuming Base $3000 / Block 192)
 ; ------------------------------------------------------------------------------
-SPRITE_PTR_PLAYER_SHIP_1   = 128  ; Sprite 1: Player Ship Stage 1 (Multicolor)
-SPRITE_PTR_PLAYER_SHIP_2   = 129  ; Sprite 2: Player Ship Stage 2 (Multicolor)
-SPRITE_PTR_PLAYER_SHIP_3   = 130  ; Sprite 3: Player Ship Stage 3 (Multicolor)
-SPRITE_PTR_ENEMY_1         = 131  ; Sprite 4: Enemy Ship 1 (Multicolor)
-SPRITE_PTR_ENEMY_2         = 132  ; Sprite 5: Enemy Ship 2 (Multicolor)
-SPRITE_PTR_ENEMY_3         = 133  ; Sprite 6: Enemy Ship 3 (Multicolor)
-SPRITE_PTR_ENEMY_4         = 134  ; Sprite 7: Enemy Ship 4 - Scorpion (Multicolor)
-SPRITE_PTR_ENEMY_5         = 135  ; Sprite 8: Enemy Ship 5 - Batplane (Multicolor)
-SPRITE_PTR_ENEMY_6         = 136  ; Sprite 9: Enemy Ship 6 - Spider (Multicolor)
-SPRITE_PTR_ENEMY_7         = 137  ; Sprite 10: Enemy Ship 7 - The Eye (Multicolor)
-SPRITE_PTR_ENEMY_8         = 138  ; Sprite 11: Enemy Ship 8 - Death (Multicolor)
-SPRITE_PTR_PLAYER_SHOT_1   = 139  ; Sprite 12: Player Shot Level 1 (Monochrome Hi-Res)
-SPRITE_PTR_PLAYER_SHOT_2   = 140  ; Sprite 13: Player Shot Level 2 (Monochrome Hi-Res Dual)
-SPRITE_PTR_PLAYER_SHOT_3   = 141  ; Sprite 14: Player Shot Level 3 (Monochrome Hi-Res Triple)
-SPRITE_PTR_ENEMY_SHOT_1    = 142  ; Sprite 15: Enemy Shot 1 (Monochrome Hi-Res Single)
-SPRITE_PTR_ENEMY_SHOT_2    = 143  ; Sprite 16: Enemy Shot 2 (Monochrome Hi-Res Spread)
-SPRITE_PTR_EXPLOSION_1     = 144  ; Sprite 17: Explosion Frame 1 (Monochrome Hi-Res)
-SPRITE_PTR_EXPLOSION_2     = 145  ; Sprite 18: Explosion Frame 2 (Monochrome Hi-Res)
-SPRITE_PTR_EXPLOSION_3     = 146  ; Sprite 19: Explosion Frame 3 (Monochrome Hi-Res)
-SPRITE_PTR_HIT_SPARK       = 147  ; Sprite 20: Hit Spark (Monochrome Hi-Res)
+SPRITE_PTR_PLAYER_SHIP_1   = 192  ; Sprite 1: Player Ship Stage 1 (Multicolor)
+SPRITE_PTR_PLAYER_SHIP_2   = 193  ; Sprite 2: Player Ship Stage 2 (Multicolor)
+SPRITE_PTR_PLAYER_SHIP_3   = 194  ; Sprite 3: Player Ship Stage 3 (Multicolor)
+SPRITE_PTR_ENEMY_1         = 195  ; Sprite 4: Enemy Ship 1 (Multicolor)
+SPRITE_PTR_ENEMY_2         = 196  ; Sprite 5: Enemy Ship 2 (Multicolor)
+SPRITE_PTR_ENEMY_3         = 197  ; Sprite 6: Enemy Ship 3 (Multicolor)
+SPRITE_PTR_ENEMY_4         = 198  ; Sprite 7: Enemy Ship 4 - Scorpion (Multicolor)
+SPRITE_PTR_ENEMY_5         = 199  ; Sprite 8: Enemy Ship 5 - Batplane (Multicolor)
+SPRITE_PTR_ENEMY_6         = 200  ; Sprite 9: Enemy Ship 6 - Spider (Multicolor)
+SPRITE_PTR_ENEMY_7         = 201  ; Sprite 10: Enemy Ship 7 - The Eye (Multicolor)
+SPRITE_PTR_ENEMY_8         = 202  ; Sprite 11: Enemy Ship 8 - Death (Multicolor)
+SPRITE_PTR_PLAYER_SHOT_1   = 203  ; Sprite 12: Player Shot Level 1 (Monochrome Hi-Res)
+SPRITE_PTR_PLAYER_SHOT_2   = 204  ; Sprite 13: Player Shot Level 2 (Monochrome Hi-Res Dual)
+SPRITE_PTR_PLAYER_SHOT_3   = 205  ; Sprite 14: Player Shot Level 3 (Monochrome Hi-Res Triple)
+SPRITE_PTR_ENEMY_SHOT_1    = 206  ; Sprite 15: Enemy Shot 1 (Monochrome Hi-Res Single)
+SPRITE_PTR_ENEMY_SHOT_2    = 207  ; Sprite 16: Enemy Shot 2 (Monochrome Hi-Res Spread)
+SPRITE_PTR_EXPLOSION_1     = 208  ; Sprite 17: Explosion Frame 1 (Monochrome Hi-Res)
+SPRITE_PTR_EXPLOSION_2     = 209  ; Sprite 18: Explosion Frame 2 (Monochrome Hi-Res)
+SPRITE_PTR_EXPLOSION_3     = 210  ; Sprite 19: Explosion Frame 3 (Monochrome Hi-Res)
+SPRITE_PTR_HIT_SPARK       = 211  ; Sprite 20: Hit Spark (Monochrome Hi-Res)
 
 ; Default alias for primary player ship
-SPRITE_PTR_PLAYER_SHIP     = 128
+SPRITE_PTR_PLAYER_SHIP     = 192
 
 ; ------------------------------------------------------------------------------
 ; Sprite 1: Player Ship Stage 1 (Multicolor)

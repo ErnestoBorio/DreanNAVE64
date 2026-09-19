@@ -8,7 +8,7 @@
 ; clamping, and VIC-II Hardware Sprite 0 configuration in multicolor mode.
 ; ==============================================================================
 
-PLAYER_SPRITE_BLOCK = 128       ; Base sprite block in VIC-II RAM ($2000 / 64 = 128)
+PLAYER_SPRITE_BLOCK = 192       ; Base sprite block in VIC-II RAM ($3000 / 64 = 192)
 PLAYER_SPEED        = 3         ; Player movement speed (pixels per frame at 50 Hz PAL)
 
 ; ------------------------------------------------------------------------------
@@ -21,7 +21,7 @@ g_player_power:     !byte 0     ; Power-up stage (0 = Ship 1, 1 = Ship 2, 2 = Sh
 
 ; ==============================================================================
 ; Subroutine: player_init
-; Purpose: Initializes player state, copies sprite data to VIC-II RAM ($2000),
+; Purpose: Initializes player state, copies sprite data to VIC-II RAM ($3000),
 ;          and configures VIC-II Hardware Sprite 0 registers.
 ; ==============================================================================
 player_init:
@@ -36,8 +36,8 @@ player_init:
     lda #1
     sta g_player_alive
 
-    ; 2. Set Sprite 0 pointer at $07F8 to point to Player Ship Stage 1 (Block 128)
-    ;    (Sprite data is assembled directly at VIC-II Sprite RAM $2000 - $23FF)
+    ; 2. Set Sprite 0 pointer at $07F8 to point to Player Ship Stage 1 (Block 192)
+    ;    (Sprite data is assembled directly at VIC-II Sprite RAM $3000 - $34FF)
     lda #PLAYER_SPRITE_BLOCK
     sta SPRITE_PTRS + 0
 

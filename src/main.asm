@@ -254,20 +254,9 @@ g_game_time_total_sec:  !word 0 ; Total elapsed seconds (0..65535, ~18.2 hours)
 !src "src/collisions.asm"
 !src "src/hud.asm"
 
-; Assert that all executable code and variables fit safely below $2000
-!if * > $2000 {
-    !error "Fatal: Code exceeded $2000! Sprite RAM collision."
-}
-
-; ------------------------------------------------------------------------------
-; VIC-II Hardware Sprite Data (20 blocks x 64 bytes = 1,280 bytes: $2000 - $24FF)
-; ------------------------------------------------------------------------------
-* = $2000
-!src "src/sprites_data.asm"
-
-; Assert that all sprite data fits safely below Charset RAM ($2800)
+; Assert that all executable code and variables fit safely below Charset RAM ($2800)
 !if * > $2800 {
-    !error "Fatal: Sprite data exceeded $2800! Charset RAM collision."
+    !error "Fatal: Code exceeded $2800! Charset RAM collision."
 }
 
 ; ------------------------------------------------------------------------------
@@ -275,4 +264,20 @@ g_game_time_total_sec:  !word 0 ; Total elapsed seconds (0..65535, ~18.2 hours)
 ; ------------------------------------------------------------------------------
 * = $2800
 !src "src/charset_data.asm"
+
+; Assert that charset data fits safely below Sprite RAM ($3000)
+!if * > $3000 {
+    !error "Fatal: Charset data exceeded $3000! Sprite RAM collision."
+}
+
+; ------------------------------------------------------------------------------
+; VIC-II Hardware Sprite Data (20 blocks x 64 bytes = 1,280 bytes: $3000 - $34FF)
+; ------------------------------------------------------------------------------
+* = $3000
+!src "src/sprites_data.asm"
+
+; Assert that all sprite data fits safely within VIC Bank 0 ($3800)
+!if * > $3800 {
+    !error "Fatal: Sprite data exceeded $3800! Bank 0 collision."
+}
 
