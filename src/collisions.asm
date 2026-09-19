@@ -353,9 +353,14 @@ collisions_check_player:
     rts
 
 @player_destroyed:
-    ; Reached 0 HP: player is dead and ship motion stops
+    ; Reached 0 HP: player is dead, ship motion stops, trigger explosion
     lda #0
     sta g_player_alive
+    sta g_player_invuln_timer
+    lda #24                     ; 24 frames (~0.48 sec) explosion animation
+    sta g_player_exploding
+    lda #12                     ; Extended 12-frame white border flash on death blow
+    sta g_debug_border_timer
     rts
 
 ; ------------------------------------------------------------------------------

@@ -90,35 +90,41 @@ This document is the master technical roadmap for **Drean NAVE 64**, a horizonta
 - Hardware Sprites 2, 3, 4 raster-multiplexed across the 3 vertical lanes (raster splits at lines 0, 112, 177).
 - Left-border recycling (`X < 16`) and independent lane spawn timers.
 
-### Phase 6: Collision Detection & Explosions Subsystem
-**Goal**: Detect missile-to-enemy and player-to-enemy impacts, spawn visual explosions, and handle player lives.
+### Phase 6: Collision Detection, Damage & Explosions Subsystem
+**Goal**: Detect missile-to-enemy and player-to-enemy impacts, spawn visual explosions, and handle player damage/death.
 - Bounding box collision checks:
-  - Player Missiles vs Enemies.
-  - Player Ship vs Enemies.
-- Multi-frame expanding explosion sprite animation sequences.
-- Player damage feedback, life decrement, and respawn invulnerability frames.
-- Score increments on enemy destruction.
+  - Player Missiles vs Enemies (50 px/frame swept-box detection, multi-hit HP, damage flash, and hit sparks).
+  - Player Ship vs Enemies & Enemy Bullets (5-phase demotion, 5 HP in Phase 1, invulnerability blinking).
+- Multi-frame expanding explosion sprite animation sequences for destroyed enemies.
+- Player death explosion animation sequence (24-frame multi-color cycling explosion upon reaching 0 HP).
+- *(Note: Score increments on enemy destruction will be implemented in Phase 8 alongside the HUD display).*
 
-### Phase 7: SID Sound Effects & Audio Subsystem
-**Goal**: Integrate audio feedback using the Commodore 64 SID chip (`$D400 - $D41C`).
-- SID register initialization, volume setup, and voice clearing.
-- High-pitched pulse/noise sweep for player missile firing.
-- Low-frequency noise crash for enemy explosions.
-- Hit and respawn sound effects.
+### Phase 7: Powerups Subsystem (Background Grid Items) [IN PROGRESS]
+**Goal**: Spawn, scroll, and collect powerup items using custom character set tiles 0–7 and 16–23.
+- **Implemented**:
+  - Letter 'P' (Power / Evolution): 2x2 grid letter 'P' (tiles 0, 1, 16, 17) in `COLOR_YELLOW`.
+  - 5-Phase Ship Evolution: Single $\rightarrow$ Dual $\rightarrow$ Triple $\rightarrow$ Scaled Dual $\rightarrow$ Scaled Triple with hardware scaling (`VIC_SPR_EXP_X/Y`).
+  - Scrolling & complete erasure upon pickup across columns.
+  - Natural spawn spacing (25s initial delay, 40s intervals) and debug force spawn (<kbd>SHIFT</kbd>+<kbd>P</kbd>).
+- **Pending Powerups**:
+  - Letter 'B' (Bomb): Screen-clearing smart bomb item.
+  - Letter 'E' (Energy / Extra HP): Restores player shields/HP.
+  - Letter 'T' (Turbo / Speed / Tactical): Speed boost / special ability item.
 
-### Phase 8: HUD & Game Flow State Machine
-**Goal**: Implement the arcade status display and overall game flow.
-- Top status line in Screen RAM displaying `SCORE`, `LIVES`, and `HIGH SCORE`.
+### Phase 8: HUD, Scoring & Game Flow State Machine
+**Goal**: Implement the arcade status display, score accumulation, and overall game flow.
+- Score increments upon enemy destruction based on enemy rank/HP.
+- Top status line in Screen RAM displaying `SCORE`, `PHASE` / `HP`, and elapsed time `MM:SS`.
 - Title Screen, Active Play, and Game Over / Restart state machine.
 - Game reset handling to restart a fresh session without rebooting.
 
-### Phase 9: Powerups Subsystem (Background Grid Items)
-**Goal**: Spawn, scroll, and collect powerup items using custom character set tiles 0–7 and 16–23.
-- Visuals: Base tiles `$00`–`$07` and animated 2nd-phase tiles `$10`–`$17` spawned into Screen RAM (`$0400`) and Color RAM (`$D800`) at Column 39.
-- Movement: Automatically scrolls leftward with the 25 FPS background starfield scroll.
-- Collection & Buffs: Bounding box collision check between player ship and powerup grid cells.
-- Buff types: Weapon upgrade (Single -> Dual -> Triple), speed boost, shields, bonus points.
-- Audio: SID sound effect / pickup chime on collection.
+### Phase 9: SID Sound Effects & Audio Subsystem (Deferred to End)
+**Goal**: Integrate audio feedback using the Commodore 64 SID chip (`$D400 - $D41C`).
+- SID register initialization, volume setup, and voice clearing.
+- High-pitched pulse/noise sweep for player missile firing.
+- Low-frequency noise crash for enemy explosions and player death.
+- Hit spark, armor strike, and powerup collection chimes.
+
 
 ---
 

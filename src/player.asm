@@ -17,6 +17,7 @@ PLAYER_SPEED        = 3         ; Player movement speed (pixels per frame at 50 
 g_player_x:         !word 60    ; 16-bit X coordinate in VIC-II raster space (24..320)
 g_player_y:         !byte 120   ; 8-bit Y coordinate in VIC-II raster space (50..240)
 g_player_alive:     !byte 1     ; Player life state (1 = Alive, 0 = Destroyed)
+g_player_exploding: !byte 0     ; Player explosion countdown timer (0 = Inactive)
 g_player_phase:     !byte 1     ; Ship evolution phase (1..5, starts at 1)
 g_player_hp:        !byte 5     ; Player health points in Phase 1 (0..5, starts at 5)
 g_player_invuln_timer: !byte 0  ; Invulnerability frames remaining (0 = vulnerable)
@@ -31,6 +32,7 @@ player_init:
     lda #0
     sta g_player_x + 1
     sta g_player_invuln_timer
+    sta g_player_exploding
     lda #60
     sta g_player_x + 0
     lda #120
@@ -88,9 +90,13 @@ player_init:
 ;          and enforces strict playfield screen boundaries.
 ; ==============================================================================
 player_update:
-    ; If player is dead, skip motion processing
+    ; If player is dead, update explosion countdown and skip motion
     lda g_player_alive
     bne +
+    lda g_player_exploding
+    beq @dead_done
+    dec g_player_exploding
+@dead_done:
     rts
 +
     ; Decrement invulnerability countdown
@@ -194,7 +200,52 @@ player_render:
     lda g_player_alive
     bne @check_flicker
 
-    ; Player destroyed: disable Hardware Sprite 0
+    ; Player dead: check if currently exploding
+    lda g_player_exploding
+    beq @player_hidden
+
+    ; --- Player Death Explosion Rendering ---
+    sei
+    ; Ensure Hardware Sprite 0 is enabled
+    lda VIC_SPR_ENABLE
+    ora #$01
+    sta VIC_SPR_ENABLE
+
+    ; Switch Sprite 0 to Hi-Res Monochrome for explosion frames
+    lda VIC_SPR_MULTICOLOR
+    and #$fe
+    sta VIC_SPR_MULTICOLOR
+
+    ; Ensure Sprite 0 is unscaled
+    lda VIC_SPR_EXP_X
+    and #$fe
+    sta VIC_SPR_EXP_X
+    lda VIC_SPR_EXP_Y
+    and #$fe
+    sta VIC_SPR_EXP_Y
+    cli
+
+    ; Select explosion frame: 24 frames total (8 frames per explosion frame)
+    lda #SPRITE_PTR_EXPLOSION_1
+    ldx g_player_exploding
+    cpx #16
+    bcs +
+    lda #SPRITE_PTR_EXPLOSION_2
+    cpx #8
+    bcs +
+    lda #SPRITE_PTR_EXPLOSION_3
++   sta SPRITE_PTRS + 0
+
+    ; Cycle energy color one per frame during explosion
+    ldx g_energy_cycle_idx
+    lda g_energy_colors, x
+    sta VIC_SPR0_COLOR
+
+    ; Anchor explosion at the exact coordinates where player died
+    jmp @write_coords
+
+@player_hidden:
+    ; Player destroyed and explosion finished: disable Hardware Sprite 0
     sei
     lda VIC_SPR_ENABLE
     and #$fe
@@ -218,12 +269,19 @@ player_render:
     rts
 
 @render_active:
-    ; Ensure Hardware Sprite 0 is enabled
+    ; Ensure Hardware Sprite 0 is enabled and in Multicolor mode
     sei
     lda VIC_SPR_ENABLE
     ora #$01
     sta VIC_SPR_ENABLE
+    lda VIC_SPR_MULTICOLOR
+    ora #$01
+    sta VIC_SPR_MULTICOLOR
     cli
+
+    ; Restore Sprite 0 Individual Color (Cyan)
+    lda #COLOR_CYAN
+    sta VIC_SPR0_COLOR
 
     ; 2. Select Sprite 0 Pointer based on player phase (1..5 -> 0..4)
     ldx g_player_phase
