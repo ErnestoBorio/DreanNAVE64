@@ -20,8 +20,6 @@ POWERUP_CHAR_TL     = 0         ; Top-Left quadrant tile index
 POWERUP_CHAR_TR     = 1         ; Top-Right quadrant tile index
 POWERUP_CHAR_BL     = 16        ; Bottom-Left quadrant tile index ($10)
 POWERUP_CHAR_BR     = 17        ; Bottom-Right quadrant tile index ($11)
-POWERUP_COLOR       = COLOR_YELLOW ; Vibrant Yellow powerup color
-
 POWERUP_INITIAL_DELAY   = 1250  ; 1,250 frames = 25.0 seconds at 50 Hz PAL
 POWERUP_SPAWN_INTERVAL  = 2000  ; 2,000 frames = 40.0 seconds at 50 Hz PAL
 
@@ -35,6 +33,13 @@ g_powerup_timer_lo: !byte 0     ; Countdown timer low byte for natural spawn
 g_powerup_timer_hi: !byte 0     ; Countdown timer high byte for natural spawn
 s_powerup_diff_lo:  !byte 0     ; Math scratch for collision testing
 s_powerup_diff_hi:  !byte 0     ; Math scratch for collision testing
+s_powerup_color_timer:   !byte 25 ; 25 frames = 0.5s at 50 Hz PAL
+s_powerup_color_idx:     !byte 0  ; Index in cycle (0..3)
+s_powerup_current_color: !byte COLOR_PURPLE
+
+; Color cycle table: Purple -> Blue -> Light Blue -> Cyan (0.5s each)
+powerup_color_cycle:
+    !byte COLOR_PURPLE, COLOR_BLUE, COLOR_LIGHT_BLUE, COLOR_CYAN
 
 ; ==============================================================================
 ; Subroutine: powerups_init
@@ -45,6 +50,11 @@ powerups_init:
     sta g_powerup_active
     sta g_powerup_col
     sta g_powerup_row
+    sta s_powerup_color_idx
+    lda #25
+    sta s_powerup_color_timer
+    lda #COLOR_PURPLE
+    sta s_powerup_current_color
     lda #<POWERUP_INITIAL_DELAY
     sta g_powerup_timer_lo
     lda #>POWERUP_INITIAL_DELAY
@@ -97,6 +107,14 @@ powerups_stamp_new:
     lda #1
     sta g_powerup_active
 
+    ; Reset color cycle to start at Purple (0.5s per color)
+    lda #0
+    sta s_powerup_color_idx
+    lda #25
+    sta s_powerup_color_timer
+    lda #COLOR_PURPLE
+    sta s_powerup_current_color
+
     ; 1. Stamp Top Row (Row R): Char 0 at Col 38, Char 1 at Col 39
     ldy g_powerup_row
     lda screen_row_table_lo, y
@@ -104,22 +122,12 @@ powerups_stamp_new:
     lda screen_row_table_hi, y
     sta $fc
 
-    lda color_row_table_lo, y
-    sta $fd
-    lda color_row_table_hi, y
-    sta $fe
-
     ldy #38
     lda #POWERUP_CHAR_TL
     sta ($fb), y
-    lda #POWERUP_COLOR
-    sta ($fd), y
-
     iny                         ; 39
     lda #POWERUP_CHAR_TR
     sta ($fb), y
-    lda #POWERUP_COLOR
-    sta ($fd), y
 
     ; 2. Stamp Bottom Row (Row R + 1): Char 16 at Col 38, Char 17 at Col 39
     ldy g_powerup_row
@@ -129,24 +137,15 @@ powerups_stamp_new:
     lda screen_row_table_hi, y
     sta $fc
 
-    lda color_row_table_lo, y
-    sta $fd
-    lda color_row_table_hi, y
-    sta $fe
-
     ldy #38
     lda #POWERUP_CHAR_BL
     sta ($fb), y
-    lda #POWERUP_COLOR
-    sta ($fd), y
-
     iny                         ; 39
     lda #POWERUP_CHAR_BR
     sta ($fb), y
-    lda #POWERUP_COLOR
-    sta ($fd), y
 
-    rts
+    ; 3. Apply initial color across both rows
+    jmp powerups_recolor
 
 ; ==============================================================================
 ; Subroutine: powerups_erase
@@ -239,18 +238,68 @@ powerups_erase:
     rts
 
 ; ==============================================================================
+; Subroutine: powerups_recolor
+; Purpose: Re-paints current cycling color into Color RAM for active powerup tiles.
+;          Cycles through Purple, Blue, Light Blue, Cyan (0.5s each).
+; ==============================================================================
+powerups_recolor:
+    lda g_powerup_active
+    bne +
+    rts
++
+    ldx s_powerup_color_idx
+    lda powerup_color_cycle, x
+    sta s_powerup_current_color
+
+    ldx #0                      ; Row offset: 0 = Row R, 1 = Row R + 1
+@row_loop:
+    txa
+    clc
+    adc g_powerup_row
+    tay
+    cpy #25
+    bcs @next_row
+
+    lda color_row_table_lo, y
+    sta $fd
+    lda color_row_table_hi, y
+    sta $fe
+
+    lda g_powerup_col
+    cmp #$ff
+    beq @col_edge
+
+    tay
+    lda s_powerup_current_color
+    sta ($fd), y
+    iny
+    sta ($fd), y
+    jmp @next_row
+
+@col_edge:
+    ldy #0
+    lda s_powerup_current_color
+    sta ($fd), y
+
+@next_row:
+    inx
+    cpx #2
+    bne @row_loop
+    rts
+
+; ==============================================================================
 ; Subroutine: powerups_update
-; Purpose: Advances scroll position on starfield shift frames first, then counts
-;          down natural spawn timer. This strict order prevents 1-column desync.
+; Purpose: Advances scroll position on starfield shift frames first, updates
+;          color cycling animation, then counts down natural spawn timer.
 ; ==============================================================================
 powerups_update:
     ; 1. Synchronize column scroll with starfield shift (every 4 frames)
     lda g_starfield_frame
     and #$03
-    bne @check_spawn
+    bne @check_anim
 
     lda g_powerup_active
-    beq @check_spawn
+    beq @check_anim
 
     ; If col was 0, decrement to $FF (left half leaves screen, right half at col 0)
     ; If col was $FF, both halves have left screen -> deactivate!
@@ -262,11 +311,28 @@ powerups_update:
     sbc #1
     sta g_powerup_col
     cmp #$ff
-    bne @check_spawn
+    bne @check_anim
 
 @deactivate:
     lda #0
     sta g_powerup_active
+
+@check_anim:
+    lda g_powerup_active
+    beq @check_spawn
+
+    ; Decrement color animation timer (25 frames = 0.5s at 50 Hz PAL)
+    dec s_powerup_color_timer
+    bne @apply_recolor
+    lda #25
+    sta s_powerup_color_timer
+    inc s_powerup_color_idx
+    lda s_powerup_color_idx
+    and #$03
+    sta s_powerup_color_idx
+
+@apply_recolor:
+    jsr powerups_recolor
 
 @check_spawn:
     ; 2. Decrement natural spawn timer

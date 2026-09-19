@@ -78,6 +78,11 @@ hud_init:
     lda #COLOR_RED
     sta $d80a
 
+    ; Draw bulk double zeroes '00' (Char 48 = $30) at Cols 32 and 31
+    lda #$30
+    sta $0420
+    sta $041f
+
     ; Initial render of score and energy
     jsr hud_render_energy
     jsr hud_render_score
@@ -103,32 +108,41 @@ hud_update:
     jsr hud_render_energy
 
 @check_flash:
-    ; 2. When energy is at 1 or 2 HP, flash the active energy bars and heart signaling death is near!
-    lda s_prev_hp
-    beq @restore_heart          ; 0 HP -> do not flash
-    cmp #3
-    bcs @restore_heart          ; >= 3 HP -> do not flash
+    ; 2. Only flash when player is alive, in Phase 1, and at 1 or 2 HP (Phases 2+ have phase armor)
     lda g_player_alive
-    beq @restore_heart
+    beq @solid_red
+    lda g_player_phase
+    cmp #1
+    bne @solid_red
+    lda s_prev_hp
+    beq @solid_red
+    cmp #3
+    bcs @solid_red
 
     ; Flash every 8 frames (~3.1 Hz heartbeat rate) between COLOR_RED and COLOR_WHITE
     lda g_game_time_frames
     and #$08
-    beq +
+    beq @red_flash
     lda #COLOR_WHITE
-    bne ++
-+   lda #COLOR_RED
-++  sta $d80a                   ; Heart color (Col 10)
+    bne @apply_bar_color
+
+@solid_red:
+@red_flash:
+    lda #COLOR_RED
+
+@apply_bar_color:
+    sta $d80a                   ; Heart color (Col 10)
+    lda s_prev_hp
+    beq @check_score            ; 0 HP -> do not color bars (remain blank/black)
+    cmp #3
+    bcs @check_score            ; 3..5 HP -> do not touch bars (already yellow/green)
+
+    lda $d80a                   ; Reload color (WHITE or RED)
     ldx s_empty_count           ; Active energy bars: s_empty_count up to slot 9
 -   sta $d800, x
     inx
     cpx #10
     bne -
-    jmp @check_score
-
-@restore_heart:
-    lda #COLOR_RED
-    sta $d80a                   ; Ensure heart is solid red when not flashing
 
 @check_score:
     ; Check if 16-bit score changed
@@ -290,21 +304,6 @@ hud_render_score:
     sta $0422
     lda s_score_digits + 4
     sta $0421
-
-    ; Cols 32 and 31: Bulk double zeroes '00' (Char 48 = $30)
-    lda #$30
-    sta $0420
-    sta $041f
-
-    ; Set Color RAM for Cols 37..31 to COLOR_WHITE
-    lda #COLOR_WHITE
-    sta $d825
-    sta $d824
-    sta $d823
-    sta $d822
-    sta $d821
-    sta $d820
-    sta $d81f
     rts
 
 ; ==============================================================================
