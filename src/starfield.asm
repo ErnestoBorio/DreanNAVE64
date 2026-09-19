@@ -18,6 +18,7 @@
 g_starfield_frame:  !byte 0   ; Frame counter for scroll timing
 s_lfsr_lo:          !byte $ac ; 16-bit Galois LFSR low byte
 s_lfsr_hi:          !byte $e1 ; 16-bit Galois LFSR high byte
+s_row_idx:          !byte 0   ; Row index for starfield_init (Rows 1..24)
 
 ; ==============================================================================
 ; Subroutine: starfield_rand
@@ -56,51 +57,33 @@ starfield_init:
     sta s_lfsr_hi
 
     ; 4. Populate initial playfield stars across Rows 1..24 (960 characters)
-    ; Page 1 of playfield: $0428 to $0527 (256 bytes)
-    ldx #0
-@seed_page0:
-    jsr starfield_rand
-    tay
-    lda g_star_prob_table, y
-    sta $0428, x
-    lda g_star_color_table, y
-    sta $d828, x
-    inx
-    bne @seed_page0
+    lda #1
+    sta s_row_idx
+@row_loop:
+    ldx s_row_idx
+    lda screen_row_table_lo, x
+    sta $fb
+    sta $fd                     ; screen_row_table_lo == color_row_table_lo
+    lda screen_row_table_hi, x
+    sta $fc
+    lda color_row_table_hi, x
+    sta $fe
 
-    ; Page 2 of playfield: $0528 to $0627 (256 bytes)
-@seed_page1:
+    ldy #39
+@col_loop:
     jsr starfield_rand
-    tay
-    lda g_star_prob_table, y
-    sta $0528, x
-    lda g_star_color_table, y
-    sta $d928, x
-    inx
-    bne @seed_page1
+    tax
+    lda g_star_prob_table, x
+    sta ($fb), y
+    lda g_star_color_table, x
+    sta ($fd), y
+    dey
+    bpl @col_loop
 
-    ; Page 3 of playfield: $0628 to $0727 (256 bytes)
-@seed_page2:
-    jsr starfield_rand
-    tay
-    lda g_star_prob_table, y
-    sta $0628, x
-    lda g_star_color_table, y
-    sta $da28, x
-    inx
-    bne @seed_page2
-
-    ; Remaining 192 bytes of playfield: $0728 to $07E7
-@seed_page3:
-    jsr starfield_rand
-    tay
-    lda g_star_prob_table, y
-    sta $0728, x
-    lda g_star_color_table, y
-    sta $db28, x
-    inx
-    cpx #192
-    bne @seed_page3
+    inc s_row_idx
+    lda s_row_idx
+    cmp #25
+    bne @row_loop
     rts
 
 ; ==============================================================================

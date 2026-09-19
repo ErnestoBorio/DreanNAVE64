@@ -27,34 +27,23 @@
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
-; Input State RAM Variables
-; ------------------------------------------------------------------------------
+; Input State RAM Variables: Frame-cleared (0..9)
 g_input_up:           !byte 0   ; 1 = Move Up active, 0 = Inactive
 g_input_down:         !byte 0   ; 1 = Move Down active, 0 = Inactive
 g_input_left:         !byte 0   ; 1 = Move Left active, 0 = Inactive
 g_input_right:        !byte 0   ; 1 = Move Right active, 0 = Inactive
 g_input_fire:         !byte 0   ; 1 = Fire button held down (level-triggered)
 g_input_fire_pressed: !byte 0   ; 1 = Fire button newly pressed (edge-triggered)
-s_prev_fire:          !byte 0   ; Previous frame fire state (used for edge-detection)
 s_col2_active:        !byte 0   ; 1 = Horizontal Column 2 active (R, D, F)
 s_col4_active:        !byte 0   ; 1 = TATE Column 4 active (J, K)
-
-; In-Game Debug Hotkey State Variables (SHIFT + Keys 1..8, C)
-g_debug_border_timer: !byte 0   ; Countdown frames for border flash feedback
 s_shift_held:         !byte 0   ; 1 = SHIFT held down, 0 = SHIFT not pressed
 s_current_debug_key:  !byte 0   ; Digit key active in current frame (0 = none, 1..8, 9=C)
-s_prev_debug_key:     !byte 0   ; Digit key active in previous frame (edge detector)
-s_scan_portb:         !byte 0   ; Saved Port B reading to prevent register clobbering
 
-g_debug_enemy_colors:
-    !byte COLOR_LIGHT_RED       ; 0: Enemy 1
-    !byte COLOR_GREEN           ; 1: Enemy 2
-    !byte COLOR_PURPLE          ; 2: Enemy 3
-    !byte COLOR_YELLOW          ; 3: Enemy 4
-    !byte COLOR_CYAN            ; 4: Enemy 5
-    !byte COLOR_ORANGE          ; 5: Enemy 6
-    !byte COLOR_LIGHT_BLUE      ; 6: Enemy 7
-    !byte COLOR_WHITE           ; 7: Enemy 8
+; Frame-preserved State Variables (10..13)
+s_prev_fire:          !byte 0   ; Previous frame fire state (used for edge-detection)
+s_prev_debug_key:     !byte 0   ; Digit key active in previous frame (edge detector)
+g_debug_border_timer: !byte 0   ; Countdown frames for border flash feedback
+s_scan_portb:         !byte 0   ; Saved Port B reading to prevent register clobbering
 
 ; ==============================================================================
 ; Subroutine: input_init
@@ -65,20 +54,10 @@ input_init:
     sta CIA1_DIR_A      ; Port A = Input mode
     sta CIA1_DIR_B      ; Port B = Input mode
 
-    sta g_input_up
-    sta g_input_down
-    sta g_input_left
-    sta g_input_right
-    sta g_input_fire
-    sta g_input_fire_pressed
-    sta s_prev_fire
-    sta s_col2_active
-    sta s_col4_active
-
-    sta g_debug_border_timer
-    sta s_shift_held
-    sta s_current_debug_key
-    sta s_prev_debug_key
+    ldx #13
+-   sta g_input_up, x
+    dex
+    bpl -
     rts
 
 ; ==============================================================================
@@ -98,16 +77,10 @@ input_update:
 +
     ; 1. Reset frame input flags to 0 (inactive)
     lda #$00
-    sta g_input_up
-    sta g_input_down
-    sta g_input_left
-    sta g_input_right
-    sta g_input_fire
-    sta g_input_fire_pressed
-    sta s_col2_active
-    sta s_col4_active
-    sta s_shift_held
-    sta s_current_debug_key
+    ldx #9
+-   sta g_input_up, x
+    dex
+    bpl -
 
     ; --------------------------------------------------------------------------
     ; Step 1: Scan Keyboard Matrix (Supports Full 8-Way Diagonals & De-Ghosting)

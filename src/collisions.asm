@@ -129,15 +129,7 @@ collisions_check:
     ; Enemy destroyed (HP == 0): Deactivate missile and trigger 12-frame explosion
     lda #0
     sta g_missile_active
-    lda #12
-    sta g_enemy_exploding, x
-    lda #SPRITE_PTR_EXPLOSION_1
-    sta g_enemy_type, x
-
-    ; Award score points based on enemy archetype (0..7)
-    ldy g_enemy_archetype, x
-    lda enemy_score_table, y
-    jsr hud_add_score
+    jsr collisions_kill_enemy
     rts
 
 @next_enemy:
@@ -147,6 +139,21 @@ collisions_check:
     jmp @check_enemy_loop
 @all_enemies_checked:
     rts
+
+; ==============================================================================
+; Subroutine: collisions_kill_enemy
+; Purpose: Instantly destroys enemy slot X, triggers explosion and awards score.
+; ==============================================================================
+collisions_kill_enemy:
+    lda #12
+    sta g_enemy_exploding, x
+    lda #SPRITE_PTR_EXPLOSION_1
+    sta g_enemy_type, x
+
+    ; Award score points based on enemy archetype (0..7)
+    ldy g_enemy_archetype, x
+    lda enemy_score_table, y
+    jmp hud_add_score
 
 ; ==============================================================================
 ; Subroutine: collisions_check_player
@@ -331,6 +338,9 @@ collisions_check_player:
     rts
 
 @player_hit_by_ship:
+    ; Instantly kill the enemy ship collided with, regardless of its HP
+    jsr collisions_kill_enemy
+
 @player_take_hit:
     ; 1. White border flash for damage feedback
     lda #COLOR_WHITE
@@ -366,6 +376,8 @@ collisions_check_player:
     sta g_player_exploding
     lda #12                     ; Extended 12-frame white border flash on death blow
     sta g_debug_border_timer
+    lda #150                    ; 150 frames = 3.0 seconds delay before Game Over
+    sta g_game_over_timer
     rts
 
 ; ------------------------------------------------------------------------------

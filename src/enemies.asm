@@ -223,28 +223,23 @@ g_enemy_sine_table:
 ; Purpose: Despawns all active enemies and bullets immediately.
 ; ==============================================================================
 enemies_clear_all:
-    ldx #0
--   lda #0
-    sta g_enemy_active, x
+    lda #0
+    ldx #MAX_VIRTUAL_SPRITES - 1
+-   sta v_spr_active, x
+    dex
+    bpl -
+
+    ldx #MAX_ENEMIES - 1
+-   sta g_enemy_active, x
     sta g_enemy_exploding, x
     sta g_enemy_flash, x
-    inx
-    cpx #MAX_ENEMIES
-    bne -
+    dex
+    bpl -
 
-    ldx #0
--   lda #0
-    sta g_bullet_active, x
-    inx
-    cpx #MAX_ENEMY_BULLETS
-    bne -
-
-    ldx #0
--   lda #0
-    sta v_spr_active, x
-    inx
-    cpx #MAX_VIRTUAL_SPRITES
-    bne -
+    ldx #MAX_ENEMY_BULLETS - 1
+-   sta g_bullet_active, x
+    dex
+    bpl -
     rts
 
 ; ==============================================================================
@@ -273,9 +268,9 @@ enemies_init:
     cpx #MAX_ENEMIES
     bne -
 
-    ldx #0
--   lda #0
-    sta g_bullet_active, x
+    lda #0
+    ldx #MAX_ENEMY_BULLETS - 1
+-   sta g_bullet_active, x
     sta g_bullet_x_lo, x
     sta g_bullet_x_hi, x
     sta g_bullet_y, x
@@ -283,9 +278,8 @@ enemies_init:
     sta g_bullet_vel_y, x
     sta g_bullet_type, x
     sta g_bullet_color, x
-    inx
-    cpx #MAX_ENEMY_BULLETS
-    bne -
+    dex
+    bpl -
 
     lda #0
     sta g_multiplexer_active

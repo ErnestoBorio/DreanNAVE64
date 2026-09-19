@@ -40,13 +40,10 @@ s_shot_spawn_offset: !byte 0    ; Temporary randomized spawn X offset
 weapons_init:
     ; 1. Reset all missile state variables
     lda #0
-    sta g_missile_x + 0
-    sta g_missile_x + 1
-    sta g_missile_y
-    sta g_missile_active
-    sta g_fire_cooldown
-    sta g_energy_cycle_idx
-    sta g_fire_requested
+    ldx #6
+-   sta g_missile_x, x
+    dex
+    bpl -
 
     ; 2. Disable Hardware Sprite 1 initially ($D015 Bit 1 = 0)
     lda VIC_SPR_ENABLE

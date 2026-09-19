@@ -96,12 +96,6 @@ start:
     ; 8. Setup VIC-II Raster Interrupt for 3-lane enemy multiplexer
     sei                         ; Ensure interrupts are masked during setup
 
-    ; Point Hardware IRQ Vector ($0314) to raster_irq
-    lda #<raster_irq
-    sta IRQ_VECTOR + 0
-    lda #>raster_irq
-    sta IRQ_VECTOR + 1
-
     ; Configure VIC-II Raster IRQ
     lda VIC_CTRL1
     and #$7f                    ; Clear raster compare line bit 8 (Line 0 < 256)
@@ -139,6 +133,15 @@ main_loop:
     ; 3. Update Game Elapsed Time Counter (50 Hz PAL)
     jsr game_timer_update
 
+    ; 4. Check if Game Over is active
+    lda g_game_over
+    beq @game_active
+
+    ; Game Over loop: keep HUD static, skip world motion, starfield scroll, and sprites
+    jsr hud_update
+    jmp main_loop
+
+@game_active:
     ; 4. Update Game Entities & World Motion
     jsr player_update
     jsr weapons_update
@@ -150,11 +153,10 @@ main_loop:
     jsr powerups_check_collision
     jsr hud_update
 
-    ; 4. Render Graphics & Hardware Sprites
+    ; 5. Render Graphics & Hardware Sprites
     jsr player_render
     jsr weapons_render
     jsr enemies_render
-    jsr hud_render
 
     jmp main_loop
 
@@ -245,6 +247,12 @@ g_game_time_frames:     !byte 0 ; Current second frame fraction (0..49)
 g_game_time_sec:        !byte 0 ; Elapsed seconds of current minute (0..59)
 g_game_time_min:        !byte 0 ; Elapsed minutes of current session (0..255)
 g_game_time_total_sec:  !word 0 ; Total elapsed seconds (0..65535, ~18.2 hours)
+
+; ------------------------------------------------------------------------------
+; Game State Variables
+; ------------------------------------------------------------------------------
+g_game_over:            !byte 0 ; 1 = Game Over active, 0 = In game
+g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s)
 
 ; ==============================================================================
 ; Include Subsystem Assembly Source Files

@@ -502,10 +502,7 @@ screen_row_table_hi:
     !byte $05, $05, $05, $05, $05, $06, $06, $06
     !byte $06, $06, $06, $06, $07, $07, $07, $07, $07
 
-color_row_table_lo:
-    !byte $00, $28, $50, $78, $a0, $c8, $f0, $18
-    !byte $40, $68, $90, $b8, $e0, $08, $30, $58
-    !byte $80, $a8, $d0, $f8, $20, $48, $70, $98, $c0
+color_row_table_lo = screen_row_table_lo
 
 color_row_table_hi:
     !byte $d8, $d8, $d8, $d8, $d8, $d8, $d8, $d9
