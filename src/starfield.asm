@@ -133,7 +133,7 @@ starfield_init:
 starfield_update:
     inc g_starfield_frame
     lda g_starfield_frame
-    and #$01            ; Scroll every 2 frames (25 FPS smooth scroll)
+    and #$03            ; Scroll every 4 frames
     beq @do_update
     rts
 

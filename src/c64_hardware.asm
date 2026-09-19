@@ -108,7 +108,7 @@ COLOR_LIGHT_GRAY    = 15
 ; ------------------------------------------------------------------------------
 SPRITE_MIN_X        = 24        ; Left visible border edge
 SPRITE_MAX_X        = 320       ; Right visible border edge (16-bit: High=1, Low=64)
-SPRITE_MIN_Y        = 50        ; Top visible border edge
+SPRITE_MIN_Y        = 50        ; Top visible border edge (sprites pass over Row 0 HUD)
 SPRITE_MAX_Y        = 240       ; Bottom visible border edge
 
 ; ------------------------------------------------------------------------------

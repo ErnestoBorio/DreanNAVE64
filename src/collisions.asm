@@ -133,6 +133,11 @@ collisions_check:
     sta g_enemy_exploding, x
     lda #SPRITE_PTR_EXPLOSION_1
     sta g_enemy_type, x
+
+    ; Award score points based on enemy archetype (0..7)
+    ldy g_enemy_archetype, x
+    lda enemy_score_table, y
+    jsr hud_add_score
     rts
 
 @next_enemy:
@@ -377,3 +382,10 @@ shot_w_table:
 
 shot_h_thresh_table:
     !byte 98, 98, 98, 122, 122
+
+; ------------------------------------------------------------------------------
+; Enemy Point Values Table (Archetypes 0..7)
+; Points added to 16-bit score (displayed with two bulk zeroes: * 100)
+; ------------------------------------------------------------------------------
+enemy_score_table:
+    !byte 1, 2, 3, 4, 5, 7, 10, 15  ; Displayed as: 100, 200, 300, 400, 500, 700, 1000, 1500

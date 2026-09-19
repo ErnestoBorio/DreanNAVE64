@@ -244,9 +244,9 @@ powerups_erase:
 ;          down natural spawn timer. This strict order prevents 1-column desync.
 ; ==============================================================================
 powerups_update:
-    ; 1. Synchronize column scroll with starfield shift (every 2 frames)
+    ; 1. Synchronize column scroll with starfield shift (every 4 frames)
     lda g_starfield_frame
-    and #$01
+    and #$03
     bne @check_spawn
 
     lda g_powerup_active
@@ -404,15 +404,10 @@ powerups_check_collision:
     ; Level up player phase (max 5)
     lda g_player_phase
     cmp #5
-    bcs @heal_hp
+    bcs @collect_feedback
 
     inc g_player_phase
-    bne @collect_feedback
-
-@heal_hp:
-    ; At Phase 5, restore player HP to maximum (5 HP)
-    lda #5
-    sta g_player_hp
+    jmp @collect_feedback
 
 @collect_feedback:
     ; Flash border white for collection
@@ -420,6 +415,10 @@ powerups_check_collision:
     sta VIC_BORDER_COLOR
     lda #8
     sta g_debug_border_timer
+
+    ; Award 500 bonus points for collecting 'P' (5 * 100)
+    lda #5
+    jsr hud_add_score
 
 @no_collision:
     rts
