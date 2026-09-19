@@ -16,17 +16,29 @@
 ; - Evolution leveling up through 5 ship phases (and full HP heal at max phase)
 ; ==============================================================================
 
-POWERUP_CHAR_TL     = 0         ; Top-Left quadrant tile index
-POWERUP_CHAR_TR     = 1         ; Top-Right quadrant tile index
-POWERUP_CHAR_BL     = 16        ; Bottom-Left quadrant tile index ($10)
-POWERUP_CHAR_BR     = 17        ; Bottom-Right quadrant tile index ($11)
+POWERUP_TYPE_P      = 0         ; Evolution Phase Level-Up ('P')
+POWERUP_TYPE_B      = 1         ; Smart Bomb ('B')
+POWERUP_TYPE_E      = 2         ; Energy Recovery ('E')
+NUM_POWERUP_TYPES   = 3
+
 POWERUP_INITIAL_DELAY   = 1250  ; 1,250 frames = 25.0 seconds at 50 Hz PAL
 POWERUP_SPAWN_INTERVAL  = 2000  ; 2,000 frames = 40.0 seconds at 50 Hz PAL
+
+; 2x2 Custom Charset Tiles for P, B, and E
+powerup_tile_tl:
+    !byte 0, 2, 4               ; P=0, B=2, E=4
+powerup_tile_tr:
+    !byte 1, 3, 5               ; P=1, B=3, E=5
+powerup_tile_bl:
+    !byte 16, 18, 20            ; P=16, B=18, E=20
+powerup_tile_br:
+    !byte 17, 19, 21            ; P=17, B=19, E=21
 
 ; ------------------------------------------------------------------------------
 ; Powerup RAM State Variables
 ; ------------------------------------------------------------------------------
 g_powerup_active:   !byte 0     ; 1 = Active on screen, 0 = Inactive
+g_powerup_type:     !byte POWERUP_TYPE_P ; Current powerup type (0=P, 1=B, 2=E)
 g_powerup_col:      !byte 0     ; Left column of powerup (0..38, $FF = offscreen left)
 g_powerup_row:      !byte 0     ; Top row of powerup (2..22)
 g_powerup_timer_lo: !byte 0     ; Countdown timer low byte for natural spawn
@@ -48,6 +60,7 @@ powerup_color_cycle:
 powerups_init:
     lda #0
     sta g_powerup_active
+    sta g_powerup_type
     sta g_powerup_col
     sta g_powerup_row
     sta s_powerup_color_idx
@@ -63,24 +76,42 @@ powerups_init:
 
 ; ==============================================================================
 ; Subroutine: powerups_spawn
-; Purpose: Attempts natural spawn at playfield right edge. If slot busy, exits.
+; Purpose: Attempts natural spawn at playfield right edge. Picks random type.
+;          (50% chance P, 25% chance B, 25% chance E).
 ; ==============================================================================
 powerups_spawn:
     lda g_powerup_active
     beq +
     rts
 +
+    ; Select random powerup type: 0 (P), 1 (B), 2 (E), 3 -> 0 (P)
+    jsr starfield_rand
+    and #$03                    ; 0..3
+    cmp #3
+    bne +
+    lda #0
++   sta g_powerup_type
+
     jsr powerups_stamp_new
     rts
 
 ; ==============================================================================
 ; Subroutine: powerups_spawn_forced
 ; Purpose: Immediately spawns powerup (erasing old one if active) for debug hotkey.
+;          Cycles powerup type: P -> B -> E -> P.
 ; ==============================================================================
 powerups_spawn_forced:
     lda g_powerup_active
     beq +
     jsr powerups_erase
++
+    ; Cycle powerup type (0 -> 1 -> 2 -> 0)
+    inc g_powerup_type
+    lda g_powerup_type
+    cmp #NUM_POWERUP_TYPES
+    bcc +
+    lda #0
+    sta g_powerup_type
 +
     jsr powerups_stamp_new
     ; Visual border flash feedback
@@ -92,7 +123,7 @@ powerups_spawn_forced:
 
 ; ==============================================================================
 ; Internal Subroutine: powerups_stamp_new
-; Purpose: Picks random playfield row, stamps 4 quadrants to Screen & Color RAM.
+; Purpose: Picks random playfield row, stamps 4 quadrants of current powerup type.
 ; ==============================================================================
 powerups_stamp_new:
     ; Pick random row between 3 and 18
@@ -115,7 +146,10 @@ powerups_stamp_new:
     lda #COLOR_PURPLE
     sta s_powerup_current_color
 
-    ; 1. Stamp Top Row (Row R): Char 0 at Col 38, Char 1 at Col 39
+    ; Load current powerup type index
+    ldx g_powerup_type
+
+    ; 1. Stamp Top Row (Row R): Char TL at Col 38, Char TR at Col 39
     ldy g_powerup_row
     lda screen_row_table_lo, y
     sta $fb
@@ -123,13 +157,13 @@ powerups_stamp_new:
     sta $fc
 
     ldy #38
-    lda #POWERUP_CHAR_TL
+    lda powerup_tile_tl, x
     sta ($fb), y
     iny                         ; 39
-    lda #POWERUP_CHAR_TR
+    lda powerup_tile_tr, x
     sta ($fb), y
 
-    ; 2. Stamp Bottom Row (Row R + 1): Char 16 at Col 38, Char 17 at Col 39
+    ; 2. Stamp Bottom Row (Row R + 1): Char BL at Col 38, Char BR at Col 39
     ldy g_powerup_row
     iny                         ; Row R + 1
     lda screen_row_table_lo, y
@@ -138,10 +172,10 @@ powerups_stamp_new:
     sta $fc
 
     ldy #38
-    lda #POWERUP_CHAR_BL
+    lda powerup_tile_bl, x
     sta ($fb), y
     iny                         ; 39
-    lda #POWERUP_CHAR_BR
+    lda powerup_tile_br, x
     sta ($fb), y
 
     ; 3. Apply initial color across both rows
@@ -180,11 +214,8 @@ powerups_erase:
     cpy #40
     bcs @start_row2
     lda ($fb), y
-    cmp #POWERUP_CHAR_TL
-    beq @wipe_r1
-    cmp #POWERUP_CHAR_TR
-    bne @next_r1
-@wipe_r1:
+    cmp #6                      ; Top quadrants: 0, 1 (P), 2, 3 (B), 4, 5 (E)
+    bcs @next_r1
     lda #$20
     sta ($fb), y
 @next_r1:
@@ -219,11 +250,10 @@ powerups_erase:
     cpy #40
     bcs @erase_done
     lda ($fb), y
-    cmp #POWERUP_CHAR_BL
-    beq @wipe_r2
-    cmp #POWERUP_CHAR_BR
-    bne @next_r2
-@wipe_r2:
+    cmp #16                     ; Bottom quadrants: 16, 17 (P), 18, 19 (B), 20, 21 (E)
+    bcc @next_r2
+    cmp #22
+    bcs @next_r2
     lda #$20
     sta ($fb), y
 @next_r2:
@@ -456,7 +486,7 @@ powerups_check_collision:
     bcs @exit_no_coll
 
 @powerup_collected:
-    ; Erase 'P' from screen buffer and deactivate
+    ; Erase powerup from screen buffer and deactivate
     jsr powerups_erase
     lda #0
     sta g_powerup_active
@@ -467,15 +497,21 @@ powerups_check_collision:
     lda #>POWERUP_SPAWN_INTERVAL
     sta g_powerup_timer_hi
 
-    ; Level up player phase (max 5)
+    ; Dispatch based on g_powerup_type (0=P, 1=B, 2=E)
+    lda g_powerup_type
+    beq @collect_type_p
+    cmp #POWERUP_TYPE_B
+    beq @collect_type_b
+    jmp @collect_type_e
+
+@collect_type_p:
+    ; Evolution: Level up player phase (max 5)
     lda g_player_phase
     cmp #5
-    bcs @collect_feedback
-
+    bcs @p_feedback
     inc g_player_phase
-    jmp @collect_feedback
 
-@collect_feedback:
+@p_feedback:
     ; Flash border white for collection
     lda #COLOR_WHITE
     sta VIC_BORDER_COLOR
@@ -485,6 +521,78 @@ powerups_check_collision:
     ; Award 500 bonus points for collecting 'P' (5 * 100)
     lda #5
     jsr hud_add_score
+    rts
+
+@collect_type_b:
+    ; Smart Bomb:
+    ; 1. Extended white border flash (15 frames = 0.3s)
+    lda #COLOR_WHITE
+    sta VIC_BORDER_COLOR
+    lda #15
+    sta g_debug_border_timer
+
+    ; 2. Destroy all active living enemies
+    ldx #0
+@bomb_enemy_loop:
+    lda g_enemy_active, x
+    beq @bomb_next_enemy
+    lda g_enemy_exploding, x
+    bne @bomb_next_enemy
+    txa
+    pha
+    jsr collisions_kill_enemy
+    pla
+    tax
+@bomb_next_enemy:
+    inx
+    cpx #MAX_ENEMIES
+    bne @bomb_enemy_loop
+
+    ; 3. Clear all active enemy bullets
+    ldx #0
+    lda #0
+@bomb_bullet_loop:
+    sta g_bullet_active, x
+    inx
+    cpx #MAX_ENEMY_BULLETS
+    bne @bomb_bullet_loop
+
+    ; 4. Award 500 bonus points for bomb pickup
+    lda #5
+    jsr hud_add_score
+    rts
+
+@collect_type_e:
+    ; Energy:
+    ; 1. Restore +2 HP up to maximum 5 HP
+    lda g_player_hp
+    cmp #5
+    bcc @heal_hp
+
+    ; Already at full health: award 1,000 bonus points (10 * 100)
+    lda #10
+    jsr hud_add_score
+    jmp @e_flash
+
+@heal_hp:
+    clc
+    adc #2
+    cmp #5
+    bcc +
+    lda #5
++   sta g_player_hp
+
+    ; Award 500 bonus points (5 * 100)
+    lda #5
+    jsr hud_add_score
+
+@e_flash:
+    ; Light Green border flash for healing feedback
+    lda #COLOR_LIGHT_GREEN
+    sta VIC_BORDER_COLOR
+    lda #8
+    sta g_debug_border_timer
+    rts
 
 @no_collision:
     rts

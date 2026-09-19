@@ -136,3 +136,10 @@ KEY_CODE_SPACE      = $3c       ; 60: Spacebar (Fire)
 KEY_CODE_LSHIFT     = $0f       ; 15: Left Shift (Fire)
 KEY_CODE_RSHIFT     = $34       ; 52: Right Shift (Fire)
 
+; ------------------------------------------------------------------------------
+; Enemy & Virtual Sprite Limits
+; ------------------------------------------------------------------------------
+MAX_ENEMIES         = 12        ; 12 free-roaming enemy ships (0..11)
+MAX_ENEMY_BULLETS   = 4         ; 4 free-flying aimed bullets (0..3)
+MAX_VIRTUAL_SPRITES = 16        ; 12 enemies + 4 bullets
+

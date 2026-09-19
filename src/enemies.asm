@@ -14,11 +14,8 @@
 ; - Organic turnaround depths, multi-hit HP damage flash, and 3-frame explosion sequencing.
 ; ==============================================================================
 
-MAX_ENEMIES         = 12        ; 12 free-roaming enemy ships (0..11)
-MAX_ENEMY_BULLETS   = 4         ; 4 free-flying aimed bullets (0..3)
-MAX_VIRTUAL_SPRITES = 16        ; 12 enemies + 4 bullets
-
 ; Trajectory Pattern Equates
+
 PATTERN_STRAIGHT    = 0         ; Linear horizontal patrol
 PATTERN_SINE        = 1         ; Wide sinusoidal wave oscillation (±25 px)
 PATTERN_TRACKING    = 2         ; Dynamic vertical hunting & altitude tracking
