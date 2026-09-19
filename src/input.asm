@@ -296,6 +296,12 @@ input_update:
     lda CIA1_DATA_B     ; Read Rows (Port B)
     and #$02            ; Bit 1: Key 'P' (0 = pressed)
     bne +
+    lda s_shift_held
+    beq @normal_p_fire
+    lda #10             ; Debug Key 10: SHIFT + P (Force Powerup P Spawn)
+    sta s_current_debug_key
+    bne +
+@normal_p_fire:
     inc g_input_fire
 +
 
@@ -415,9 +421,14 @@ input_update:
 ; Input: A = 1..8 (Enemy 1..8)
 ; ==============================================================================
 input_jump_to_tier:
+    cmp #10
+    bne +
+    jsr powerups_spawn_forced
+    rts
++
     cmp #9
     bne @is_tier_jump
-    lda #COLOR_LIGHT_RED
+    lda #COLOR_WHITE
     sta VIC_BORDER_COLOR
     bne @flash_and_clear
 
@@ -427,8 +438,8 @@ input_jump_to_tier:
     sbc #1                      ; 1..8 -> 0..7
     tax                         ; X = archetype / tier index (0..7)
 
-    ; 1. Flash border with archetype feedback color
-    lda g_debug_enemy_colors, x
+    ; 1. Flash border white
+    lda #COLOR_WHITE
     sta VIC_BORDER_COLOR
 
     ; 2. Set game elapsed time to unlock threshold of Enemy N

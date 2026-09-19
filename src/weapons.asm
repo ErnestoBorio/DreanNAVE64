@@ -99,6 +99,29 @@ weapons_fire:
     adc #8                      ; 8..23 pixels forward (tightly emerging from ship)
     sta s_shot_spawn_offset
 
+    ldx g_player_phase
+    dex
+    lda player_phase_scaled, x
+    beq @unscaled_spawn
+
+    ; Scaled ship (48x42): nose is 24px further right, center 10px lower
+    lda g_player_x + 0
+    clc
+    adc s_shot_spawn_offset
+    clc
+    adc #24
+    sta g_missile_x + 0
+    lda g_player_x + 1
+    adc #0
+    sta g_missile_x + 1
+
+    lda g_player_y
+    clc
+    adc #13
+    sta g_missile_y
+    jmp @cooldown_set
+
+@unscaled_spawn:
     lda g_player_x + 0
     clc
     adc s_shot_spawn_offset
@@ -112,6 +135,7 @@ weapons_fire:
     adc #3
     sta g_missile_y
 
+@cooldown_set:
     ; Set fire cooldown = 6 frames (~8.3 shots per second max rate)
     lda #6
     sta g_fire_cooldown
@@ -209,7 +233,7 @@ weapons_render:
     lda g_missile_active
     bne @render_active
 
-    ; Inactive: disable Sprite 1 ($D015 Bit 1 = 0) and clear Sprite 1 MSB ($D010 Bit 1 = 0)
+    ; Inactive: disable Sprite 1 ($D015 Bit 1 = 0), clear MSB, clear Scaling
     sei
     lda VIC_SPR_ENABLE
     and #$fd
@@ -217,6 +241,12 @@ weapons_render:
     lda VIC_SPR_MSB
     and #$fd
     sta VIC_SPR_MSB
+    lda VIC_SPR_EXP_X
+    and #$fd
+    sta VIC_SPR_EXP_X
+    lda VIC_SPR_EXP_Y
+    and #$fd
+    sta VIC_SPR_EXP_Y
     cli
     rts
 
@@ -233,7 +263,16 @@ weapons_render:
     cmp #1
     beq @render_missile
 
-    ; Hit Spark: Block 147 (SPRITE_PTR_HIT_SPARK), Random Energy Color
+    ; Hit Spark: Block 211 (SPRITE_PTR_HIT_SPARK), Random Energy Color, Never Scaled
+    sei
+    lda VIC_SPR_EXP_X
+    and #$fd
+    sta VIC_SPR_EXP_X
+    lda VIC_SPR_EXP_Y
+    and #$fd
+    sta VIC_SPR_EXP_Y
+    cli
+
     lda #SPRITE_PTR_HIT_SPARK
     sta SPRITE_PTRS + 1
     lda g_spark_color
@@ -241,28 +280,50 @@ weapons_render:
     bne @write_coords
 
 @render_missile:
-    ; 2. Select Sprite 1 Pointer based on player power stage:
-    ;    Stage 1: Block 139 (SPRITE_PTR_PLAYER_SHOT_1)
-    ;    Stage 2: Block 140 (SPRITE_PTR_PLAYER_SHOT_2)
-    ;    Stage 3: Block 141 (SPRITE_PTR_PLAYER_SHOT_3)
-    lda #SPRITE_PTR_PLAYER_SHOT_1
-    clc
-    adc g_player_power
+    ; 2. Select Sprite 1 Pointer based on player phase (1..5 -> 0..4)
+    ldx g_player_phase
+    dex
+    lda player_phase_shot_sprite, x
     sta SPRITE_PTRS + 1
 
-    ; 3. Set Sprite 1 color from current Energy Palette cycling index
+    ; 3. Configure Hardware Scaling (X/Y Expansion) for Sprite 1
+    lda player_phase_scaled, x
+    beq @unscaled_shot
+
+    sei
+    lda VIC_SPR_EXP_X
+    ora #$02
+    sta VIC_SPR_EXP_X
+    lda VIC_SPR_EXP_Y
+    ora #$02
+    sta VIC_SPR_EXP_Y
+    cli
+    jmp @color_shot
+
+@unscaled_shot:
+    sei
+    lda VIC_SPR_EXP_X
+    and #$fd
+    sta VIC_SPR_EXP_X
+    lda VIC_SPR_EXP_Y
+    and #$fd
+    sta VIC_SPR_EXP_Y
+    cli
+
+@color_shot:
+    ; 4. Set Sprite 1 color from current Energy Palette cycling index
     ldx g_energy_cycle_idx
     lda g_energy_colors, x
     sta VIC_SPR1_COLOR
 
 @write_coords:
-    ; 4. Write Sprite 1 X low byte ($D002) and Y byte ($D003)
+    ; 5. Write Sprite 1 X low byte ($D002) and Y byte ($D003)
     lda g_missile_x + 0
     sta VIC_SPR1_X
     lda g_missile_y
     sta VIC_SPR1_Y
 
-    ; 5. Set or clear Bit 1 of VIC_SPR_MSB ($D010) based on 16-bit missile X
+    ; 6. Set or clear Bit 1 of VIC_SPR_MSB ($D010) based on 16-bit missile X
     sei
     lda VIC_SPR_MSB
     ldy g_missile_x + 1

@@ -90,6 +90,7 @@ start:
     jsr weapons_init
     jsr enemies_init
     jsr collisions_init
+    jsr powerups_init
     jsr hud_init
 
     ; 8. Setup VIC-II Raster Interrupt for 3-lane enemy multiplexer
@@ -142,8 +143,11 @@ main_loop:
     jsr player_update
     jsr weapons_update
     jsr starfield_update
+    jsr powerups_update
     jsr enemies_update
     jsr collisions_check
+    jsr collisions_check_player
+    jsr powerups_check_collision
     jsr hud_update
 
     ; 4. Render Graphics & Hardware Sprites
@@ -250,6 +254,7 @@ g_game_time_total_sec:  !word 0 ; Total elapsed seconds (0..65535, ~18.2 hours)
 !src "src/player.asm"
 !src "src/weapons.asm"
 !src "src/starfield.asm"
+!src "src/powerups.asm"
 !src "src/enemies.asm"
 !src "src/collisions.asm"
 !src "src/hud.asm"

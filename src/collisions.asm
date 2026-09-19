@@ -12,6 +12,7 @@
 ; ==============================================================================
 
 s_coll_diff_lo:     !byte 0
+s_coll_diff_hi:     !byte 0
 
 ; ==============================================================================
 ; Subroutine: collisions_init
@@ -20,6 +21,7 @@ s_coll_diff_lo:     !byte 0
 collisions_init:
     lda #0
     sta s_coll_diff_lo
+    sta s_coll_diff_hi
     rts
 
 ; ==============================================================================
@@ -39,34 +41,52 @@ collisions_check:
 @check_enemy_loop:
     ; 1. Check if enemy slot is active and not already exploding
     lda g_enemy_active, x
-    beq @next_enemy
+    beq @skip_enemy
     lda g_enemy_exploding, x
-    bne @next_enemy
+    bne @skip_enemy
+    jmp @enemy_is_valid
 
-    ; 2. Vertical Range Check:
-    ; Enemy sprite height = 21 pixels (Y to Y + 20).
-    ; Check if missile_y + 2 - enemy_y < 25
+@skip_enemy:
+    jmp @next_enemy
+
+@enemy_is_valid:
+    ; 2. Vertical Range Check across all 5 shot types:
+    ; diff_y = missile_y + shot_h_add[phase] - enemy_y
+    ; Overlap if 0 <= diff_y < shot_v_threshold[phase]
+    ldy g_player_phase
+    dey                         ; 1..5 -> 0..4
     lda g_missile_y
     clc
-    adc #2
+    adc shot_h_add_table, y
     sec
     sbc g_enemy_y, x
-    cmp #25
-    bcs @next_enemy
+    bcc @skip_enemy             ; diff_y < 0 (missile above enemy)
+    cmp shot_v_threshold_table, y
+    bcs @skip_enemy             ; diff_y >= threshold (missile below enemy)
 
-    ; 3. Horizontal Swept Check (50 px/frame sweep vs 24 px wide enemy):
-    ; Condition for hit during this frame: 0 <= (X_missile - X_enemy) <= 73
+    ; 3. Horizontal Swept Check (50 px/frame sweep + shot_w vs 24 px wide enemy):
+    ; diff_x = missile_x - enemy_x + shot_w[phase]
+    ; Overlap if 0 <= diff_x < shot_h_thresh[phase]
     lda g_missile_x + 0
     sec
     sbc g_enemy_x_lo, x
     sta s_coll_diff_lo
     lda g_missile_x + 1
     sbc g_enemy_x_hi, x
-    bne @next_enemy             ; If MSB != 0, out of range (either negative or > 255)
+    sta s_coll_diff_hi
+
+    ; Add shot_w
+    lda s_coll_diff_lo
+    clc
+    adc shot_w_table, y
+    sta s_coll_diff_lo
+    lda s_coll_diff_hi
+    adc #0
+    bne @skip_enemy             ; Out of horizontal range (diff < 0 or diff >= 256)
 
     lda s_coll_diff_lo
-    cmp #74                     ; 0 <= diff <= 73
-    bcs @next_enemy
+    cmp shot_h_thresh_table, y
+    bcs @skip_enemy
 
     ; --------------------------------------------------------------------------
     ; Direct Hit Confirmed!
@@ -118,5 +138,237 @@ collisions_check:
 @next_enemy:
     inx
     cpx #MAX_ENEMIES
-    bne @check_enemy_loop
+    beq @all_enemies_checked
+    jmp @check_enemy_loop
+@all_enemies_checked:
     rts
+
+; ==============================================================================
+; Subroutine: collisions_check_player
+; Purpose: Tests active enemy ships and enemy bullets against player ship bounding
+;          box. Applies phase demotion, HP loss, and invulnerability blinking.
+; ==============================================================================
+collisions_check_player:
+    ; Exit if player is already destroyed
+    lda g_player_alive
+    bne +
+    rts
++
+    ; Exit if player is currently invulnerable
+    lda g_player_invuln_timer
+    beq +
+    rts
++
+    ; --------------------------------------------------------------------------
+    ; 1. Check Player vs Active Enemy Ships (MAX_ENEMIES = 12)
+    ; --------------------------------------------------------------------------
+    ldx #0
+@check_enemy_loop:
+    lda g_enemy_active, x
+    beq @next_enemy_ship
+    lda g_enemy_exploding, x
+    bne @next_enemy_ship
+
+    ; Vertical range check:
+    ; diff_y = enemy_y + 21 - player_y
+    ; Overlap if 0 <= diff_y < (player_h + 21)
+    ; Unscaled player: player_h = 21 -> threshold = 42
+    ; Scaled player:   player_h = 42 -> threshold = 63
+    lda g_enemy_y, x
+    clc
+    adc #21
+    sec
+    sbc g_player_y
+    bcc @next_enemy_ship
+    sta s_coll_diff_lo
+
+    ldy g_player_phase
+    dey                         ; 1..5 -> 0..4
+    lda player_phase_scaled, y
+    bne @scaled_enemy_v
+
+    lda s_coll_diff_lo
+    cmp #42
+    bcs @next_enemy_ship
+    bcc @check_h_enemy
+
+@scaled_enemy_v:
+    lda s_coll_diff_lo
+    cmp #63
+    bcs @next_enemy_ship
+
+@check_h_enemy:
+    ; Horizontal range check:
+    ; diff_x = enemy_x - player_x
+    ; Overlap if 0 <= (diff_x + 24) < (player_w + 24)
+    ; Unscaled: player_w = 24 -> threshold = 48
+    ; Scaled:   player_w = 48 -> threshold = 72
+    lda g_enemy_x_lo, x
+    sec
+    sbc g_player_x + 0
+    sta s_coll_diff_lo
+    lda g_enemy_x_hi, x
+    sbc g_player_x + 1
+    sta s_coll_diff_hi
+
+    lda s_coll_diff_lo
+    clc
+    adc #24
+    sta s_coll_diff_lo
+    lda s_coll_diff_hi
+    adc #0
+    bne @next_enemy_ship        ; Out of horizontal range
+
+    ldy g_player_phase
+    dey
+    lda player_phase_scaled, y
+    bne @scaled_enemy_h
+
+    lda s_coll_diff_lo
+    cmp #48
+    bcs @next_enemy_ship
+    jmp @player_hit_by_ship
+
+@scaled_enemy_h:
+    lda s_coll_diff_lo
+    cmp #72
+    bcs @next_enemy_ship
+    jmp @player_hit_by_ship
+
+@next_enemy_ship:
+    inx
+    cpx #MAX_ENEMIES
+    bne @check_enemy_loop
+
+    ; --------------------------------------------------------------------------
+    ; 2. Check Player vs Active Enemy Bullets (MAX_ENEMY_BULLETS = 4)
+    ; --------------------------------------------------------------------------
+    ldx #0
+@check_bullet_loop:
+    lda g_bullet_active, x
+    beq @next_bullet
+
+    ; Vertical range check (bullet height = 8 px):
+    ; diff_y = bullet_y + 8 - player_y
+    ; Overlap if 0 <= diff_y < (player_h + 8)
+    ; Unscaled: player_h = 21 -> threshold = 29
+    ; Scaled:   player_h = 42 -> threshold = 50
+    lda g_bullet_y, x
+    clc
+    adc #8
+    sec
+    sbc g_player_y
+    bcc @next_bullet
+    sta s_coll_diff_lo
+
+    ldy g_player_phase
+    dey
+    lda player_phase_scaled, y
+    bne @scaled_bullet_v
+
+    lda s_coll_diff_lo
+    cmp #29
+    bcs @next_bullet
+    bcc @check_h_bullet
+
+@scaled_bullet_v:
+    lda s_coll_diff_lo
+    cmp #50
+    bcs @next_bullet
+
+@check_h_bullet:
+    ; Horizontal range check (bullet width = 8 px):
+    ; diff_x = bullet_x - player_x
+    ; Overlap if 0 <= (diff_x + 8) < (player_w + 8)
+    ; Unscaled: player_w = 24 -> threshold = 32
+    ; Scaled:   player_w = 48 -> threshold = 56
+    lda g_bullet_x_lo, x
+    sec
+    sbc g_player_x + 0
+    sta s_coll_diff_lo
+    lda g_bullet_x_hi, x
+    sbc g_player_x + 1
+    sta s_coll_diff_hi
+
+    lda s_coll_diff_lo
+    clc
+    adc #8
+    sta s_coll_diff_lo
+    lda s_coll_diff_hi
+    adc #0
+    bne @next_bullet
+
+    ldy g_player_phase
+    dey
+    lda player_phase_scaled, y
+    bne @scaled_bullet_h
+
+    lda s_coll_diff_lo
+    cmp #32
+    bcs @next_bullet
+    bcc @player_hit_by_bullet
+
+@scaled_bullet_h:
+    lda s_coll_diff_lo
+    cmp #56
+    bcs @next_bullet
+
+@player_hit_by_bullet:
+    ; Consume bullet on impact
+    lda #0
+    sta g_bullet_active, x
+    jmp @player_take_hit
+
+@next_bullet:
+    inx
+    cpx #MAX_ENEMY_BULLETS
+    bne @check_bullet_loop
+    rts
+
+@player_hit_by_ship:
+@player_take_hit:
+    ; 1. White border flash for damage feedback
+    lda #COLOR_WHITE
+    sta VIC_BORDER_COLOR
+    lda #6
+    sta g_debug_border_timer
+
+    ; 2. 50-frame invulnerability window (1.0 second at 50 Hz PAL)
+    lda #50
+    sta g_player_invuln_timer
+
+    ; 3. Phase demotion & HP damage
+    lda g_player_phase
+    cmp #1
+    beq @take_hp_damage
+
+    ; Drop down one phase (5 -> 4 -> 3 -> 2 -> 1)
+    dec g_player_phase
+    rts
+
+@take_hp_damage:
+    ; When in Phase 1, each hit decrements 1 of 5 HP
+    dec g_player_hp
+    beq @player_destroyed
+    rts
+
+@player_destroyed:
+    ; Reached 0 HP: player is dead and ship motion stops
+    lda #0
+    sta g_player_alive
+    rts
+
+; ------------------------------------------------------------------------------
+; Player Shot Collision Geometry Tables (Phases 1..5)
+; ------------------------------------------------------------------------------
+shot_h_add_table:
+    !byte  4, 13, 20, 26, 40
+
+shot_v_threshold_table:
+    !byte 25, 34, 41, 47, 61
+
+shot_w_table:
+    !byte 24, 24, 24, 48, 48
+
+shot_h_thresh_table:
+    !byte 98, 98, 98, 122, 122
