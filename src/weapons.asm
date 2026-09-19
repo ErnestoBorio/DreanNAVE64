@@ -100,42 +100,25 @@ weapons_fire:
     sta s_shot_spawn_offset
 
     ldx g_player_phase
-    dex
-    lda player_phase_scaled, x
-    beq @unscaled_spawn
+    dex                         ; 1..5 -> 0..4
 
-    ; Scaled ship (48x42): nose is 24px further right, center 10px lower
-    lda g_player_x + 0
+    ; Compute 16-bit X coordinate
+    lda s_shot_spawn_offset
     clc
-    adc s_shot_spawn_offset
+    adc shot_spawn_x_extra, x
     clc
-    adc #24
+    adc g_player_x + 0
     sta g_missile_x + 0
     lda g_player_x + 1
     adc #0
     sta g_missile_x + 1
 
+    ; Compute 8-bit Y coordinate aligned to each phase's cannons/nose
     lda g_player_y
     clc
-    adc #13
-    sta g_missile_y
-    jmp @cooldown_set
-
-@unscaled_spawn:
-    lda g_player_x + 0
-    clc
-    adc s_shot_spawn_offset
-    sta g_missile_x + 0
-    lda g_player_x + 1
-    adc #0
-    sta g_missile_x + 1
-
-    lda g_player_y
-    clc
-    adc #3
+    adc shot_spawn_y_offset, x
     sta g_missile_y
 
-@cooldown_set:
     ; Set fire cooldown = 6 frames (~8.3 shots per second max rate)
     lda #6
     sta g_fire_cooldown
@@ -334,3 +317,12 @@ weapons_render:
 ++  sta VIC_SPR_MSB
     cli
     rts
+
+; ------------------------------------------------------------------------------
+; Shot Spawn Coordinate Offset Tables by Phase (Phases 1..5 -> Index 0..4)
+; ------------------------------------------------------------------------------
+shot_spawn_y_offset:
+    !byte 3, 4, 1, 8, 2
+
+shot_spawn_x_extra:
+    !byte 0, 0, 0, 20, 20
