@@ -92,6 +92,7 @@ start:
     jsr collisions_init
     jsr powerups_init
     jsr hud_init
+    jsr gamestate_init
 
     ; 8. Setup VIC-II Raster Interrupt for 3-lane enemy multiplexer
     sei                         ; Ensure interrupts are masked during setup
@@ -133,30 +134,8 @@ main_loop:
     ; 3. Update Game Elapsed Time Counter (50 Hz PAL)
     jsr game_timer_update
 
-    ; 4. Check if Game Over is active
-    lda g_game_over
-    beq @game_active
-
-    ; Game Over loop: keep HUD static, skip world motion, starfield scroll, and sprites
-    jsr hud_update
-    jmp main_loop
-
-@game_active:
-    ; 4. Update Game Entities & World Motion
-    jsr player_update
-    jsr weapons_update
-    jsr starfield_update
-    jsr powerups_update
-    jsr enemies_update
-    jsr collisions_check
-    jsr collisions_check_player
-    jsr powerups_check_collision
-    jsr hud_update
-
-    ; 5. Render Graphics & Hardware Sprites
-    jsr player_render
-    jsr weapons_render
-    jsr enemies_render
+    ; 4. Update Current Game Flow State Machine
+    jsr gamestate_update
 
     jmp main_loop
 
@@ -221,6 +200,11 @@ game_timer_update:
     lda #0
     sta g_game_time_frames
 
+    ; Only advance gameplay timeline & wave progression while playing
+    lda g_game_state
+    cmp #STATE_PLAYING
+    bne @timer_done
+
     ; Increment 16-bit total elapsed seconds
     inc g_game_time_total_sec + 0
     bne +
@@ -265,7 +249,6 @@ g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s
 !src "src/powerups.asm"
 !src "src/enemies.asm"
 !src "src/collisions.asm"
-!src "src/hud.asm"
 
 ; Assert that all executable code and variables fit safely below Charset RAM ($2800)
 !if * > $2800 {
@@ -289,8 +272,21 @@ g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s
 * = $3000
 !src "src/sprites_data.asm"
 
-; Assert that all sprite data fits safely within VIC Bank 0 ($3800)
-!if * > $3800 {
-    !error "Fatal: Sprite data exceeded $3800! Bank 0 collision."
+; Assert that all sprite data fits safely within $3600
+!if * > $3600 {
+    !error "Fatal: Sprite data exceeded $3600! Sprite collision."
+}
+
+; ------------------------------------------------------------------------------
+; High Memory Code Section: HUD, State Machine, and Title Screen ($4000+)
+; ------------------------------------------------------------------------------
+* = $4000
+!src "src/hud.asm"
+!src "src/gamestate.asm"
+!src "src/title.asm"
+
+; Assert that high code fits safely within RAM ($8000)
+!if * > $8000 {
+    !error "Fatal: High code exceeded $8000!"
 }
 

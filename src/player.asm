@@ -15,7 +15,7 @@ PLAYER_SPEED        = 3         ; Player movement speed (pixels per frame at 50 
 ; Player Entity Data RAM Variables
 ; ------------------------------------------------------------------------------
 g_player_x:         !word 60    ; 16-bit X coordinate in VIC-II raster space (24..320)
-g_player_y:         !byte 120   ; 8-bit Y coordinate in VIC-II raster space (50..240)
+g_player_y:         !byte 144   ; 8-bit Y coordinate in VIC-II raster space (50..240, centered horizontally)
 g_player_alive:     !byte 1     ; Player life state (1 = Alive, 0 = Destroyed)
 g_player_exploding: !byte 0     ; Player explosion countdown timer (0 = Inactive)
 g_player_phase:     !byte 1     ; Ship evolution phase (1..5, starts at 1)
@@ -35,7 +35,7 @@ player_init:
     sta g_player_exploding
     lda #60
     sta g_player_x + 0
-    lda #120
+    lda #144
     sta g_player_y
     lda #1
     sta g_player_alive

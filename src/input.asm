@@ -27,23 +27,26 @@
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
-; Input State RAM Variables: Frame-cleared (0..9)
-g_input_up:           !byte 0   ; 1 = Move Up active, 0 = Inactive
-g_input_down:         !byte 0   ; 1 = Move Down active, 0 = Inactive
-g_input_left:         !byte 0   ; 1 = Move Left active, 0 = Inactive
-g_input_right:        !byte 0   ; 1 = Move Right active, 0 = Inactive
-g_input_fire:         !byte 0   ; 1 = Fire button held down (level-triggered)
-g_input_fire_pressed: !byte 0   ; 1 = Fire button newly pressed (edge-triggered)
-s_col2_active:        !byte 0   ; 1 = Horizontal Column 2 active (R, D, F)
-s_col4_active:        !byte 0   ; 1 = TATE Column 4 active (J, K)
-s_shift_held:         !byte 0   ; 1 = SHIFT held down, 0 = SHIFT not pressed
-s_current_debug_key:  !byte 0   ; Digit key active in current frame (0 = none, 1..8, 9=C)
+; Input State RAM Variables: Frame-cleared (0..11)
+g_input_up:            !byte 0   ; 0:  1 = Move Up active, 0 = Inactive
+g_input_down:          !byte 0   ; 1:  1 = Move Down active, 0 = Inactive
+g_input_left:          !byte 0   ; 2:  1 = Move Left active, 0 = Inactive
+g_input_right:         !byte 0   ; 3:  1 = Move Right active, 0 = Inactive
+g_input_fire:          !byte 0   ; 4:  1 = Fire button held down (level-triggered)
+g_input_fire_pressed:  !byte 0   ; 5:  1 = Fire button newly pressed (edge-triggered)
+g_input_start:         !byte 0   ; 6:  1 = Space or F1 held down (level-triggered)
+g_input_start_pressed: !byte 0   ; 7:  1 = Space or F1 newly pressed (edge-triggered)
+s_col2_active:         !byte 0   ; 8:  1 = Horizontal Column 2 active (R, D, F)
+s_col4_active:         !byte 0   ; 9:  1 = TATE Column 4 active (J, K)
+s_shift_held:          !byte 0   ; 10: 1 = SHIFT held down, 0 = SHIFT not pressed
+s_current_debug_key:   !byte 0   ; 11: Digit key active in current frame (0 = none, 1..8, 9=C)
 
-; Frame-preserved State Variables (10..13)
-s_prev_fire:          !byte 0   ; Previous frame fire state (used for edge-detection)
-s_prev_debug_key:     !byte 0   ; Digit key active in previous frame (edge detector)
-g_debug_border_timer: !byte 0   ; Countdown frames for border flash feedback
-s_scan_portb:         !byte 0   ; Saved Port B reading to prevent register clobbering
+; Frame-preserved State Variables (12..16)
+s_prev_fire:           !byte 0   ; 12: Previous frame fire state (used for edge-detection)
+s_prev_start:          !byte 0   ; 13: Previous frame start state (used for edge-detection)
+s_prev_debug_key:      !byte 0   ; 14: Digit key active in previous frame (edge detector)
+g_debug_border_timer:  !byte 0   ; 15: Countdown frames for border flash feedback
+s_scan_portb:          !byte 0   ; 16: Saved Port B reading to prevent register clobbering
 
 ; ==============================================================================
 ; Subroutine: input_init
@@ -54,7 +57,7 @@ input_init:
     sta CIA1_DIR_A      ; Port A = Input mode
     sta CIA1_DIR_B      ; Port B = Input mode
 
-    ldx #13
+    ldx #16
 -   sta g_input_up, x
     dex
     bpl -
@@ -77,7 +80,7 @@ input_update:
 +
     ; 1. Reset frame input flags to 0 (inactive)
     lda #$00
-    ldx #9
+    ldx #11
 -   sta g_input_up, x
     dex
     bpl -
@@ -111,6 +114,12 @@ input_update:
     lda CIA1_DATA_B     ; Read Rows (Port B)
     sta s_scan_portb
 
+    ; Check SPACE key (Row PB4: 0 = pressed)
+    lda s_scan_portb
+    and #$10
+    bne +
+    inc g_input_start
++
     ; When Shift is held, scan debug keys '1' (PB0) and '2' (PB3)
     lda s_shift_held
     beq @col7_debug_done
@@ -278,6 +287,15 @@ input_update:
     inc g_input_fire
 +
 
+    ; --- Column 0 ($FE = %11111110): Function Key F1 (Row PB4) ---
+    lda #$fe
+    sta CIA1_DATA_A     ; Pull Column 0 low
+    lda CIA1_DATA_B     ; Read Rows (Port B)
+    and #$10            ; Bit 4: F1 key (0 = pressed)
+    bne +
+    inc g_input_start
++
+
     ; Release all column drivers and restore Port A & B to all-inputs
     lda #$ff
     sta CIA1_DATA_A     ; Release driven lines high
@@ -369,7 +387,28 @@ input_update:
     sta s_prev_fire
 
     ; --------------------------------------------------------------------------
-    ; Step 5: Evaluate Edge-Triggered Debug Tier Jump (SHIFT + 1..8)
+    ; Step 5: Compute Edge-Triggered Start Key (start_pressed: SPACE or F1)
+    ; --------------------------------------------------------------------------
+    lda g_input_start
+    beq @no_start_pressed
+
+    lda s_prev_start
+    bne @done_start_edge
+
+    lda #$01
+    sta g_input_start_pressed
+    jmp @done_start_edge
+
+@no_start_pressed:
+    lda #$00
+    sta g_input_start_pressed
+
+@done_start_edge:
+    lda g_input_start
+    sta s_prev_start
+
+    ; --------------------------------------------------------------------------
+    ; Step 6: Evaluate Edge-Triggered Debug Tier Jump (SHIFT + 1..8)
     ; --------------------------------------------------------------------------
     lda s_current_debug_key
     beq @no_debug_key

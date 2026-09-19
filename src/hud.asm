@@ -9,23 +9,29 @@
 ; - Screen Right (Col 39) = Rotated TOP, Screen Left (Col 0) = Rotated BOTTOM
 ; - 1UP Indicator: Digit 1 (Char 49) + 'UP' (Char 107) in Light Blue (Cols 39..38)
 ; - 16-bit Score: Converted to 5 decimal digits with leading spaces + '00' bulk zeroes (Cols 37..31) in White
+; - HI Indicator: 'H' (Char 72) + 'I' (Char 73) in Light Blue (Cols 25..24)
+; - 16-bit Hi-Score: Converted to 5 decimal digits + '00' bulk zeroes (Cols 23..17) in White
 ; - Red Heart (Char 98) in Red at Col 10
 ; - 10-bar Energy Gauge (Char 106) in Yellow (Cols 9..0), decreasing from left to right (2 bars per HP)
-; - Saturated 16-bit score addition with enemy rank and powerup bonus points
+; - Dynamic High Score tracking & persistent session storage
+; - Game Over display and screen cleanup
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
 ; HUD RAM Variables
 ; ------------------------------------------------------------------------------
-g_score:            !word 0     ; 16-bit score integer (0..65535, displayed * 100)
+g_score:            !word 0     ; 16-bit player score (0..65535, displayed * 100)
+g_high_score:       !word 0     ; 16-bit high score (persists across games, default 0 pts)
+s_prev_hi_score:    !word $ffff ; Cached high score for dirty check
 s_score_val_lo:     !byte 0     ; Temporary binary-to-decimal working value low byte
 s_score_val_hi:     !byte 0     ; Temporary binary-to-decimal working value high byte
 s_score_digits:     !fill 5, 0  ; 5 decimal digits buffer (D4..D0)
 s_empty_count:      !byte 0     ; Depleted energy bars count (0..10)
 s_bar_color:        !byte 0     ; Dynamic color for active energy bars
 s_prev_hp:          !byte $ff   ; Cached player effective HP for dirty check
-s_prev_score:       !word $ffff ; Cached score for dirty check
-s_cur_row:          !byte 0     ; Row cursor for Game Over text rendering
+s_prev_score:       !word $ffff ; Cached player score for dirty check
+s_cur_row:          !byte 0     ; Row cursor for playfield text rendering
+s_char_color:       !byte COLOR_WHITE ; Current drawing color for hud_draw_char
 
 ; Energy bar color table by HP remaining (0..5):
 ; 5, 4 HP -> Light Green; 3 HP -> Yellow; 2, 1, 0 HP -> Red
@@ -38,8 +44,8 @@ hud_pow10_lo:       !byte <10000, <1000, <100, <10
 
 ; ==============================================================================
 ; Subroutine: hud_init
-; Purpose: Resets score, invalidates cached dirty flags, clears Row 0, and
-;          draws initial static elements (1UP, Heart, full Energy bars, 000).
+; Purpose: Resets score, invalidates cached dirty flags, and clears Row 0.
+;          Note: g_high_score is preserved across game sessions!
 ; ==============================================================================
 hud_init:
     lda #0
@@ -51,17 +57,33 @@ hud_init:
     sta s_prev_hp
     sta s_prev_score + 0
     sta s_prev_score + 1
+    sta s_prev_hi_score + 0
+    sta s_prev_hi_score + 1
+    jmp hud_clear
 
-    ; Clear Row 0 ($0400..$0427) with blank spaces ($20)
+; ==============================================================================
+; Subroutine: hud_clear
+; Purpose: Clears character Row 0 ($0400..$0427) with blank spaces and black color.
+; ==============================================================================
+hud_clear:
     ldx #39
--   lda #$20
-    sta $0400, x
-    lda #COLOR_WHITE
+    lda #$20
+-   sta $0400, x
+    lda #COLOR_BLACK
     sta $d800, x
     dex
     bpl -
+    rts
 
-    ; Draw '1UP' at Cols 39 and 38 (Rotated Top of screen)
+; ==============================================================================
+; Subroutine: hud_show
+; Purpose: Draws static HUD elements (1UP, HI, Heart, 000) and renders energy,
+;          score, and high score to Row 0.
+; ==============================================================================
+hud_show:
+    jsr hud_clear
+
+    ; 1. Draw '1UP' at Cols 39 and 38 (Rotated Top of screen)
     ; Col 39 = '1' (Char 49), Col 38 = 'UP' (Char 107) in Light Blue
     lda #49
     sta $0427
@@ -71,25 +93,64 @@ hud_init:
     sta $d827
     sta $d826
 
-    ; Draw Red Heart at Col 10 (Char 98) in Red
+    ; Draw 1UP bulk double zeroes '00' (Char 48 = $30) at Cols 32 and 31
+    lda #$30
+    sta $0420
+    sta $041f
+
+    ; Set Color RAM for 1UP score digits & bulk zeroes (Cols 37..31: $D825..$D81F)
+    lda #COLOR_WHITE
+    ldx #6
+-   sta $d81f, x
+    dex
+    bpl -
+
+    ; 2. Draw 'HI' centered between Score (Col 31) and Energy Bar Heart (Col 10)
+    ; HI-score cluster occupies Cols 25..17 (5 spaces above: Cols 30..26, 6 spaces below: Cols 16..11)
+    ; Col 25 = 'H' (Char 72), Col 24 = 'I' (Char 73) in Light Blue
+    lda #72
+    sta $0419
+    lda #73
+    sta $0418
+    lda #COLOR_LIGHT_BLUE
+    sta $d819
+    sta $d818
+
+    ; Set Color RAM for HI score digits & bulk zeroes (Cols 23..17: $D817..$D811)
+    lda #COLOR_WHITE
+    ldx #6
+-   sta $d811, x
+    dex
+    bpl -
+
+    ; Draw HI bulk double zeroes '00' (Char 48 = $30) at Cols 18 and 17
+    lda #$30
+    sta $0412
+    sta $0411
+
+    ; 3. Draw Red Heart at Col 10 (Char 98) in Red
     lda #98
     sta $040a
     lda #COLOR_RED
     sta $d80a
 
-    ; Draw bulk double zeroes '00' (Char 48 = $30) at Cols 32 and 31
-    lda #$30
-    sta $0420
-    sta $041f
+    ; Reset dirty flags to force re-render
+    lda #$ff
+    sta s_prev_hp
+    sta s_prev_score + 0
+    sta s_prev_score + 1
+    sta s_prev_hi_score + 0
+    sta s_prev_hi_score + 1
 
-    ; Initial render of score and energy
+    ; Initial render of score, hiscore, and energy
     jsr hud_render_energy
     jsr hud_render_score
+    jsr hud_render_hiscore
     rts
 
 ; ==============================================================================
 ; Subroutine: hud_update
-; Purpose: Checks if player effective HP or score changed, and triggers redraw.
+; Purpose: Checks if player effective HP, score, or hi-score changed, and triggers redraw.
 ; ==============================================================================
 hud_update:
     ; 1. Calculate player effective HP:
@@ -132,9 +193,9 @@ hud_update:
 @apply_bar_color:
     sta $d80a                   ; Heart color (Col 10)
     lda s_prev_hp
-    beq @check_game_over        ; 0 HP -> do not color bars (remain blank/black)
+    beq @check_hi_score         ; 0 HP -> do not color bars (remain blank/black)
     cmp #3
-    bcs @check_game_over        ; 3..5 HP -> do not touch bars (already yellow/green)
+    bcs @check_hi_score         ; 3..5 HP -> do not touch bars (already yellow/green)
 
     lda $d80a                   ; Reload color (WHITE or RED)
     ldx s_empty_count           ; Active energy bars: s_empty_count up to slot 9
@@ -143,18 +204,21 @@ hud_update:
     cpx #10
     bne -
 
-@check_game_over:
-    ; Check player death timer for Game Over (150 frames = 3.0s at 50 Hz PAL)
-    lda g_player_alive
-    bne @check_score
-
-    lda g_game_over
-    bne @check_score
-    lda g_game_over_timer
+@check_hi_score:
+    ; Check if 16-bit high score changed
+    lda g_high_score + 0
+    cmp s_prev_hi_score + 0
+    bne @do_hi_render
+    lda g_high_score + 1
+    cmp s_prev_hi_score + 1
     beq @check_score
-    dec g_game_over_timer
-    bne @check_score
-    jsr game_over_trigger
+
+@do_hi_render:
+    lda g_high_score + 0
+    sta s_prev_hi_score + 0
+    lda g_high_score + 1
+    sta s_prev_hi_score + 1
+    jsr hud_render_hiscore
 
 @check_score:
     ; Check if 16-bit score changed
@@ -213,18 +277,11 @@ hud_render_energy:
     rts
 
 ; ==============================================================================
-; Subroutine: hud_render_score
-; Purpose: Converts 16-bit g_score to 5 decimal digits, space-pads leading zeroes,
-;          writes to Cols 37..33, and appends '00' bulk zeroes to Cols 32..31.
+; Subroutine: hud_convert_16bit_to_digits
+; Purpose: Converts 16-bit integer in (s_score_val_lo, s_score_val_hi) into 5
+;          decimal digits in s_score_digits (D4..D0), space-padding leading zeroes.
 ; ==============================================================================
-hud_render_score:
-    ; 1. Copy 16-bit score to working registers
-    lda g_score + 0
-    sta s_score_val_lo
-    lda g_score + 1
-    sta s_score_val_hi
-
-    ; 2. Convert 16-bit value to 5 decimal digits (D4..D0)
+hud_convert_16bit_to_digits:
     ldx #0                      ; Index into hud_pow10 tables (0..3)
 @pow_loop:
     lda #0
@@ -255,7 +312,7 @@ hud_render_score:
     lda s_score_val_lo
     sta s_score_digits + 4
 
-    ; 3. Space-pad leading zeroes (D4 down to D1; D0 is never suppressed)
+    ; Space-pad leading zeroes (D4 down to D1; D0 is never suppressed)
     ldx #0
 @pad_loop:
     cpx #4                      ; Never suppress D0 (ones place)
@@ -271,7 +328,7 @@ hud_render_score:
     ; Convert all remaining numerical digits (0..9) to screencode ($30..$39)
 @convert_ascii_loop:
     cpx #5
-    beq @write_screen
+    beq @done_conversion
     lda s_score_digits, x
     cmp #$20
     beq +                       ; If already a space, don't add $30
@@ -281,10 +338,47 @@ hud_render_score:
 +   inx
     jmp @convert_ascii_loop
 
-@write_screen:
-    ; 4. Write digits to Screen RAM (Cols 37..33: $0425..$0421)
+@done_conversion:
+    rts
+
+; ==============================================================================
+; Subroutine: hud_render_score
+; Purpose: Converts 16-bit g_score to 5 decimal digits, space-pads leading zeroes,
+;          and writes to Cols 37..33 ($0425..$0421).
+; ==============================================================================
+hud_render_score:
+    lda g_score + 0
+    sta s_score_val_lo
+    lda g_score + 1
+    sta s_score_val_hi
+    jsr hud_convert_16bit_to_digits
+
+    ; Write digits to Screen RAM (Cols 37..33: $0425..$0421)
     ldx #0
     ldy #$25
+-   lda s_score_digits, x
+    sta $0400, y
+    dey
+    inx
+    cpx #5
+    bne -
+    rts
+
+; ==============================================================================
+; Subroutine: hud_render_hiscore
+; Purpose: Converts 16-bit g_high_score to 5 decimal digits, space-pads leading zeroes,
+;          and writes to Cols 23..19 ($0417..$0413).
+; ==============================================================================
+hud_render_hiscore:
+    lda g_high_score + 0
+    sta s_score_val_lo
+    lda g_high_score + 1
+    sta s_score_val_hi
+    jsr hud_convert_16bit_to_digits
+
+    ; Write digits to Screen RAM (Cols 23..19: $0417..$0413)
+    ldx #0
+    ldy #$17
 -   lda s_score_digits, x
     sta $0400, y
     dey
@@ -297,6 +391,7 @@ hud_render_score:
 ; Subroutine: hud_add_score
 ; Purpose: Adds unsigned 8-bit points in Accumulator to 16-bit g_score.
 ;          Saturates at $FFFF (65,535 -> 6,553,500 displayed) to prevent overflow.
+;          Dynamically updates g_high_score if player beats previous record!
 ; Arguments: A = points to add
 ; ==============================================================================
 hud_add_score:
@@ -310,7 +405,24 @@ hud_add_score:
     lda #$ff
     sta g_score + 0
     sta g_score + 1
-+   rts
++
+    ; Dynamic High Score comparison: if g_score > g_high_score, update g_high_score
+    lda g_score + 1
+    cmp g_high_score + 1
+    bcc @score_done
+    bne @update_hi
+    lda g_score + 0
+    cmp g_high_score + 0
+    bcc @score_done
+
+@update_hi:
+    lda g_score + 0
+    sta g_high_score + 0
+    lda g_score + 1
+    sta g_high_score + 1
+
+@score_done:
+    rts
 
 ; ==============================================================================
 ; Subroutine: game_over_trigger
@@ -335,16 +447,23 @@ game_over_trigger:
     ; 3. Erase any active grid powerup
     jsr powerups_erase
 
-    ; 4. Ensure s_score_digits is fully refreshed with current score
-    jsr hud_render_score
+    ; 4. Clear HUD from Row 0
+    jsr hud_clear
 
-    ; 5. Print "GAME OVER" and "SCORE <score>" banners in white
+    ; 5. Ensure s_score_digits is fully refreshed with current score
+    lda g_score + 0
+    sta s_score_val_lo
+    lda g_score + 1
+    sta s_score_val_hi
+    jsr hud_convert_16bit_to_digits
+
+    ; 6. Print "GAME OVER" and "SCORE <score>" banners
     jmp hud_show_game_over
 
 ; ==============================================================================
 ; Subroutine: hud_show_game_over
 ; Purpose: Prints "GAME OVER" across Rows 8..16 at Column 20 in white.
-;          2 lines below (Column 18), prints "SCORE <current_score>" in white.
+;          2 lines below (Column 18), prints "SCORE <current_score>" in light gray.
 ; ==============================================================================
 game_over_text:
     !byte 71, 65, 77, 69, 32, 79, 86, 69, 82 ; "GAME OVER" (ASCII codes)
@@ -352,7 +471,9 @@ score_label_text:
     !byte 83, 67, 79, 82, 69, 32             ; "SCORE " (ASCII codes)
 
 hud_show_game_over:
-    ; 1. Print "GAME OVER" at Column 20, Rows 8..16
+    ; 1. Print "GAME OVER" at Column 20, Rows 8..16 in White
+    lda #COLOR_WHITE
+    sta s_char_color
     lda #8
     sta s_cur_row
     ldy #20
@@ -379,9 +500,11 @@ hud_show_game_over:
     lsr
     sta s_cur_row
 
-    ; 4. Print "SCORE " at Column 18 (2 lines below Column 20)
+    ; 4. Print "SCORE " at Column 18 in Light Gray
     txa
     pha                         ; Save first digit index on stack
+    lda #COLOR_LIGHT_GRAY
+    sta s_char_color
     ldy #18
     ldx #0
 -   lda score_label_text, x
@@ -406,8 +529,37 @@ hud_show_game_over:
     jmp hud_draw_char
 
 ; ==============================================================================
+; Subroutine: hud_clear_game_over
+; Purpose: Erases "GAME OVER" (Col 20) and "SCORE" (Col 18) lines from playfield.
+; ==============================================================================
+hud_clear_game_over:
+    lda #COLOR_BLACK
+    sta s_char_color
+
+    ; Erase Column 20 (Rows 8..16: 9 characters)
+    lda #8
+    sta s_cur_row
+    ldy #20
+    ldx #9
+-   lda #$20
+    jsr hud_draw_char
+    dex
+    bne -
+
+    ; Erase Column 18 (Rows 7..18: 12 characters)
+    lda #7
+    sta s_cur_row
+    ldy #18
+    ldx #12
+-   lda #$20
+    jsr hud_draw_char
+    dex
+    bne -
+    rts
+
+; ==============================================================================
 ; Subroutine: hud_draw_char
-; Purpose: Draws character in A at (s_cur_row, Col Y) in COLOR_WHITE,
+; Purpose: Draws character in A at (s_cur_row, Col Y) in s_char_color,
 ;          and increments s_cur_row. Preserves Y.
 ; ==============================================================================
 hud_draw_char:
@@ -426,10 +578,7 @@ hud_draw_char:
     tax
     pla
     sta ($fb), y
-    lda #COLOR_WHITE
-    cpy #20
-    beq +
-    lda #COLOR_LIGHT_GRAY
-+   sta ($fd), y
+    lda s_char_color
+    sta ($fd), y
     inc s_cur_row
     rts
