@@ -551,7 +551,7 @@ powerups_check_collision:
 
 @collect_type_e:
     ; Energy:
-    ; 1. Restore +2 HP up to maximum 5 HP
+    ; 1. Restore +1 HP up to maximum 5 HP
     lda g_player_hp
     cmp #5
     bcc @heal_hp
@@ -562,12 +562,7 @@ powerups_check_collision:
     jmp @e_flash
 
 @heal_hp:
-    clc
-    adc #2
-    cmp #5
-    bcc +
-    lda #5
-+   sta g_player_hp
+    inc g_player_hp             ; Restore exactly +1 HP
 
     ; Award 500 bonus points (5 * 100)
     lda #5
