@@ -3,11 +3,13 @@
 tools/build_title_bitmap.py - Pre-bakes the 320x200 C64 Hi-Res Title Screen Bitmap.
 
 Reads:
-- refes/NAVE_logo.png (83x194 monochrome 1-bit PNG)
+- assets/DreanNAVE64.png (103x191 PNG logo)
 - src/charset_data.asm (for 8x8 font glyphs, including char 102 copyright and char 103 copyleft)
 
 Generates:
-- bin/title_bitmap.bin (8000 bytes raw C64 bitmap data for VIC-II Hi-Res mode)
+- assets/title_bitmap.bin (8000 bytes raw C64 bitmap data for VIC-II Hi-Res mode)
+- bin/title_bitmap.bin (8000 bytes copy for build)
+- bin/tate_title_preview.png (TATE rotated PNG preview)
 """
 
 import os
@@ -21,24 +23,71 @@ def load_png(filename):
     pos = 8
     idat = bytearray()
     w, h = 0, 0
+    bit_depth, color_type = 0, 0
+    plte = []
+    trns = None
     while pos < len(data):
         length, ctype = struct.unpack('>I4s', data[pos:pos+8])
         if ctype == b'IHDR':
-            w, h = struct.unpack('>II', data[pos+8:pos+8+8])
+            w, h, bit_depth, color_type = struct.unpack('>IIBB', data[pos+8:pos+8+10])
+        elif ctype == b'PLTE':
+            raw_plte = data[pos+8:pos+8+length]
+            plte = [raw_plte[i:i+3] for i in range(0, len(raw_plte), 3)]
+        elif ctype == b'tRNS':
+            trns = data[pos+8:pos+8+length]
         elif ctype == b'IDAT':
             idat.extend(data[pos+8:pos+8+length])
         pos += 8 + length + 4
 
     raw = zlib.decompress(idat)
-    stride = 1 + (w + 7) // 8
     pixels = [[0] * w for _ in range(h)]
-    for y in range(h):
-        line = raw[y * stride + 1 : (y + 1) * stride]
-        for x in range(w):
-            byte_idx = x // 8
-            bit_idx = 7 - (x % 8)
-            if line[byte_idx] & (1 << bit_idx):
-                pixels[y][x] = 1
+
+    if color_type == 3:  # Indexed color
+        stride = 1 + w
+        prev_row = [0] * w
+        is_white = []
+        for i, e in enumerate(plte):
+            lum = (e[0] + e[1] + e[2]) / 3
+            if trns and i < len(trns) and trns[i] == 0:
+                is_white.append(0)
+            else:
+                is_white.append(1 if lum > 100 else 0)
+
+        for y in range(h):
+            filter_type = raw[y * stride]
+            row_data = list(raw[y * stride + 1 : (y + 1) * stride])
+            current_row = [0] * w
+            for x in range(w):
+                val = row_data[x]
+                if filter_type == 0: recon = val
+                elif filter_type == 1: recon = (val + (current_row[x-1] if x > 0 else 0)) & 0xff
+                elif filter_type == 2: recon = (val + prev_row[x]) & 0xff
+                elif filter_type == 3: recon = (val + ((current_row[x-1] if x > 0 else 0) + prev_row[x]) // 2) & 0xff
+                elif filter_type == 4:
+                    a = current_row[x-1] if x > 0 else 0
+                    b = prev_row[x]
+                    c = prev_row[x-1] if x > 0 else 0
+                    p = a + b - c
+                    pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                    pr = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                    recon = (val + pr) & 0xff
+                current_row[x] = recon
+                pixels[y][x] = is_white[recon] if recon < len(is_white) else 0
+            prev_row = current_row
+    elif color_type == 0:  # Grayscale
+        stride = 1 + (w + 7) // 8 if bit_depth == 1 else 1 + w
+        for y in range(h):
+            line = raw[y * stride + 1 : (y + 1) * stride]
+            for x in range(w):
+                if bit_depth == 1:
+                    byte_idx = x // 8
+                    bit_idx = 7 - (x % 8)
+                    if line[byte_idx] & (1 << bit_idx):
+                        pixels[y][x] = 1
+                else:
+                    if line[x] > 100:
+                        pixels[y][x] = 1
+
     return w, h, pixels
 
 def parse_charset(filename):
@@ -63,7 +112,7 @@ def parse_charset(filename):
 
 def main():
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    logo_path = os.path.join(repo_root, 'refes', 'NAVE_logo.png')
+    logo_path = os.path.join(repo_root, 'assets', 'DreanNAVE64.png')
     charset_path = os.path.join(repo_root, 'src', 'charset_data.asm')
     out_bin = os.path.join(repo_root, 'bin', 'title_bitmap.bin')
 
@@ -72,20 +121,25 @@ def main():
 
     # 320x200 pixel matrix (C64 standard coordinates: X=0..319, Y=0..199)
     # In TATE (90 deg CCW rotation):
-    # - Top of vertical screen is high X (Columns 39..29)
+    # - Top of vertical screen is high X (Columns 39..27)
     # - Bottom of vertical screen is low X (Columns 0..8)
     # - Left of vertical screen is low Y (Row 0..2)
     # - Right of vertical screen is high Y (Row 22..24)
     pixels = [[0] * 320 for _ in range(200)]
 
-    # 1. Place NAVE logo at top of TATE screen (X = 234..316, Y = 3..196)
-    # logo_w = 83, logo_h = 194
+    # 1. Place Drean NAVE 64 logo at top of TATE screen
+    # logo_w = 103, logo_h = 191
+    # lx = 0..102: lx=102 is "Dream" at top of logo, lx=0 is bottom edge of letters / "64"
+    # ly = 0..190: ly=0 is "N" (left side in TATE), ly=190 is "E" / "64" (right side in TATE)
+    X_BASE = 216
+    Y_OFFSET = 4
     for ly in range(logo_h):
         for lx in range(logo_w):
             if logo_pixels[ly][lx]:
-                c64_x = 234 + lx
-                c64_y = 3 + ly
-                pixels[c64_y][c64_x] = 1
+                c64_x = X_BASE + lx
+                c64_y = Y_OFFSET + ly
+                if 0 <= c64_x < 320 and 0 <= c64_y < 200:
+                    pixels[c64_y][c64_x] = 1
 
     # Helper to draw character glyph from charset at Column C (0..39), Row R (0..24)
     def draw_char(col_c, row_r, ch):
@@ -170,7 +224,7 @@ def main():
 
         raw = bytearray()
         for row in img_rows:
-            raw.append(0) # Filter type 0 (None)
+            raw.append(0)  # Filter type 0 (None)
             raw.extend(row)
         compressed = zlib.compress(bytes(raw), 9)
 

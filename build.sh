@@ -13,7 +13,7 @@ echo "==> Using ACME Assembler: $ACME_BIN"
 mkdir -p bin
 
 # Pre-bake title screen bitmap asset if source logo exists
-if [ -f "tools/build_title_bitmap.py" ] && [ -f "refes/NAVE_logo.png" ]; then
+if [ -f "tools/build_title_bitmap.py" ] && [ -f "assets/DreanNAVE64.png" ]; then
     echo "==> Pre-baking title bitmap asset..."
     python3 tools/build_title_bitmap.py
 fi
