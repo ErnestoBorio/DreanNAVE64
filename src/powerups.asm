@@ -122,6 +122,27 @@ powerups_spawn_forced:
     rts
 
 ; ==============================================================================
+; Subroutine: powerups_spawn_forced_type
+; Purpose: Immediately spawns specified powerup type passed in A.
+; Arguments: A = powerup type (POWERUP_TYPE_P, POWERUP_TYPE_B, POWERUP_TYPE_E)
+; ==============================================================================
+powerups_spawn_forced_type:
+    pha
+    lda g_powerup_active
+    beq +
+    jsr powerups_erase
++
+    pla
+    sta g_powerup_type
+    jsr powerups_stamp_new
+    ; Visual border flash feedback
+    lda #COLOR_WHITE
+    sta VIC_BORDER_COLOR
+    lda #8
+    sta g_debug_border_timer
+    rts
+
+; ==============================================================================
 ; Internal Subroutine: powerups_stamp_new
 ; Purpose: Picks random playfield row, stamps 4 quadrants of current powerup type.
 ; ==============================================================================
@@ -525,41 +546,7 @@ powerups_check_collision:
 
 @collect_type_b:
     ; Smart Bomb:
-    ; 1. Extended white border flash (15 frames = 0.3s)
-    lda #COLOR_WHITE
-    sta VIC_BORDER_COLOR
-    lda #15
-    sta g_debug_border_timer
-
-    ; 2. Destroy all active living enemies
-    ldx #0
-@bomb_enemy_loop:
-    lda g_enemy_active, x
-    beq @bomb_next_enemy
-    lda g_enemy_exploding, x
-    bne @bomb_next_enemy
-    txa
-    pha
-    jsr collisions_kill_enemy
-    pla
-    tax
-@bomb_next_enemy:
-    inx
-    cpx #MAX_ENEMIES
-    bne @bomb_enemy_loop
-
-    ; 3. Clear all active enemy bullets
-    ldx #0
-    lda #0
-@bomb_bullet_loop:
-    sta g_bullet_active, x
-    inx
-    cpx #MAX_ENEMY_BULLETS
-    bne @bomb_bullet_loop
-
-    ; 4. Award 500 bonus points for bomb pickup
-    lda #5
-    jsr hud_add_score
+    jsr powerups_trigger_smart_bomb
     rts
 
 @collect_type_e:
@@ -595,6 +582,49 @@ powerups_check_collision:
     rts
 
 @no_collision:
+    rts
+
+; ==============================================================================
+; Subroutine: powerups_trigger_smart_bomb
+; Purpose: Destroys all active enemies, clears bullets, triggers white strobe flash,
+;          and awards 500 bonus points.
+; ==============================================================================
+powerups_trigger_smart_bomb:
+    ; 1. Extended white border flash (15 frames = 0.3s)
+    lda #COLOR_WHITE
+    sta VIC_BORDER_COLOR
+    lda #15
+    sta g_debug_border_timer
+
+    ; 2. Destroy all active living enemies
+    ldx #0
+@bomb_enemy_loop:
+    lda g_enemy_active, x
+    beq @bomb_next_enemy
+    lda g_enemy_exploding, x
+    bne @bomb_next_enemy
+    txa
+    pha
+    jsr collisions_kill_enemy
+    pla
+    tax
+@bomb_next_enemy:
+    inx
+    cpx #MAX_ENEMIES
+    bne @bomb_enemy_loop
+
+    ; 3. Clear all active enemy bullets
+    ldx #0
+    lda #0
+@bomb_bullet_loop:
+    sta g_bullet_active, x
+    inx
+    cpx #MAX_ENEMY_BULLETS
+    bne @bomb_bullet_loop
+
+    ; 4. Award 500 bonus points for bomb pickup
+    lda #5
+    jsr hud_add_score
     rts
 
 ; ------------------------------------------------------------------------------

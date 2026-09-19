@@ -201,7 +201,7 @@ input_update:
     sta s_current_debug_key
 @col4_debug_done:
 
-    ; --- Column 3 ($F7 = %11110111): Shared 'G', 'H', 'U', Debug '7' (PB0), '8' (PB3) ---
+    ; --- Column 3 ($F7 = %11110111): Shared 'G', 'H', 'U', Debug '7' (PB0), '8' (PB3), 'B' (PB4) ---
     ; De-ghosting:
     ; 1) 'G' (Horizontal Right) is suppressed if Column 4 (J, K) is active,
     ;    preventing H+J+K in TATE mode from ghosting G and freezing controls.
@@ -233,6 +233,19 @@ input_update:
     bne +
     inc g_input_right
 +
+    ; Debug Key 'B' (Row PB4): Spawn Bomb Powerup (or trigger bomb directly if Shift held)
+    lda s_scan_portb
+    and #$10            ; Bit 4: Key 'B' (0 = pressed)
+    bne +
+    lda s_shift_held
+    bne @trigger_bomb_direct
+    lda #12             ; Debug Key 12: Spawn Bomb Powerup
+    sta s_current_debug_key
+    jmp +
+@trigger_bomb_direct:
+    lda #13             ; Debug Key 13: Direct Smart Bomb trigger
+    sta s_current_debug_key
++
     ; Debug Keys '7' (PB0) and '8' (PB3) - only scanned if Shift held
     lda s_shift_held
     beq @col3_debug_done
@@ -248,7 +261,7 @@ input_update:
     sta s_current_debug_key
 @col3_debug_done:
 
-    ; --- Column 1 ($FD = %11111101): Fire 'Z' (PB4), Debug '3' (PB0), '4' (PB3) ---
+    ; --- Column 1 ($FD = %11111101): Fire 'Z' (PB4), Debug '3' (PB0), '4' (PB3), 'E' (PB6) ---
     lda #$fd
     sta CIA1_DATA_A     ; Pull Column 1 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
@@ -256,6 +269,13 @@ input_update:
     and #$10            ; Bit 4: Key 'Z' (0 = pressed)
     bne +
     inc g_input_fire
++
+    ; Debug Key 'E' (Row PB6): Spawn Powerup 'E'
+    lda s_scan_portb
+    and #$40            ; Bit 6: Key 'E' (0 = pressed)
+    bne +
+    lda #11             ; Debug Key 11: Spawn 'E' Powerup
+    sta s_current_debug_key
 +
     ; Debug Keys '3' (PB0) and '4' (PB3) - only scanned if Shift held
     lda s_shift_held
@@ -278,12 +298,6 @@ input_update:
     lda CIA1_DATA_B     ; Read Rows (Port B)
     and #$02            ; Bit 1: Key 'P' (0 = pressed)
     bne +
-    lda s_shift_held
-    beq @normal_p_fire
-    lda #10             ; Debug Key 10: SHIFT + P (Force Powerup P Spawn)
-    sta s_current_debug_key
-    bne +
-@normal_p_fire:
     inc g_input_fire
 +
 
@@ -424,9 +438,21 @@ input_update:
 ; Input: A = 1..8 (Enemy 1..8)
 ; ==============================================================================
 input_jump_to_tier:
-    cmp #10
+    cmp #11                     ; Debug Key 11: Spawn 'E' Powerup
     bne +
-    jsr powerups_spawn_forced
+    lda #POWERUP_TYPE_E
+    jsr powerups_spawn_forced_type
+    rts
++
+    cmp #12                     ; Debug Key 12: Spawn Bomb Powerup
+    bne +
+    lda #POWERUP_TYPE_B
+    jsr powerups_spawn_forced_type
+    rts
++
+    cmp #13                     ; Debug Key 13: Direct Smart Bomb trigger
+    bne +
+    jsr powerups_trigger_smart_bomb
     rts
 +
     cmp #9
