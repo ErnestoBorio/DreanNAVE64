@@ -6,12 +6,18 @@
 ; ==============================================================================
 ; Displays:
 ; - "DREAN NAVE 64" centered at Column 26 (Rows 6..18) in White
-; - "HIGH SCORE" centered at Column 20 (Rows 7..16) in Light Blue
-; - High score value centered at Column 18 in White
-; - Blinking "PRESS SPACE OR F1" at Column 12 (Rows 4..20) in Yellow
+; - "HIGH SCORE" centered at Column 20 (Rows 8..17) in Green
+; - High score value centered at Column 18 in Green
+; - Blinking "PRESS FIRE OR SPACE" at Column 12 (Rows 3..21) in Yellow
 ; - Background starfield scrolling
-; - Detects SPACE or F1 press to transition to STATE_READY
+; - Detects FIRE or SPACE press to transition to STATE_READY
 ; ==============================================================================
+
+; ------------------------------------------------------------------------------
+; Title State RAM Variables
+; ------------------------------------------------------------------------------
+s_title_lockout:    !byte 0     ; Debounce safety timer on entering Title (20 frames = 0.4s)
+s_title_released:   !byte 0     ; 1 = Fire & Space were released after entering Title
 
 title_banner_text:
     !byte 68, 82, 69, 65, 78, 32, 78, 65, 86, 69, 32, 54, 52 ; "DREAN NAVE 64" (13 chars)
@@ -20,13 +26,19 @@ title_hiscore_text:
     !byte 72, 73, 71, 72, 32, 83, 67, 79, 82, 69             ; "HIGH SCORE" (10 chars)
 
 title_prompt_text:
-    !byte 80, 82, 69, 83, 83, 32, 83, 80, 65, 67, 69, 32, 79, 82, 32, 70, 49 ; "PRESS SPACE OR F1" (17 chars)
+    !byte 80, 82, 69, 83, 83, 32, 70, 73, 82, 69, 32, 79, 82, 32, 83, 80, 65, 67, 69 ; "PRESS FIRE OR SPACE" (19 chars)
 
 ; ==============================================================================
 ; Subroutine: title_enter
 ; Purpose: Draws Title screen elements across playfield columns.
 ; ==============================================================================
 title_enter:
+    ; Reset debounce safety lockout & require fresh button release
+    lda #20
+    sta s_title_lockout
+    lda #0
+    sta s_title_released
+
     ; 0. Clear and reseed static starfield across Rows 1..24
     jsr starfield_init
 
@@ -43,11 +55,9 @@ title_enter:
     cpx #13
     bne -
 
-    ; 2. Draw "HIGH SCORE" at Column 20, Rows 7..16 in Light Blue
-    ; 2. Draw "HIGH SCORE" at Column 20, Rows 8..17 in Light Blue
-    lda #COLOR_LIGHT_BLUE
+    ; 2. Draw "HIGH SCORE" at Column 20, Rows 8..17 in Green
+    lda #COLOR_GREEN
     sta s_char_color
-    lda #7
     lda #8
     sta s_cur_row
     ldy #20
@@ -58,7 +68,7 @@ title_enter:
     cpx #10
     bne -
 
-    ; 3. Convert and draw High Score value at Column 18 in White
+    ; 3. Convert and draw High Score value at Column 18 in Green
     lda g_high_score + 0
     sta s_score_val_lo
     lda g_high_score + 1
@@ -74,7 +84,6 @@ title_enter:
     cpx #4
     bne -
 +
-    ; Center digits across playfield rows: start_row = (17 + X) / 2 + 1
     ; Center digits across playfield rows:
     ; Length = 7 - X. Margin = (24 - (7 - X)) / 2 = (17 + X) / 2.
     ; Start row = Margin + 1.
@@ -88,7 +97,7 @@ title_enter:
 
     txa
     pha                         ; Save first digit index
-    lda #COLOR_WHITE
+    lda #COLOR_GREEN
     sta s_char_color
     ldy #18
     pla
@@ -105,29 +114,49 @@ title_enter:
     lda #$30
     jsr hud_draw_char
 
-    ; 4. Initial draw of "PRESS SPACE OR F1"
+    ; 4. Initial draw of "PRESS FIRE OR SPACE"
     jmp title_draw_prompt
 
 ; ==============================================================================
 ; Subroutine: title_update
-; Purpose: Blinks start prompt and checks for SPACE / F1.
+; Purpose: Blinks start prompt and checks for FIRE or SPACE with safety debounce.
 ; ==============================================================================
 title_update:
-    ; 1. Blink "PRESS SPACE OR F1" prompt:
+    ; 1. Blink "PRESS FIRE OR SPACE" prompt:
     ; 0.5s shown (frames 0..24), 0.5s hidden (frames 25..49)
     lda g_game_time_frames
     cmp #25
     bcs @hide_prompt
 
     jsr title_draw_prompt
-    jmp @check_start
+    jmp @check_input_safety
 
 @hide_prompt:
     jsr title_hide_prompt
 
+@check_input_safety:
+    ; 2. Track button release: Fire and Space must be completely released
+    lda g_input_fire
+    ora g_input_start
+    bne @button_held
+    lda #1
+    sta s_title_released
+@button_held:
+
+    ; 3. Decrement safety lockout timer
+    lda s_title_lockout
+    beq @check_start
+    dec s_title_lockout
+    rts
+
 @check_start:
-    ; 3. Check for SPACE or F1 newly pressed
-    lda g_input_start_pressed
+    ; 4. Require that button was released at least once on Title screen
+    lda s_title_released
+    beq @done
+
+    ; 5. Check for FIRE or SPACE newly pressed
+    lda g_input_fire_pressed
+    ora g_input_start_pressed
     beq @done
 
     ; Transition to STATE_READY
@@ -139,33 +168,33 @@ title_update:
 
 ; ==============================================================================
 ; Subroutine: title_draw_prompt
-; Purpose: Prints "PRESS SPACE OR F1" at Column 12, Rows 4..20 in Yellow.
+; Purpose: Prints "PRESS FIRE OR SPACE" at Column 12, Rows 3..21 in Yellow.
 ; ==============================================================================
 title_draw_prompt:
     lda #COLOR_YELLOW
     sta s_char_color
-    lda #4
+    lda #3
     sta s_cur_row
     ldy #12
     ldx #0
 -   lda title_prompt_text, x
     jsr hud_draw_char
     inx
-    cpx #17
+    cpx #19
     bne -
     rts
 
 ; ==============================================================================
 ; Subroutine: title_hide_prompt
-; Purpose: Clears "PRESS SPACE OR F1" line at Column 12 with blank spaces.
+; Purpose: Clears "PRESS FIRE OR SPACE" line at Column 12 with blank spaces.
 ; ==============================================================================
 title_hide_prompt:
     lda #COLOR_BLACK
     sta s_char_color
-    lda #4
+    lda #3
     sta s_cur_row
     ldy #12
-    ldx #17
+    ldx #19
 -   lda #$20
     jsr hud_draw_char
     dex
@@ -190,8 +219,6 @@ title_exit:
     dex
     bne -
 
-    ; 2. Erase Column 20 ("HIGH SCORE": Rows 7..16)
-    lda #7
     ; 2. Erase Column 20 ("HIGH SCORE": Rows 8..17)
     lda #8
     sta s_cur_row
@@ -212,5 +239,5 @@ title_exit:
     dex
     bne -
 
-    ; 4. Erase Column 12 ("PRESS SPACE OR F1": Rows 4..20)
+    ; 4. Erase Column 12 ("PRESS FIRE OR SPACE": Rows 3..21)
     jmp title_hide_prompt

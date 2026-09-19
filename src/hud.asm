@@ -8,9 +8,9 @@
 ; - TATE Mode Rotated Status Bar on Character Row 0 ($0400-$0427, Color $D800-$D827)
 ; - Screen Right (Col 39) = Rotated TOP, Screen Left (Col 0) = Rotated BOTTOM
 ; - 1UP Indicator: Digit 1 (Char 49) + 'UP' (Char 107) in Light Blue (Cols 39..38)
-; - 16-bit Score: Converted to 5 decimal digits with leading spaces + '00' bulk zeroes (Cols 37..31) in White
-; - HI Indicator: 'H' (Char 72) + 'I' (Char 73) in Light Blue (Cols 25..24)
-; - 16-bit Hi-Score: Converted to 5 decimal digits + '00' bulk zeroes (Cols 23..17) in White
+; - 16-bit Score: Converted to 5 decimal digits with leading spaces + '00' bulk zeroes (Cols 37..31) in Light Blue
+; - HI Indicator: 'H' (Char 72) + 'I' (Char 73) in Green (Cols 25..24)
+; - 16-bit Hi-Score: Converted to 5 decimal digits + '00' bulk zeroes (Cols 23..17) in Green
 ; - Red Heart (Char 98) in Red at Col 10
 ; - 10-bar Energy Gauge (Char 106) in Yellow (Cols 9..0), decreasing from left to right (2 bars per HP)
 ; - Dynamic High Score tracking & persistent session storage
@@ -98,8 +98,8 @@ hud_show:
     sta $0420
     sta $041f
 
-    ; Set Color RAM for 1UP score digits & bulk zeroes (Cols 37..31: $D825..$D81F)
-    lda #COLOR_WHITE
+    ; Set Color RAM for 1UP score digits & bulk zeroes (Cols 37..31: $D825..$D81F) in Light Blue
+    lda #COLOR_LIGHT_BLUE
     ldx #6
 -   sta $d81f, x
     dex
@@ -107,17 +107,17 @@ hud_show:
 
     ; 2. Draw 'HI' centered between Score (Col 31) and Energy Bar Heart (Col 10)
     ; HI-score cluster occupies Cols 25..17 (5 spaces above: Cols 30..26, 6 spaces below: Cols 16..11)
-    ; Col 25 = 'H' (Char 72), Col 24 = 'I' (Char 73) in Light Blue
+    ; Col 25 = 'H' (Char 72), Col 24 = 'I' (Char 73) in Green
     lda #72
     sta $0419
     lda #73
     sta $0418
-    lda #COLOR_LIGHT_BLUE
+    lda #COLOR_GREEN
     sta $d819
     sta $d818
 
-    ; Set Color RAM for HI score digits & bulk zeroes (Cols 23..17: $D817..$D811)
-    lda #COLOR_WHITE
+    ; Set Color RAM for HI score digits & bulk zeroes (Cols 23..17: $D817..$D811) in Green
+    lda #COLOR_GREEN
     ldx #6
 -   sta $d811, x
     dex
@@ -353,11 +353,13 @@ hud_render_score:
     sta s_score_val_hi
     jsr hud_convert_16bit_to_digits
 
-    ; Write digits to Screen RAM (Cols 37..33: $0425..$0421)
+    ; Write digits to Screen RAM (Cols 37..33: $0425..$0421) and set Color to Light Blue
     ldx #0
     ldy #$25
 -   lda s_score_digits, x
     sta $0400, y
+    lda #COLOR_LIGHT_BLUE
+    sta $d800, y
     dey
     inx
     cpx #5
@@ -376,11 +378,13 @@ hud_render_hiscore:
     sta s_score_val_hi
     jsr hud_convert_16bit_to_digits
 
-    ; Write digits to Screen RAM (Cols 23..19: $0417..$0413)
+    ; Write digits to Screen RAM (Cols 23..19: $0417..$0413) and set Color to Green
     ldx #0
     ldy #$17
 -   lda s_score_digits, x
     sta $0400, y
+    lda #COLOR_GREEN
+    sta $d800, y
     dey
     inx
     cpx #5

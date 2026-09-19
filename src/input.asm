@@ -34,8 +34,8 @@ g_input_left:          !byte 0   ; 2:  1 = Move Left active, 0 = Inactive
 g_input_right:         !byte 0   ; 3:  1 = Move Right active, 0 = Inactive
 g_input_fire:          !byte 0   ; 4:  1 = Fire button held down (level-triggered)
 g_input_fire_pressed:  !byte 0   ; 5:  1 = Fire button newly pressed (edge-triggered)
-g_input_start:         !byte 0   ; 6:  1 = Space or F1 held down (level-triggered)
-g_input_start_pressed: !byte 0   ; 7:  1 = Space or F1 newly pressed (edge-triggered)
+g_input_start:         !byte 0   ; 6:  1 = Space key held down (level-triggered)
+g_input_start_pressed: !byte 0   ; 7:  1 = Space key newly pressed (edge-triggered)
 s_col2_active:         !byte 0   ; 8:  1 = Horizontal Column 2 active (R, D, F)
 s_col4_active:         !byte 0   ; 9:  1 = TATE Column 4 active (J, K)
 s_shift_held:          !byte 0   ; 10: 1 = SHIFT held down, 0 = SHIFT not pressed
@@ -287,15 +287,6 @@ input_update:
     inc g_input_fire
 +
 
-    ; --- Column 0 ($FE = %11111110): Function Key F1 (Row PB4) ---
-    lda #$fe
-    sta CIA1_DATA_A     ; Pull Column 0 low
-    lda CIA1_DATA_B     ; Read Rows (Port B)
-    and #$10            ; Bit 4: F1 key (0 = pressed)
-    bne +
-    inc g_input_start
-+
-
     ; Release all column drivers and restore Port A & B to all-inputs
     lda #$ff
     sta CIA1_DATA_A     ; Release driven lines high
@@ -387,7 +378,7 @@ input_update:
     sta s_prev_fire
 
     ; --------------------------------------------------------------------------
-    ; Step 5: Compute Edge-Triggered Start Key (start_pressed: SPACE or F1)
+    ; Step 5: Compute Edge-Triggered Start Key (start_pressed: SPACE)
     ; --------------------------------------------------------------------------
     lda g_input_start
     beq @no_start_pressed

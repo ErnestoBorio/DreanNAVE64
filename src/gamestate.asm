@@ -5,11 +5,11 @@
 ; Assembler: ACME 6502 Assembler
 ; ==============================================================================
 ; Manages Game States:
-; - STATE_TITLE     (0): Attract & Title screen, scrolling starfield, SPACE/F1 to start
+; - STATE_TITLE     (0): Attract & Title screen, scrolling starfield, FIRE/SPACE to start
 ; - STATE_READY     (1): Reset session, display "READY!", 1.5s countdown
 ; - STATE_PLAYING   (2): Active gameplay loop (player, enemies, weapons, HUD)
 ; - STATE_DYING     (3): Ship death explosion, 3.0s delay
-; - STATE_GAME_OVER (4): "GAME OVER" & final score, 5.0s delay or Fire to title
+; - STATE_GAME_OVER (4): "GAME OVER" & final score, 5.0s delay or Fire/Space to title
 ; ==============================================================================
 
 STATE_TITLE     = 0
@@ -287,8 +287,14 @@ state_game_over_update:
     dec g_state_timer
     beq @to_title
 
-    ; 2. Check for Joystick Port 2 Fire button / Fire key press to skip early
+    ; 2. Guard delay: don't allow skipping in the first 0.2s (frames 250..241)
+    lda g_state_timer
+    cmp #240
+    bcs @done
+
+    ; 3. Check for Fire button / Fire key or Space newly pressed to skip early
     lda g_input_fire_pressed
+    ora g_input_start_pressed
     beq @done
 
 @to_title:
