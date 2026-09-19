@@ -9,6 +9,7 @@
 ; ==============================================================================
 
 PLAYER_SPRITE_BLOCK = 128       ; Base sprite block in VIC-II RAM ($2000 / 64 = 128)
+PLAYER_SPEED        = 3         ; Player movement speed (pixels per frame at 50 Hz PAL)
 
 ; ------------------------------------------------------------------------------
 ; Player Entity Data RAM Variables
@@ -25,16 +26,15 @@ g_player_power:     !byte 0     ; Power-up stage (0 = Ship 1, 1 = Ship 2, 2 = Sh
 ; ==============================================================================
 player_init:
     ; 1. Initialize player state variables
-    lda #60
-    sta g_player_x + 0
     lda #0
     sta g_player_x + 1
+    sta g_player_power
+    lda #60
+    sta g_player_x + 0
     lda #120
     sta g_player_y
     lda #1
     sta g_player_alive
-    lda #0
-    sta g_player_power
 
     ; 2. Set Sprite 0 pointer at $07F8 to point to Player Ship Stage 1 (Block 128)
     ;    (Sprite data is assembled directly at VIC-II Sprite RAM $2000 - $23FF)
@@ -88,7 +88,7 @@ player_update:
     bne +
     rts
 +
-    ; Movement speed: 2 pixels per frame (smooth 50 Hz arcade motion)
+    ; Movement speed: PLAYER_SPEED pixels per frame (smooth 50 Hz arcade motion)
 
     ; --------------------------------------------------------------------------
     ; Check Move Up (Y decrements towards top border: SPRITE_MIN_Y = 50)
@@ -97,7 +97,7 @@ player_update:
     beq @check_down
     lda g_player_y
     sec
-    sbc #2
+    sbc #PLAYER_SPEED
     cmp #SPRITE_MIN_Y
     bcs +
     lda #SPRITE_MIN_Y           ; Clamp to top visible border
@@ -111,7 +111,7 @@ player_update:
     beq @check_left
     lda g_player_y
     clc
-    adc #2
+    adc #PLAYER_SPEED
     cmp #SPRITE_MAX_Y
     bcc +
     lda #SPRITE_MAX_Y           ; Clamp to bottom visible border
@@ -125,7 +125,7 @@ player_update:
     beq @check_right
     lda g_player_x + 0
     sec
-    sbc #2
+    sbc #PLAYER_SPEED
     sta g_player_x + 0
     lda g_player_x + 1
     sbc #0
@@ -151,7 +151,7 @@ player_update:
     beq @update_done
     lda g_player_x + 0
     clc
-    adc #2
+    adc #PLAYER_SPEED
     sta g_player_x + 0
     lda g_player_x + 1
     adc #0

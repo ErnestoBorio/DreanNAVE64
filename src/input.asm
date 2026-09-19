@@ -430,8 +430,6 @@ input_jump_to_tier:
     ; 1. Flash border with archetype feedback color
     lda g_debug_enemy_colors, x
     sta VIC_BORDER_COLOR
-    lda #8
-    sta g_debug_border_timer
 
     ; 2. Set game elapsed time to unlock threshold of Enemy N
     lda enemy_table_unlock_sec_lo, x

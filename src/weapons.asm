@@ -176,6 +176,9 @@ weapons_update:
 
 @update_hit_spark:
     dec g_missile_active
+    lda g_missile_active
+    cmp #1
+    beq @despawn_missile
 
 @check_fire_latch:
     ; 4. Latch new single-shot keydown event (strictly single-shot: 1 shot per tap, NO auto-fire)
