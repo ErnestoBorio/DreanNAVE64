@@ -1,16 +1,19 @@
 ; ==============================================================================
-; TITLE.ASM - Attract & Title Screen Subsystem
+; TITLE.ASM - Attract & Title Screen Subsystem (Hi-Res Monochrome Bitmap Mode)
 ; ==============================================================================
 ; Target: Commodore 64 (50 Hz PAL, TATE Rotated Screen)
 ; Assembler: ACME 6502 Assembler
 ; ==============================================================================
 ; Displays:
-; - "DREAN NAVE 64" centered at Column 26 (Rows 6..18) in White
-; - "HIGH SCORE" centered at Column 20 (Rows 8..17) in Green
-; - High score value centered at Column 18 in Green
-; - Blinking "PRESS FIRE OR SPACE" at Column 12 (Rows 3..21) in Yellow
-; - Background starfield scrolling
-; - Detects FIRE or SPACE press to transition to STATE_READY
+; - NAVE Logo: 83x194 monochrome 1-bit bitmap at top of TATE screen (Cols 29..39)
+; - "HIGH SCORE": Centered at Column 25 (Rows 7..16)
+; - High score value: Dynamically stamped into Column 23, centered
+; - "(C)2012 VIDEOGAMO INC": Centered at Column 17 (Rows 3..21)
+; - "(D)2026 DREAN64": Centered at Column 15 (Rows 6..18)
+; - Blinking "PRESS FIRE TO START": At Column 8 (Rows 3..21)
+;   Blinking achieved by toggling Screen RAM cell colors between $10 (White on Black)
+;   and $00 (Black on Black).
+; - Press FIRE or SPACE (with double-skip debounce protection) to transition to STATE_READY.
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
@@ -18,57 +21,151 @@
 ; ------------------------------------------------------------------------------
 s_title_lockout:    !byte 0     ; Debounce safety timer on entering Title (20 frames = 0.4s)
 s_title_released:   !byte 0     ; 1 = Fire & Space were released after entering Title
+s_prompt_state:     !byte 0     ; Current color byte of prompt ($10 = visible, $00 = hidden, $FF = dirty)
+s_hiscore_row:      !byte 0     ; Dynamic cursor row for stamping high score digits
+s_digit_idx:        !byte 0     ; Digit buffer index during high score stamping
 
-title_banner_text:
-    !byte 68, 82, 69, 65, 78, 32, 78, 65, 86, 69, 32, 54, 52 ; "DREAN NAVE 64" (13 chars)
+; ------------------------------------------------------------------------------
+; Screen RAM cell addresses for Column 8, Rows 3..21 (19 cells: $8000 + R * 40 + 8)
+; ------------------------------------------------------------------------------
+prompt_cells_lo:
+    !byte <$8080, <$80a8, <$80d0, <$80f8, <$8120, <$8148, <$8170, <$8198
+    !byte <$81c0, <$81e8, <$8210, <$8238, <$8260, <$8288, <$82b0, <$82d8
+    !byte <$8300, <$8328, <$8350
 
-title_hiscore_text:
-    !byte 72, 73, 71, 72, 32, 83, 67, 79, 82, 69             ; "HIGH SCORE" (10 chars)
+prompt_cells_hi:
+    !byte >$8080, >$80a8, >$80d0, >$80f8, >$8120, >$8148, >$8170, >$8198
+    !byte >$81c0, >$81e8, >$8210, >$8238, >$8260, >$8288, >$82b0, >$82d8
+    !byte >$8300, >$8328, >$8350
 
-title_prompt_text:
-    !byte 80, 82, 69, 83, 83, 32, 70, 73, 82, 69, 32, 79, 82, 32, 83, 80, 65, 67, 69 ; "PRESS FIRE OR SPACE" (19 chars)
+; ------------------------------------------------------------------------------
+; Bitmap RAM cell addresses for Column 23, Rows 0..24 ($A000 + R * 320 + 184)
+; ------------------------------------------------------------------------------
+col23_bitmap_lo:
+    !byte <$a0b8, <$a1f8, <$a338, <$a478, <$a5b8, <$a6f8, <$a838, <$a978
+    !byte <$aab8, <$abf8, <$ad38, <$ae78, <$afb8, <$b0f8, <$b238, <$b378
+    !byte <$b4b8, <$b5f8, <$b738, <$b878, <$b9b8, <$baf8, <$bc38, <$bd78
+    !byte <$beb8
+
+col23_bitmap_hi:
+    !byte >$a0b8, >$a1f8, >$a338, >$a478, >$a5b8, >$a6f8, >$a838, >$a978
+    !byte >$aab8, >$abf8, >$ad38, >$ae78, >$afb8, >$b0f8, >$b238, >$b378
+    !byte >$b4b8, >$b5f8, >$b738, >$b878, >$b9b8, >$baf8, >$bc38, >$bd78
+    !byte >$beb8
 
 ; ==============================================================================
 ; Subroutine: title_enter
-; Purpose: Draws Title screen elements across playfield columns.
+; Purpose: Sets up VIC-II Bank 2 Hi-Res Bitmap mode, copies pre-baked bitmap,
+;          stamps dynamic high score, initializes colors, and enables display.
 ; ==============================================================================
 title_enter:
-    ; Reset debounce safety lockout & require fresh button release
+    ; 1. Reset debounce safety lockout & require fresh button release
     lda #20
     sta s_title_lockout
     lda #0
     sta s_title_released
+    lda #$ff
+    sta s_prompt_state          ; Force dirty refresh on first frame
 
-    ; 0. Clear and reseed static starfield across Rows 1..24
-    jsr starfield_init
+    ; 2. Bank out BASIC ROM ($0001 = $36) so $A000..$BF3F is RAM
+    lda #$36
+    sta $0001
 
-    ; 1. Draw "DREAN NAVE 64" at Column 26, Rows 6..18 in White
-    lda #COLOR_WHITE
-    sta s_char_color
-    lda #6
-    sta s_cur_row
-    ldy #26
+    ; 3. Fast copy 8,000-byte pre-baked title bitmap from title_bitmap_data to $A000
+    lda #<title_bitmap_data
+    sta $fb
+    lda #>title_bitmap_data
+    sta $fc
+    lda #<$a000
+    sta $fd
+    lda #>$a000
+    sta $fe
+
+    ; Copy 31 full pages (7,936 bytes)
+    ldx #31
+@page_loop:
+    ldy #0
+-   lda ($fb), y
+    sta ($fd), y
+    iny
+    bne -
+    inc $fc
+    inc $fe
+    dex
+    bne @page_loop
+
+    ; Copy remaining 64 bytes (8000 - 7936 = 64)
+    ldy #63
+-   lda ($fb), y
+    sta ($fd), y
+    dey
+    bpl -
+
+    ; 4. Dynamically stamp current g_high_score into Column 23
+    jsr title_stamp_hiscore
+
+    ; 5. Initialize Screen RAM ($8000..$83E7) to $10 (White on Black)
+    lda #$10
     ldx #0
--   lda title_banner_text, x
-    jsr hud_draw_char
+-   sta $8000, x
+    sta $8100, x
+    sta $8200, x
+    sta $82e8, x                ; Fills $82E8..$83E7 (256 bytes)
     inx
-    cpx #13
     bne -
 
-    ; 2. Draw "HIGH SCORE" at Column 20, Rows 8..17 in Green
-    lda #COLOR_GREEN
-    sta s_char_color
-    lda #8
-    sta s_cur_row
-    ldy #20
-    ldx #0
--   lda title_hiscore_text, x
-    jsr hud_draw_char
-    inx
-    cpx #10
-    bne -
+    ; 6. Switch VIC-II to Bank 2 ($8000..$BFFF) Hi-Res Bitmap Mode
+    ; Ensure CIA2 Port A bits 0-1 are configured as outputs
+    lda CIA2_DIR_A
+    ora #$03
+    sta CIA2_DIR_A
 
-    ; 3. Convert and draw High Score value at Column 18 in Green
+    ; Select VIC-II Bank 2 (%01)
+    lda CIA2_DATA_A
+    and #$fc
+    ora #$01
+    sta CIA2_DATA_A
+
+    ; Set Screen RAM at offset $0000 ($8000) and Bitmap at offset $2000 ($A000)
+    ; $D018: Bits 7..4 = %0000 ($0000), Bit 3 = 1 ($2000) -> $08
+    lda #$08
+    sta VIC_MEM_SETUP
+
+    ; Set Hi-Res Bitmap Mode (BMM = 1, 25 rows, display enable)
+    lda #$3b
+    sta VIC_CTRL1
+
+    ; Ensure Multi-Color Mode is disabled (MCM = 0, 40 cols)
+    lda #$c8
+    sta VIC_CTRL2
+
+    ; Initial prompt state: visible ($10)
+    lda #$10
+    sta s_prompt_state
+    rts
+
+; ==============================================================================
+; Subroutine: title_stamp_hiscore
+; Purpose: Clears Column 23 rows 7..17 and stamps formatted g_high_score + "00".
+; ==============================================================================
+title_stamp_hiscore:
+    ; 1. Clear Column 23 rows 7..17 in bitmap (fill with 8 bytes of 0 per row)
+    ldx #7
+@clear_loop:
+    lda col23_bitmap_lo, x
+    sta $fb
+    lda col23_bitmap_hi, x
+    sta $fc
+    lda #0
+    ldy #7
+-   sta ($fb), y
+    dey
+    bpl -
+    inx
+    cpx #18
+    bne @clear_loop
+
+    ; 2. Convert 16-bit g_high_score to decimal digits
     lda g_high_score + 0
     sta s_score_val_lo
     lda g_high_score + 1
@@ -84,55 +181,99 @@ title_enter:
     cpx #4
     bne -
 +
-    ; Center digits across playfield rows:
-    ; Length = 7 - X. Margin = (24 - (7 - X)) / 2 = (17 + X) / 2.
+    stx s_digit_idx
+
+    ; Calculate centered starting row:
+    ; Length = (5 - X) + 2 = 7 - X digits.
+    ; Margin = (24 - (7 - X)) / 2 = (17 + X) / 2.
     ; Start row = Margin + 1.
     txa
     clc
     adc #17
     lsr
-    clc                         ; Clear carry after lsr so adc #1 doesn't add carry!
+    clc
     adc #1
-    sta s_cur_row
+    sta s_hiscore_row
 
-    txa
-    pha                         ; Save first digit index
-    lda #COLOR_GREEN
-    sta s_char_color
-    ldy #18
+    ; 3. Stamp decimal digits from s_digit_idx to 4
+@stamp_digits:
+    ldx s_digit_idx
+    lda s_score_digits, x
+    ldx s_hiscore_row
+    jsr title_stamp_col23_char
+    inc s_hiscore_row
+    inc s_digit_idx
+    lda s_digit_idx
+    cmp #5
+    bne @stamp_digits
+
+    ; 4. Stamp trailing bulk double zeroes "00"
+    ldx s_hiscore_row
+    lda #$30                    ; Char '0'
+    jsr title_stamp_col23_char
+    inc s_hiscore_row
+
+    ldx s_hiscore_row
+    lda #$30                    ; Char '0'
+    jsr title_stamp_col23_char
+    rts
+
+; ==============================================================================
+; Subroutine: title_stamp_col23_char
+; Purpose: Copies 8x8 glyph for Char A from g_custom_charset ($2800) into
+;          Column 23, Row X of Bitmap RAM ($A000).
+; Arguments: A = character code, X = row (0..24)
+; ==============================================================================
+title_stamp_col23_char:
+    pha
+    lda col23_bitmap_lo, x
+    sta $fb
+    lda col23_bitmap_hi, x
+    sta $fc
     pla
-    tax
--   lda s_score_digits, x
-    jsr hud_draw_char
-    inx
-    cpx #5
-    bne -
 
-    ; Print trailing bulk double zeroes "00"
-    lda #$30
-    jsr hud_draw_char
-    lda #$30
-    jsr hud_draw_char
+    ; Calculate source glyph address: $2800 + A * 8
+    sta $fd
+    lda #0
+    sta $fe
+    asl $fd
+    rol $fe
+    asl $fd
+    rol $fe
+    asl $fd
+    rol $fe
+    lda $fe
+    clc
+    adc #>$2800
+    sta $fe
 
-    ; 4. Initial draw of "PRESS FIRE OR SPACE"
-    jmp title_draw_prompt
+    ; Copy 8 scanlines
+    ldy #7
+-   lda ($fd), y
+    sta ($fb), y
+    dey
+    bpl -
+    rts
 
 ; ==============================================================================
 ; Subroutine: title_update
 ; Purpose: Blinks start prompt and checks for FIRE or SPACE with safety debounce.
 ; ==============================================================================
 title_update:
-    ; 1. Blink "PRESS FIRE OR SPACE" prompt:
-    ; 0.5s shown (frames 0..24), 0.5s hidden (frames 25..49)
+    ; 1. Blink "PRESS FIRE TO START" prompt:
+    ; 0.5s visible (frames 0..24), 0.5s hidden (frames 25..49)
     lda g_game_time_frames
     cmp #25
-    bcs @hide_prompt
-
-    jsr title_draw_prompt
-    jmp @check_input_safety
-
-@hide_prompt:
-    jsr title_hide_prompt
+    bcc @show_prompt
+    lda #$00                    ; Black on Black ($00) -> Hidden
+    beq @apply_color
+@show_prompt:
+    lda #$10                    ; White on Black ($10) -> Visible
+@apply_color:
+    cmp s_prompt_state
+    beq @check_input_safety
+    sta s_prompt_state
+    jsr title_set_prompt_color
 
 @check_input_safety:
     ; 2. Track button release: Fire and Space must be completely released
@@ -167,77 +308,49 @@ title_update:
     rts
 
 ; ==============================================================================
-; Subroutine: title_draw_prompt
-; Purpose: Prints "PRESS FIRE OR SPACE" at Column 12, Rows 3..21 in Yellow.
+; Subroutine: title_set_prompt_color
+; Purpose: Sets Screen RAM color byte for Column 8, Rows 3..21 to s_prompt_state.
 ; ==============================================================================
-title_draw_prompt:
-    lda #COLOR_YELLOW
-    sta s_char_color
-    lda #3
-    sta s_cur_row
-    ldy #12
-    ldx #0
--   lda title_prompt_text, x
-    jsr hud_draw_char
-    inx
-    cpx #19
-    bne -
-    rts
-
-; ==============================================================================
-; Subroutine: title_hide_prompt
-; Purpose: Clears "PRESS FIRE OR SPACE" line at Column 12 with blank spaces.
-; ==============================================================================
-title_hide_prompt:
-    lda #COLOR_BLACK
-    sta s_char_color
-    lda #3
-    sta s_cur_row
-    ldy #12
-    ldx #19
--   lda #$20
-    jsr hud_draw_char
+title_set_prompt_color:
+    ldx #18
+-   lda prompt_cells_lo, x
+    sta $fb
+    lda prompt_cells_hi, x
+    sta $fc
+    lda s_prompt_state
+    ldy #0
+    sta ($fb), y
     dex
-    bne -
+    bpl -
     rts
 
 ; ==============================================================================
 ; Subroutine: title_exit
-; Purpose: Clears all title screen text elements from playfield.
+; Purpose: Restores Bank 0, Text Mode, Screen RAM $0400, Charset $2800,
+;          re-enables BASIC ROM, and reseeds the playfield starfield.
 ; ==============================================================================
 title_exit:
-    lda #COLOR_BLACK
-    sta s_char_color
+    ; 1. Restore standard VIC-II settings: Text Mode, Screen $0400, Charset $2800
+    lda #$1b
+    sta VIC_CTRL1
 
-    ; 1. Erase Column 26 ("DREAN NAVE 64": Rows 6..18)
-    lda #6
-    sta s_cur_row
-    ldy #26
-    ldx #13
--   lda #$20
-    jsr hud_draw_char
-    dex
-    bne -
+    lda #$c8
+    sta VIC_CTRL2
 
-    ; 2. Erase Column 20 ("HIGH SCORE": Rows 8..17)
-    lda #8
-    sta s_cur_row
-    ldy #20
-    ldx #10
--   lda #$20
-    jsr hud_draw_char
-    dex
-    bne -
+    lda #$1a
+    sta VIC_MEM_SETUP
 
-    ; 3. Erase Column 18 (Score digits: Rows 7..17)
-    lda #7
-    sta s_cur_row
-    ldy #18
-    ldx #11
--   lda #$20
-    jsr hud_draw_char
-    dex
-    bne -
+    ; 2. Restore VIC-II Bank 0 (%11)
+    lda CIA2_DATA_A
+    ora #$03
+    sta CIA2_DATA_A
 
-    ; 4. Erase Column 12 ("PRESS FIRE OR SPACE": Rows 3..21)
-    jmp title_hide_prompt
+    ; 3. Restore standard C64 memory configuration ($0001 = $37: BASIC ROM enabled)
+    lda #$37
+    sta $0001
+
+    ; 4. Re-initialize and seed starfield across Rows 1..24 ($0428..$07E7)
+    jsr starfield_init
+
+    ; 5. Clear Row 0 HUD
+    jmp hud_clear

@@ -285,8 +285,20 @@ g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s
 !src "src/gamestate.asm"
 !src "src/title.asm"
 
-; Assert that high code fits safely within RAM ($8000)
+; Assert that high code fits safely below Title Bitmap RAM ($4800)
+!if * > $4800 {
+    !error "Fatal: High code exceeded $4800! Overflows into title_bitmap_data."
+}
+
+; ------------------------------------------------------------------------------
+; Title Screen Pre-baked Hi-Res Bitmap Data (8,000 bytes: $4800 - $673F)
+; ------------------------------------------------------------------------------
+* = $4800
+title_bitmap_data:
+    !bin "assets/title_bitmap.bin"
+
+; Assert that high code and bitmap fit safely within RAM ($8000)
 !if * > $8000 {
-    !error "Fatal: High code exceeded $8000!"
+    !error "Fatal: High code and title bitmap exceeded $8000!"
 }
 

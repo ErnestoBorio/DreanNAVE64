@@ -11,5 +11,6 @@ bin/
 *.map
 
 # Development helper scripts
-tools/
+tools/*
+!tools/build_title_bitmap.py
 

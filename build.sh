@@ -12,6 +12,12 @@ echo "==> Using ACME Assembler: $ACME_BIN"
 # Create output bin directory
 mkdir -p bin
 
+# Pre-bake title screen bitmap asset if source logo exists
+if [ -f "tools/build_title_bitmap.py" ] && [ -f "refes/NAVE_logo.png" ]; then
+    echo "==> Pre-baking title bitmap asset..."
+    python3 tools/build_title_bitmap.py
+fi
+
 # Assemble main.asm into C64 PRG binary with VICE debug labels
 "$ACME_BIN" --cpu 6502 --labeldump bin/drean_nave_64.vs --vicelabels bin/vice.lbl src/main.asm
 
