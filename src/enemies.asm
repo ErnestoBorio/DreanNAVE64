@@ -89,13 +89,6 @@ g_bullet_vel_y:     !fill MAX_ENEMY_BULLETS, 0 ; Signed byte (-2, -1, 0, 1, 2)
 g_bullet_type:      !fill MAX_ENEMY_BULLETS, 0
 g_bullet_color:     !fill MAX_ENEMY_BULLETS, 0
 
-; Bullet energy palette cycling (8 vibrant colors)
-NUM_ENEMY_SHOT_COLORS = 8
-g_enemy_shot_colors:
-    !byte COLOR_CYAN, COLOR_PURPLE, COLOR_YELLOW, COLOR_GREEN
-    !byte COLOR_LIGHT_GREEN, COLOR_LIGHT_BLUE, COLOR_WHITE, COLOR_ORANGE
-g_enemy_shot_cycle_idx: !byte 0
-
 ; Temporary calculation variables
 s_sort_i:           !byte 0
 s_sort_j:           !byte 0
@@ -127,14 +120,14 @@ enemy_table_sprite:
     !byte SPRITE_PTR_ENEMY_1    ; 131: Enemy 1 (Scout)
     !byte SPRITE_PTR_ENEMY_2    ; 132: Enemy 2 (Light Fighter)
     !byte SPRITE_PTR_ENEMY_3    ; 133: Enemy 3 (Interceptor)
-    !byte SPRITE_PTR_ENEMY_4    ; 134: Enemy 4 (Gunship)
-    !byte SPRITE_PTR_ENEMY_5    ; 135: Enemy 5 (Twin-Hull)
-    !byte SPRITE_PTR_ENEMY_6    ; 136: Enemy 6 (Heavy Cruiser)
-    !byte SPRITE_PTR_ENEMY_7    ; 137: Enemy 7 (Battleship)
-    !byte SPRITE_PTR_ENEMY_8    ; 138: Enemy 8 (Dreadnought Boss)
+    !byte SPRITE_PTR_ENEMY_4    ; 134: Enemy 4 (Scorpion)
+    !byte SPRITE_PTR_ENEMY_5    ; 135: Enemy 5 (Batplane)
+    !byte SPRITE_PTR_ENEMY_6    ; 136: Enemy 6 (Spider)
+    !byte SPRITE_PTR_ENEMY_7    ; 137: Enemy 7 (The Eye)
+    !byte SPRITE_PTR_ENEMY_8    ; 138: Enemy 8 (Death)
 
 enemy_table_hp:
-    !byte 1, 1, 2, 2, 3, 3, 4, 6
+    !byte 1, 1, 1, 2, 2, 3, 3, 3
 
 enemy_table_pattern_mode:
     !byte PATTERN_MODE_SINE_MIX     ; Enemy 1: straight or sine wave
@@ -291,7 +284,6 @@ enemies_init:
     bne -
 
     lda #0
-    sta g_enemy_shot_cycle_idx
     sta g_multiplexer_active
     sta g_sort_count
     lda #20
@@ -541,12 +533,7 @@ enemies_spawn:
 ; Purpose: Updates wave timers, enemies, and free-flying aimed bullets.
 ; ==============================================================================
 enemies_update:
-    ; 1. Advance bullet color cycling index (8 colors)
-    inc g_enemy_shot_cycle_idx
-    lda g_enemy_shot_cycle_idx
-    and #$07
-    sta g_enemy_shot_cycle_idx
-    ; 2. Wave Spawn Timer
+    ; Wave Spawn Timer
     dec g_wave_spawn_timer
     bne @update_entities
 
@@ -603,20 +590,21 @@ enemies_update:
     beq @not_exploding
     dec g_enemy_exploding, x
     beq @exp_done
-    cmp #8
-    bcs @exp1
-    cmp #4
-    bcs @exp2
-    lda #SPRITE_PTR_EXPLOSION_3
-    sta g_enemy_type, x
-    jmp @next_enemy_upd
-@exp2:
-    lda #SPRITE_PTR_EXPLOSION_2
-    sta g_enemy_type, x
-    jmp @next_enemy_upd
-@exp1:
+
+    ; Cycle energy color one per frame during explosion
+    ldy g_energy_cycle_idx
+    lda g_energy_colors, y
+    sta g_enemy_color, x
+
     lda #SPRITE_PTR_EXPLOSION_1
-    sta g_enemy_type, x
+    ldy g_enemy_exploding, x
+    cpy #8
+    bcs +
+    lda #SPRITE_PTR_EXPLOSION_2
+    cpy #4
+    bcs +
+    lda #SPRITE_PTR_EXPLOSION_3
++   sta g_enemy_type, x
     jmp @next_enemy_upd
 @exp_done:
     lda #0
@@ -865,10 +853,10 @@ enemies_update:
     ; Cycle energy color one per frame (with per-slot offset for shimmering effect)
     txa
     clc
-    adc g_enemy_shot_cycle_idx
+    adc g_energy_cycle_idx
     and #$07
     tay
-    lda g_enemy_shot_colors, y
+    lda g_energy_colors, y
     sta g_bullet_color, x
 
     ; Move X leftward
@@ -958,8 +946,8 @@ enemies_fire_aimed_bullet:
     sta g_bullet_type, y
 
     ; Cycling energy color
-    ldx g_enemy_shot_cycle_idx
-    lda g_enemy_shot_colors, x
+    ldx g_energy_cycle_idx
+    lda g_energy_colors, x
     sta g_bullet_color, y
 
     ; Calculate Aimed Vel Y:
@@ -1036,8 +1024,11 @@ multiplexer_export:
     sta v_spr_ptr, x
     lda g_enemy_color, x
     sta v_spr_color, x
-    lda #1                      ; Multicolor
-    sta v_spr_mc, x
+    lda #1                      ; 1 = Multicolor (normal enemy ships)
+    ldy g_enemy_exploding, x
+    beq +
+    lda #0                      ; 0 = Hi-res Monochrome (explosion)
++   sta v_spr_mc, x
 
 @next_enemy_exp:
     inx

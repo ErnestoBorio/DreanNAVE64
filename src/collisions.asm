@@ -31,7 +31,8 @@ collisions_init:
 collisions_check:
     ; Quick exit if no player missile is currently in flight
     lda g_missile_active
-    bne +
+    cmp #1                      ; 1 = Missile in flight
+    beq +
     rts
 +
     ldx #0
@@ -70,15 +71,6 @@ collisions_check:
     ; --------------------------------------------------------------------------
     ; Direct Hit Confirmed!
     ; --------------------------------------------------------------------------
-    ; Deactivate player missile and hide Hardware Sprite 1
-    lda #0
-    sta g_missile_active
-    sei
-    lda VIC_SPR_ENABLE
-    and #$fd                    ; Clear bit 1 (Sprite 1)
-    sta VIC_SPR_ENABLE
-    cli
-
     ; Decrement enemy HP
     dec g_enemy_hp, x
     beq @enemy_destroyed
@@ -88,16 +80,39 @@ collisions_check:
     sta g_enemy_flash, x
     lda #COLOR_WHITE
     sta g_enemy_color, x
+
+    ; Trigger hit spark on Sprite 1 (4 frames)
+    lda #4
+    sta g_missile_active
+
+    ; Position spark in front of enemy nose (enemy faces left at g_enemy_x)
+    lda g_enemy_x_lo, x
+    sec
+    sbc #8
+    sta g_missile_x + 0
+    lda g_enemy_x_hi, x
+    sbc #0
+    sta g_missile_x + 1
+
+    lda g_enemy_y, x
+    sta g_missile_y
+
+    ; Pick a random energy color for the hit spark
+    jsr starfield_rand
+    and #$07
+    tay
+    lda g_energy_colors, y
+    sta g_spark_color
     rts
 
 @enemy_destroyed:
-    ; Enemy destroyed (HP == 0): Trigger 12-frame explosion sequence
+    ; Enemy destroyed (HP == 0): Deactivate missile and trigger 12-frame explosion
+    lda #0
+    sta g_missile_active
     lda #12
     sta g_enemy_exploding, x
     lda #SPRITE_PTR_EXPLOSION_1
     sta g_enemy_type, x
-    lda #COLOR_YELLOW
-    sta g_enemy_color, x
     rts
 
 @next_enemy:

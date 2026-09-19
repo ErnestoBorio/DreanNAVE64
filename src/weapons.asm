@@ -12,27 +12,22 @@
 ; - VIC-II Hardware Sprite 1 configuration in hi-res monochrome mode
 ; ==============================================================================
 
-NUM_ENERGY_COLORS   = 7         ; 7-color Energy Palette sequence length
+NUM_ENERGY_COLORS   = 8         ; 8-color Energy Palette sequence length
 
 ; ------------------------------------------------------------------------------
-; Energy Color Palette Sequence
-; (Cyan, Purple/Pink, Yellow, Green, Light Green, Light Blue, Light Gray)
+; Shared Energy Color Palette Sequence (8 vibrant colors)
 ; ------------------------------------------------------------------------------
 g_energy_colors:
-    !byte COLOR_CYAN            ; Color 0: Cyan (3)
-    !byte COLOR_PURPLE          ; Color 1: Purple/Pink (4)
-    !byte COLOR_YELLOW          ; Color 2: Yellow (7)
-    !byte COLOR_GREEN           ; Color 3: Dark Green (5)
-    !byte COLOR_LIGHT_GREEN     ; Color 4: Light Green (13)
-    !byte COLOR_LIGHT_BLUE      ; Color 5: Light Blue (14)
-    !byte COLOR_LIGHT_GRAY      ; Color 6: Light Gray (15)
+    !byte COLOR_CYAN, COLOR_PURPLE, COLOR_YELLOW, COLOR_GREEN
+    !byte COLOR_LIGHT_GREEN, COLOR_LIGHT_BLUE, COLOR_WHITE, COLOR_ORANGE
 
 ; ------------------------------------------------------------------------------
 ; Player Missile RAM Variables
 ; ------------------------------------------------------------------------------
 g_missile_x:        !word 0     ; 16-bit X coordinate in VIC-II raster space (0..320)
 g_missile_y:        !byte 0     ; 8-bit Y coordinate in VIC-II raster space
-g_missile_active:   !byte 0     ; 1 = In flight, 0 = Inactive
+g_missile_active:   !byte 0     ; 1 = In flight, 0 = Inactive, >1 = Hit spark countdown
+g_spark_color:      !byte COLOR_WHITE ; Current hit spark energy color
 g_fire_cooldown:    !byte 0     ; Cooldown counter between shots (frames)
 g_energy_cycle_idx: !byte 0     ; Current index in Energy palette sequence (0..6)
 g_fire_requested:   !byte 0     ; Latched fire trigger flag (1 = Pending shot)
@@ -134,14 +129,11 @@ weapons_fire:
 ;          recycles missile when X >= 320, and processes latched fire requests.
 ; ==============================================================================
 weapons_update:
-    ; 1. Advance Energy palette index each frame (0..6)
+    ; 1. Advance Energy palette index each frame (0..7)
     inc g_energy_cycle_idx
     lda g_energy_cycle_idx
-    cmp #NUM_ENERGY_COLORS
-    bcc +
-    lda #0
+    and #$07
     sta g_energy_cycle_idx
-+
 
     ; 2. Decrement fire cooldown timer
     lda g_fire_cooldown
@@ -149,9 +141,11 @@ weapons_update:
     dec g_fire_cooldown
 +
 
-    ; 3. Move existing active missile rightward before checking new triggers
+    ; 3. Move existing active missile rightward or update hit spark countdown
     lda g_missile_active
     beq @check_fire_latch
+    cmp #1
+    bne @update_hit_spark
 
     ; Add 50 pixels to 16-bit missile X coordinate
     lda g_missile_x + 0
@@ -178,6 +172,10 @@ weapons_update:
     ; Despawn missile when reaching right border
     lda #0
     sta g_missile_active
+    beq @check_fire_latch
+
+@update_hit_spark:
+    dec g_missile_active
 
 @check_fire_latch:
     ; 4. Latch new single-shot keydown event (strictly single-shot: 1 shot per tap, NO auto-fire)
@@ -204,11 +202,11 @@ weapons_update:
 ; Purpose: Configures Sprite 1 registers (pointer, active Energy color, X/Y, MSB).
 ; ==============================================================================
 weapons_render:
-    ; Check if missile is active
+    ; Check if missile or hit spark is active
     lda g_missile_active
     bne @render_active
 
-    ; Missile inactive: disable Sprite 1 ($D015 Bit 1 = 0) and clear Sprite 1 MSB ($D010 Bit 1 = 0)
+    ; Inactive: disable Sprite 1 ($D015 Bit 1 = 0) and clear Sprite 1 MSB ($D010 Bit 1 = 0)
     sei
     lda VIC_SPR_ENABLE
     and #$fd
@@ -227,6 +225,19 @@ weapons_render:
     sta VIC_SPR_ENABLE
     cli
 
+    ; Check if in hit spark mode (g_missile_active > 1)
+    lda g_missile_active
+    cmp #1
+    beq @render_missile
+
+    ; Hit Spark: Block 147 (SPRITE_PTR_HIT_SPARK), Random Energy Color
+    lda #SPRITE_PTR_HIT_SPARK
+    sta SPRITE_PTRS + 1
+    lda g_spark_color
+    sta VIC_SPR1_COLOR
+    bne @write_coords
+
+@render_missile:
     ; 2. Select Sprite 1 Pointer based on player power stage:
     ;    Stage 1: Block 139 (SPRITE_PTR_PLAYER_SHOT_1)
     ;    Stage 2: Block 140 (SPRITE_PTR_PLAYER_SHOT_2)
@@ -241,6 +252,7 @@ weapons_render:
     lda g_energy_colors, x
     sta VIC_SPR1_COLOR
 
+@write_coords:
     ; 4. Write Sprite 1 X low byte ($D002) and Y byte ($D003)
     lda g_missile_x + 0
     sta VIC_SPR1_X
@@ -248,22 +260,13 @@ weapons_render:
     sta VIC_SPR1_Y
 
     ; 5. Set or clear Bit 1 of VIC_SPR_MSB ($D010) based on 16-bit missile X
-    lda g_missile_x + 1
-    beq @clear_msb1
-
-    ; Set Bit 1 (X >= 256)
     sei
     lda VIC_SPR_MSB
+    ldy g_missile_x + 1
+    beq +
     ora #$02
-    sta VIC_SPR_MSB
-    cli
-    rts
-
-@clear_msb1:
-    ; Clear Bit 1 (X < 256)
-    sei
-    lda VIC_SPR_MSB
-    and #$fd
-    sta VIC_SPR_MSB
+    bne ++
++   and #$fd
+++  sta VIC_SPR_MSB
     cli
     rts

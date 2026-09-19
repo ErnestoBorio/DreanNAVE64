@@ -260,7 +260,7 @@ g_game_time_total_sec:  !word 0 ; Total elapsed seconds (0..65535, ~18.2 hours)
 }
 
 ; ------------------------------------------------------------------------------
-; VIC-II Hardware Sprite Data (19 blocks x 64 bytes = 1,216 bytes: $2000 - $24BF)
+; VIC-II Hardware Sprite Data (20 blocks x 64 bytes = 1,280 bytes: $2000 - $24FF)
 ; ------------------------------------------------------------------------------
 * = $2000
 !src "src/sprites_data.asm"

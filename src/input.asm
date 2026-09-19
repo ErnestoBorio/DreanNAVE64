@@ -42,9 +42,8 @@ s_col4_active:        !byte 0   ; 1 = TATE Column 4 active (J, K)
 ; In-Game Debug Hotkey State Variables (SHIFT + Keys 1..8, C)
 g_debug_border_timer: !byte 0   ; Countdown frames for border flash feedback
 s_shift_held:         !byte 0   ; 1 = SHIFT held down, 0 = SHIFT not pressed
-s_current_debug_key:  !byte 0   ; Digit key active in current frame (0 = none, 1..8)
+s_current_debug_key:  !byte 0   ; Digit key active in current frame (0 = none, 1..8, 9=C)
 s_prev_debug_key:     !byte 0   ; Digit key active in previous frame (edge detector)
-s_prev_c_pressed:     !byte 0   ; Edge-trigger tracking for key 'C'
 s_scan_portb:         !byte 0   ; Saved Port B reading to prevent register clobbering
 
 g_debug_enemy_colors:
@@ -80,7 +79,6 @@ input_init:
     sta s_shift_held
     sta s_current_debug_key
     sta s_prev_debug_key
-    sta s_prev_c_pressed
     rts
 
 ; ==============================================================================
@@ -192,22 +190,9 @@ input_update:
     sta s_current_debug_key
 +   lda s_scan_portb
     and #$10            ; Bit 4: Debug Key 'C' (Clear all enemies)
-    bne @c_not_pressed
-    lda s_prev_c_pressed
     bne @col2_debug_done
-    lda #1
-    sta s_prev_c_pressed
-    jsr enemies_clear_all
-    lda #2              ; Trigger immediate wave spawn
-    sta g_wave_spawn_timer
-    lda #COLOR_LIGHT_RED
-    sta VIC_BORDER_COLOR
-    lda #8
-    sta g_debug_border_timer
-    jmp @col2_debug_done
-@c_not_pressed:
-    lda #0
-    sta s_prev_c_pressed
+    lda #9
+    sta s_current_debug_key
 @col2_debug_done:
 
     ; --- Column 4 ($EF = %11101111): TATE Keys 'J' (PB2), 'K' (PB5), Debug '0' (PB3) ---
@@ -430,6 +415,13 @@ input_update:
 ; Input: A = 1..8 (Enemy 1..8)
 ; ==============================================================================
 input_jump_to_tier:
+    cmp #9
+    bne @is_tier_jump
+    lda #COLOR_LIGHT_RED
+    sta VIC_BORDER_COLOR
+    bne @flash_and_clear
+
+@is_tier_jump:
     sta g_first_spawn_force     ; 1..8: Force Enemy N on very first upcoming spawn
     sec
     sbc #1                      ; 1..8 -> 0..7
@@ -450,6 +442,10 @@ input_jump_to_tier:
     sta g_game_time_frames
     sta g_game_time_sec
     sta g_game_time_min
+
+@flash_and_clear:
+    lda #8
+    sta g_debug_border_timer
 
     ; 3. Despawn all active enemies and bullets for a clean wave start
     jsr enemies_clear_all
