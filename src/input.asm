@@ -298,6 +298,12 @@ input_update:
     lda CIA1_DATA_B     ; Read Rows (Port B)
     and #$02            ; Bit 1: Key 'P' (0 = pressed)
     bne +
+    lda s_shift_held
+    beq @normal_p_fire
+    lda #10             ; Debug Key 10: SHIFT + P (Force Powerup P Spawn)
+    sta s_current_debug_key
+    bne +
+@normal_p_fire:
     inc g_input_fire
 +
 
@@ -438,6 +444,12 @@ input_update:
 ; Input: A = 1..8 (Enemy 1..8)
 ; ==============================================================================
 input_jump_to_tier:
+    cmp #10                     ; Debug Key 10: SHIFT + P (Spawn 'P' Powerup)
+    bne +
+    lda #POWERUP_TYPE_P
+    jsr powerups_spawn_forced_type
+    rts
++
     cmp #11                     ; Debug Key 11: Spawn 'E' Powerup
     bne +
     lda #POWERUP_TYPE_E
