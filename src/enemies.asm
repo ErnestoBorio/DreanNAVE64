@@ -162,10 +162,10 @@ enemy_table_shot_type:
 
 ; Unlock thresholds in total elapsed seconds (16-bit)
 enemy_table_unlock_sec_lo:
-    !byte <0, <15, <35, <60, <95, <140, <195, <260
+    !byte <0, <25, <60, <110, <170, <240, <320, <400
 
 enemy_table_unlock_sec_hi:
-    !byte >0, >15, >35, >60, >95, >140, >195, >260
+    !byte >0, >25, >60, >110, >170, >240, >320, >400
 
 ; ------------------------------------------------------------------------------
 ; 32-Entry Weighted Tier Spawn Tables (8 Tiers x 32 bytes = 256 bytes total)
@@ -282,7 +282,7 @@ enemies_init:
     sta g_multiplexer_active
     sta g_sort_count
     sta g_first_spawn_force
-    lda #35
+    lda #40
     sta g_wave_spawn_timer
 
     ; Disable physical Sprites 2..7 initially ($D015 Bits 2..7 = 0)
@@ -322,31 +322,50 @@ enemies_spawn:
 
     ; Max allowed active enemies (driven by elapsed game timeline):
     lda g_game_time_total_sec + 1
-    bne @density_high           ; T >= 256s
+    bne @density_high           ; T >= 256s (4.2m+)
 
     lda g_game_time_total_sec + 0
-    cmp #10
-    bcs @after_first_10s
-
-    ; First 10 seconds: max 2 active enemies at once
-    ldy #2
+    cmp #15
+    bcs +
+    ldy #2                      ; 0..14s: max 2
     jmp @check_density_limit
 
-@after_first_10s:
-    ldy #5                      ; 10s..29s: max 5
-    cmp #30
-    bcc @check_density_limit
-    ldy #8                      ; 30s..59s: max 8
-    cmp #60
-    bcc @check_density_limit
-    ldy #10                     ; 60s..119s: max 10
-    cmp #120
-    bcc @check_density_limit
-    ldy #MAX_ENEMIES            ; 120s+: max 12
++   cmp #40
+    bcs +
+    ldy #3                      ; 15..39s: max 3
+    jmp @check_density_limit
+
++   cmp #80
+    bcs +
+    ldy #4                      ; 40..79s (~1.3m): max 4
+    jmp @check_density_limit
+
++   cmp #130
+    bcs +
+    ldy #5                      ; 80..129s (~2.1m): max 5
+    jmp @check_density_limit
+
++   cmp #190
+    bcs +
+    ldy #6                      ; 130..189s (~3.1m): max 6
+    jmp @check_density_limit
+
++   ldy #8                      ; 190..255s (~3.1..4.2m): max 8
     jmp @check_density_limit
 
 @density_high:
-    ldy #MAX_ENEMIES            ; T >= 256s: max 12
+    lda g_game_time_total_sec + 1
+    cmp #>340
+    bne +
+    lda g_game_time_total_sec + 0
+    cmp #<340
++   bcs @density_max            ; T >= 340s (~5.6m) -> max 12
+
+    ldy #10                     ; 256..339s: max 10
+    jmp @check_density_limit
+
+@density_max:
+    ldy #MAX_ENEMIES            ; 340s+ (5.6m+): max 12
 
 @check_density_limit:
     cpy s_active_count
@@ -536,65 +555,61 @@ enemies_update:
     ; Timer fired: spawn an enemy
     jsr enemies_spawn
 
-    ; Reset timer based on elapsed time and current density:
+    ; Reset timer based on elapsed time:
     lda g_game_time_total_sec + 1
-    bne @normal_density_check   ; T >= 256s
+    bne @mid_late_spawn         ; T >= 256s (4.2m+)
 
     lda g_game_time_total_sec + 0
-    cmp #10
-    bcs @normal_density_check
+    cmp #40
+    bcs @after_40s
 
-    ; First 10 seconds: gentle intro (40..55 frames = 0.8..1.1s per enemy)
+    ; Phase 1 (0..39s): 35..50 frames (~0.7..1.0s per spawn)
     jsr starfield_rand
     and #$0f
     clc
-    adc #40
+    adc #35
     sta g_wave_spawn_timer
     jmp @update_entities
 
-@normal_density_check:
-    lda s_active_count
-    cmp #3
-    bcs @normal_density_timer
+@after_40s:
+    cmp #90
+    bcs @after_90s
 
-    ; Low density (<3 enemies) after 10s: replenish in 12..19 frames (~0.24..0.38s)
-    jsr starfield_rand
-    and #$07
-    clc
-    adc #12
-    sta g_wave_spawn_timer
-    jmp @update_entities
-
-@normal_density_timer:
-    lda g_game_time_total_sec + 1
-    bne @very_fast_spawn        ; T >= 256s
-    lda g_game_time_total_sec + 0
-    cmp #60
-    bcs @fast_spawn             ; T >= 60s (1 min)
-
-    ; Early game cadence (10s <= T < 60s): 20..35 frames (~0.40..0.70s)
+    ; Phase 2 (40..89s, ~1.5 min): 28..42 frames (~0.55..0.85s per spawn)
     jsr starfield_rand
     and #$0f
     clc
-    adc #20
+    adc #28
     sta g_wave_spawn_timer
     jmp @update_entities
 
-@fast_spawn:
-    ; Mid game cadence (60s <= T < 256s): 14..25 frames (~0.28..0.50s)
+@after_90s:
+    cmp #180
+    bcs @after_180s
+
+    ; Phase 3 (90..179s, 1.5..3 min): 22..35 frames (~0.45..0.70s per spawn)
+    jsr starfield_rand
+    and #$0f
+    clc
+    adc #22
+    sta g_wave_spawn_timer
+    jmp @update_entities
+
+@after_180s:
+    ; Phase 4 (180..255s, 3..4.2 min): 18..28 frames (~0.35..0.55s per spawn)
     jsr starfield_rand
     and #$0b
     clc
-    adc #14
+    adc #18
     sta g_wave_spawn_timer
     jmp @update_entities
 
-@very_fast_spawn:
-    ; Late game cadence (T >= 256s): 10..17 frames (~0.20..0.34s)
+@mid_late_spawn:
+    ; Phase 5 (256s+, 4.2 min+): 14..22 frames (~0.28..0.44s per spawn)
     jsr starfield_rand
     and #$07
     clc
-    adc #10
+    adc #14
     sta g_wave_spawn_timer
 
 @update_entities:
