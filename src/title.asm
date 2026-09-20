@@ -24,6 +24,9 @@ s_title_released:   !byte 0     ; 1 = Fire & Space were released after entering 
 s_prompt_state:     !byte 0     ; Current color byte of prompt ($10 = visible, $00 = hidden, $FF = dirty)
 s_hiscore_row:      !byte 0     ; Dynamic cursor row for stamping high score digits
 s_digit_idx:        !byte 0     ; Digit buffer index during high score stamping
+s_attract_screen:   !byte 0     ; 0 = Title Bitmap screen, 1 = Top 10 Directory screen
+s_attract_timer_lo: !byte <500  ; Attract mode alternation countdown (500 frames = 10.0s)
+s_attract_timer_hi: !byte >500
 
 ; ------------------------------------------------------------------------------
 ; Screen RAM cell addresses for Column 8, Rows 3..21 (19 cells: $8000 + R * 40 + 8)
@@ -55,8 +58,8 @@ col23_bitmap_hi:
 
 ; ==============================================================================
 ; Subroutine: title_enter
-; Purpose: Sets up VIC-II Bank 2 Hi-Res Bitmap mode, copies pre-baked bitmap,
-;          stamps dynamic high score, initializes colors, and enables display.
+; Purpose: Sets up Title state, initializes attract mode timer, and displays
+;          Title Bitmap screen.
 ; ==============================================================================
 title_enter:
     ; 1. Reset debounce safety lockout & require fresh button release
@@ -64,8 +67,26 @@ title_enter:
     sta s_title_lockout
     lda #0
     sta s_title_released
+    sta s_attract_screen        ; 0 = Title Bitmap screen
+    lda #<500
+    sta s_attract_timer_lo      ; 500 frames = 10.0s
+    lda #>500
+    sta s_attract_timer_hi
+    ; Fall through to title_enter_bitmap
+
+; ==============================================================================
+; Subroutine: title_enter_bitmap
+; Purpose: Sets up VIC-II Bank 2 Hi-Res Bitmap mode, copies pre-baked bitmap,
+;          stamps dynamic high score, initializes colors, and enables display.
+; ==============================================================================
+title_enter_bitmap:
     lda #$ff
     sta s_prompt_state          ; Force dirty refresh on first frame
+
+    ; Ensure black border and background
+    lda #COLOR_BLACK
+    sta VIC_BORDER_COLOR
+    sta VIC_BG_COLOR0
 
     ; 2. Bank out BASIC ROM ($0001 = $36) so $A000..$BF3F is RAM
     lda #$36
@@ -257,11 +278,50 @@ title_stamp_col23_char:
 
 ; ==============================================================================
 ; Subroutine: title_update
-; Purpose: Blinks start prompt and checks for FIRE or SPACE with safety debounce.
+; Purpose: Blinks start prompt or directory cursor, alternates between screens
+;          every 5 seconds, and checks for FIRE or SPACE to start game.
 ; ==============================================================================
 title_update:
-    ; 1. Blink "PRESS FIRE TO START" prompt:
-    ; 0.5s visible (frames 0..24), 0.5s hidden (frames 25..49)
+    ; --------------------------------------------------------------------------
+    ; 1. Input Check: Check for Fire or Space newly pressed to start game
+    ; --------------------------------------------------------------------------
+    ; Track button release: Fire and Space must be completely released first
+    lda g_input_fire
+    ora g_input_start
+    bne @button_held
+    lda #1
+    sta s_title_released
+@button_held:
+
+    ; Decrement safety lockout timer
+    lda s_title_lockout
+    beq @check_start
+    dec s_title_lockout
+    jmp @update_screens
+
+@check_start:
+    ; Require that button was released at least once on Title screen
+    lda s_title_released
+    beq @update_screens
+
+    ; Check for FIRE or SPACE newly pressed
+    lda g_input_fire_pressed
+    ora g_input_start_pressed
+    beq @update_screens
+
+    ; Transition to STATE_READY
+    lda #STATE_READY
+    jsr change_state
+    rts
+
+    ; --------------------------------------------------------------------------
+    ; 2. Screen-specific Update
+    ; --------------------------------------------------------------------------
+@update_screens:
+    lda s_attract_screen
+    bne @update_hiscore
+
+    ; Mode 0: Title Bitmap Screen -> Blink "PRESS FIRE TO START" prompt
     lda g_game_time_frames
     cmp #25
     bcc @show_prompt
@@ -271,38 +331,45 @@ title_update:
     lda #$10                    ; White on Black ($10) -> Visible
 @apply_color:
     cmp s_prompt_state
-    beq @check_input_safety
+    beq @tick_attract_timer
     sta s_prompt_state
     jsr title_set_prompt_color
+    jmp @tick_attract_timer
 
-@check_input_safety:
-    ; 2. Track button release: Fire and Space must be completely released
-    lda g_input_fire
-    ora g_input_start
-    bne @button_held
-    lda #1
-    sta s_title_released
-@button_held:
+@update_hiscore:
+    ; Mode 1: Top 10 Directory Screen -> Blink cursor
+    jsr hiscore_screen_update
 
-    ; 3. Decrement safety lockout timer
-    lda s_title_lockout
-    beq @check_start
-    dec s_title_lockout
+    ; --------------------------------------------------------------------------
+    ; 3. Attract Mode 7-second Alternation Timer (350 frames @ 50 Hz PAL)
+    ; --------------------------------------------------------------------------
+@tick_attract_timer:
+    lda s_attract_timer_lo
+    bne +
+    dec s_attract_timer_hi
++   dec s_attract_timer_lo
+    lda s_attract_timer_lo
+    ora s_attract_timer_hi
+    bne @done
+
+    ; Timer expired: Reset to 500 frames (10.0s) and toggle screen
+    lda #<500
+    sta s_attract_timer_lo
+    lda #>500
+    sta s_attract_timer_hi
+
+    lda s_attract_screen
+    eor #$01
+    sta s_attract_screen
+    beq @switch_to_bitmap
+
+    ; Switch to Top 10 Directory Screen
+    jsr hiscore_screen_show
     rts
 
-@check_start:
-    ; 4. Require that button was released at least once on Title screen
-    lda s_title_released
-    beq @done
-
-    ; 5. Check for FIRE or SPACE newly pressed
-    lda g_input_fire_pressed
-    ora g_input_start_pressed
-    beq @done
-
-    ; Transition to STATE_READY
-    lda #STATE_READY
-    jsr change_state
+@switch_to_bitmap:
+    ; Switch to Title Bitmap Screen
+    jsr title_enter_bitmap
 
 @done:
     rts
@@ -327,7 +394,7 @@ title_set_prompt_color:
 ; ==============================================================================
 ; Subroutine: title_exit
 ; Purpose: Restores Bank 0, Text Mode, Screen RAM $0400, Charset $2800,
-;          re-enables BASIC ROM, and reseeds the playfield starfield.
+;          re-enables BASIC ROM, sets black border/bg, and reseeds starfield.
 ; ==============================================================================
 title_exit:
     ; 1. Restore standard VIC-II settings: Text Mode, Screen $0400, Charset $2800
@@ -349,8 +416,13 @@ title_exit:
     lda #$37
     sta $0001
 
-    ; 4. Re-initialize and seed starfield across Rows 1..24 ($0428..$07E7)
+    ; 4. Restore Black border and background
+    lda #COLOR_BLACK
+    sta VIC_BORDER_COLOR
+    sta VIC_BG_COLOR0
+
+    ; 5. Re-initialize and seed starfield across Rows 1..24 ($0428..$07E7)
     jsr starfield_init
 
-    ; 5. Clear Row 0 HUD
+    ; 6. Clear Row 0 HUD
     jmp hud_clear
