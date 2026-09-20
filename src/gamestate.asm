@@ -12,12 +12,11 @@
 ; - STATE_GAME_OVER (4): "GAME OVER" & final score, 5.0s delay or Fire/Space to title
 ; ==============================================================================
 
-STATE_TITLE      = 0
-STATE_READY      = 1
-STATE_PLAYING    = 2
-STATE_DYING      = 3
-STATE_GAME_OVER  = 4
-STATE_NAME_ENTRY = 5
+STATE_TITLE     = 0
+STATE_READY     = 1
+STATE_PLAYING   = 2
+STATE_DYING     = 3
+STATE_GAME_OVER = 4
 
 ; ------------------------------------------------------------------------------
 ; State Machine RAM Variables
@@ -33,28 +32,25 @@ ready_banner_text:
 ; State Dispatch Tables
 ; ------------------------------------------------------------------------------
 state_update_table:
-    !word state_title_update      ; 0: STATE_TITLE
-    !word state_ready_update      ; 1: STATE_READY
-    !word state_playing_update    ; 2: STATE_PLAYING
-    !word state_dying_update      ; 3: STATE_DYING
-    !word state_game_over_update  ; 4: STATE_GAME_OVER
-    !word state_name_entry_update ; 5: STATE_NAME_ENTRY
+    !word state_title_update     ; 0: STATE_TITLE
+    !word state_ready_update     ; 1: STATE_READY
+    !word state_playing_update   ; 2: STATE_PLAYING
+    !word state_dying_update     ; 3: STATE_DYING
+    !word state_game_over_update ; 4: STATE_GAME_OVER
 
 state_enter_table:
-    !word state_title_enter       ; 0: STATE_TITLE
-    !word state_ready_enter       ; 1: STATE_READY
-    !word state_playing_enter     ; 2: STATE_PLAYING
-    !word state_dying_enter       ; 3: STATE_DYING
-    !word state_game_over_enter   ; 4: STATE_GAME_OVER
-    !word state_name_entry_enter  ; 5: STATE_NAME_ENTRY
+    !word state_title_enter      ; 0: STATE_TITLE
+    !word state_ready_enter      ; 1: STATE_READY
+    !word state_playing_enter    ; 2: STATE_PLAYING
+    !word state_dying_enter      ; 3: STATE_DYING
+    !word state_game_over_enter  ; 4: STATE_GAME_OVER
 
 state_exit_table:
-    !word state_title_exit        ; 0: STATE_TITLE
-    !word state_ready_exit        ; 1: STATE_READY
-    !word state_playing_exit      ; 2: STATE_PLAYING
-    !word state_dying_exit        ; 3: STATE_DYING
-    !word state_game_over_exit    ; 4: STATE_GAME_OVER
-    !word state_name_entry_exit   ; 5: STATE_NAME_ENTRY
+    !word state_title_exit       ; 0: STATE_TITLE
+    !word state_ready_exit       ; 1: STATE_READY
+    !word state_playing_exit     ; 2: STATE_PLAYING
+    !word state_dying_exit       ; 3: STATE_DYING
+    !word state_game_over_exit   ; 4: STATE_GAME_OVER
 
 ; ==============================================================================
 ; Subroutine: gamestate_init
@@ -289,7 +285,7 @@ state_game_over_enter:
 state_game_over_update:
     ; 1. Decrement 5.0-second countdown
     dec g_state_timer
-    beq @game_over_finish
+    beq @to_title
 
     ; 2. Guard delay: don't allow skipping in the first 0.2s (frames 250..241)
     lda g_state_timer
@@ -301,19 +297,7 @@ state_game_over_update:
     ora g_input_start_pressed
     beq @done
 
-@game_over_finish:
-    ; Check if player's score qualifies for the Top 10 table
-    jsr hiscore_qualifies
-    bcc @to_title
-
-    ; Qualified! Transition to Name Entry state
-    lda #STATE_NAME_ENTRY
-    jsr change_state
-    rts
-
 @to_title:
-    lda #0
-    sta s_attract_page          ; Start attract loop with Title Bitmap screen
     lda #STATE_TITLE
     jsr change_state
 

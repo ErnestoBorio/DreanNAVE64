@@ -92,7 +92,6 @@ start:
     jsr collisions_init
     jsr powerups_init
     jsr hud_init
-    jsr hiscore_init
     jsr gamestate_init
 
     ; 8. Setup VIC-II Raster Interrupt for 3-lane enemy multiplexer
@@ -298,13 +297,8 @@ g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s
 title_bitmap_data:
     !bin "assets/title_bitmap.bin"
 
-; ------------------------------------------------------------------------------
-; High Score Table & Name Entry Subsystem ($6740+)
-; ------------------------------------------------------------------------------
-!src "src/hiscore.asm"
-
-; Assert that high code, bitmap, and hiscore fit safely within RAM ($8000)
+; Assert that high code and bitmap fit safely within RAM ($8000)
 !if * > $8000 {
-    !error "Fatal: High code, bitmap, and hiscore exceeded $8000!"
+    !error "Fatal: High code and title bitmap exceeded $8000!"
 }
 
