@@ -286,9 +286,9 @@ hiscore_screen_show:
 
 @all_ranks_done:
     ; --------------------------------------------------------------------------
-    ; Draw "64 BLOCKS FREE." at Col 23
+    ; Draw "64 BLOCKS FREE." at Col 24 (immediately below Rank 10 at Col 25)
     ; --------------------------------------------------------------------------
-    lda #23
+    lda #24
     sta s_hisc_col
     lda #0
     sta s_hisc_row
@@ -300,9 +300,9 @@ hiscore_screen_show:
     bne -
 
     ; --------------------------------------------------------------------------
-    ; Draw "READY." at Col 21
+    ; Draw "READY." at Col 23 (immediately below BLOCKS FREE)
     ; --------------------------------------------------------------------------
-    lda #21
+    lda #23
     sta s_hisc_col
     lda #0
     sta s_hisc_row
@@ -314,9 +314,9 @@ hiscore_screen_show:
     bne -
 
     ; --------------------------------------------------------------------------
-    ; Draw Cursor Block at Col 20, Row 0
+    ; Draw Cursor Block at Col 22, Row 0 (immediately below READY.)
     ; --------------------------------------------------------------------------
-    lda #20
+    lda #22
     sta s_hisc_col
     lda #0
     sta s_hisc_row
@@ -332,7 +332,7 @@ hiscore_screen_show:
 
 ; ==============================================================================
 ; Subroutine: hiscore_screen_update
-; Purpose: Blinks the solid block cursor at Col 20, Row 0 every 25 frames.
+; Purpose: Blinks the solid block cursor at Col 22, Row 0 every 25 frames.
 ; ==============================================================================
 hiscore_screen_update:
     dec s_cursor_blink
@@ -343,7 +343,7 @@ hiscore_screen_update:
 
     lda #0
     sta s_hisc_row
-    lda #20
+    lda #22
     sta s_hisc_col
 
     lda s_cursor_vis

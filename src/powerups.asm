@@ -21,8 +21,8 @@ POWERUP_TYPE_B      = 1         ; Smart Bomb ('B')
 POWERUP_TYPE_E      = 2         ; Energy Recovery ('E')
 NUM_POWERUP_TYPES   = 3
 
-POWERUP_INITIAL_DELAY   = 1250  ; 1,250 frames = 25.0 seconds at 50 Hz PAL
-POWERUP_SPAWN_INTERVAL  = 2000  ; 2,000 frames = 40.0 seconds at 50 Hz PAL
+POWERUP_INITIAL_DELAY   = 600   ; 600 frames = 12.0 seconds at 50 Hz PAL (was 25s)
+POWERUP_SPAWN_INTERVAL  = 900   ; 900 frames = 18.0 seconds at 50 Hz PAL (was 40s)
 
 ; 2x2 Custom Charset Tiles for P, B, and E
 powerup_tile_tl:
@@ -45,17 +45,36 @@ g_powerup_timer_lo: !byte 0     ; Countdown timer low byte for natural spawn
 g_powerup_timer_hi: !byte 0     ; Countdown timer high byte for natural spawn
 s_powerup_diff_lo:  !byte 0     ; Math scratch for collision testing
 s_powerup_diff_hi:  !byte 0     ; Math scratch for collision testing
-s_powerup_color_timer:   !byte 25 ; 25 frames = 0.5s at 50 Hz PAL
-s_powerup_color_idx:     !byte 0  ; Index in cycle (0..3)
+s_powerup_color_timer:   !byte 20 ; 20 frames = 0.4s at 50 Hz PAL
+s_powerup_color_idx:     !byte 0  ; Index in cycle (0..3 for P, 0..2 for B/E)
 s_powerup_current_color: !byte COLOR_PURPLE
 
-; Color cycle table: Purple -> Blue -> Light Blue -> Cyan (0.5s each)
-powerup_color_cycle:
+; Color cycle table for P: Purple -> Blue -> Light Blue -> Cyan
+powerup_p_color_cycle:
     !byte COLOR_PURPLE, COLOR_BLUE, COLOR_LIGHT_BLUE, COLOR_CYAN
+
+; Color cycle table for B: PURPLE -> Red -> Light Red
+powerup_b_color_cycle:
+    !byte COLOR_PURPLE, COLOR_RED, COLOR_LIGHT_RED
+
+; Color cycle table for E: Green -> Light Green -> Cyan
+powerup_e_color_cycle:
+    !byte COLOR_GREEN, COLOR_LIGHT_GREEN, COLOR_CYAN
+
+; 8-Entry spawn table (50% E, 37.5% P, 12.5% B)
+powerup_type_table:
+    !byte POWERUP_TYPE_E        ; 0: E (Energy)
+    !byte POWERUP_TYPE_P        ; 1: P (Phase Level-Up)
+    !byte POWERUP_TYPE_E        ; 2: E (Energy)
+    !byte POWERUP_TYPE_B        ; 3: B (Smart Bomb)
+    !byte POWERUP_TYPE_E        ; 4: E (Energy)
+    !byte POWERUP_TYPE_P        ; 5: P (Phase Level-Up)
+    !byte POWERUP_TYPE_E        ; 6: E (Energy)
+    !byte POWERUP_TYPE_P        ; 7: P (Phase Level-Up)
 
 ; ==============================================================================
 ; Subroutine: powerups_init
-; Purpose: Resets powerup state and arms initial natural spawn timer (25 seconds).
+; Purpose: Resets powerup state and arms initial natural spawn timer (12 seconds).
 ; ==============================================================================
 powerups_init:
     lda #0
@@ -64,7 +83,7 @@ powerups_init:
     sta g_powerup_col
     sta g_powerup_row
     sta s_powerup_color_idx
-    lda #25
+    lda #20
     sta s_powerup_color_timer
     lda #COLOR_PURPLE
     sta s_powerup_current_color
@@ -77,21 +96,34 @@ powerups_init:
 ; ==============================================================================
 ; Subroutine: powerups_spawn
 ; Purpose: Attempts natural spawn at playfield right edge. Picks random type.
-;          (50% chance P, 25% chance B, 25% chance E).
+;          (50% chance E, 37.5% chance P, 12.5% chance B; 75% E if player HP <= 2).
 ; ==============================================================================
 powerups_spawn:
     lda g_powerup_active
     beq +
     rts
 +
-    ; Select random powerup type: 0 (P), 1 (B), 2 (E), 3 -> 0 (P)
-    jsr starfield_rand
-    and #$03                    ; 0..3
+    ; If player HP is critical (<= 2), give 75% chance of E
+    lda g_player_hp
     cmp #3
-    bne +
-    lda #0
-+   sta g_powerup_type
+    bcs @normal_type_pick
 
+    jsr starfield_rand
+    and #$03
+    beq @normal_type_pick       ; 25% chance of normal table pick
+    lda #POWERUP_TYPE_E         ; 75% chance of E emergency heal
+    sta g_powerup_type
+    jmp @spawn_stamp
+
+@normal_type_pick:
+    ; Pick from 8-entry table (50% E, 37.5% P, 12.5% B)
+    jsr starfield_rand
+    and #$07
+    tax
+    lda powerup_type_table, x
+    sta g_powerup_type
+
+@spawn_stamp:
     jsr powerups_stamp_new
     rts
 
@@ -159,13 +191,11 @@ powerups_stamp_new:
     lda #1
     sta g_powerup_active
 
-    ; Reset color cycle to start at Purple (0.5s per color)
+    ; Reset color cycle (0.4s per color)
     lda #0
     sta s_powerup_color_idx
-    lda #25
+    lda #20
     sta s_powerup_color_timer
-    lda #COLOR_PURPLE
-    sta s_powerup_current_color
 
     ; Load current powerup type index
     ldx g_powerup_type
@@ -299,7 +329,26 @@ powerups_recolor:
     rts
 +
     ldx s_powerup_color_idx
-    lda powerup_color_cycle, x
+    lda g_powerup_type
+    cmp #POWERUP_TYPE_B
+    beq @color_b
+    cmp #POWERUP_TYPE_E
+    beq @color_e
+
+    ; Default: Powerup P (Purple -> Blue -> Light Blue -> Cyan)
+    lda powerup_p_color_cycle, x
+    jmp @store_color
+
+@color_b:
+    ; Powerup B: PURPLE -> Red -> Light Red
+    lda powerup_b_color_cycle, x
+    jmp @store_color
+
+@color_e:
+    ; Powerup E: Green -> Light Green -> Cyan
+    lda powerup_e_color_cycle, x
+
+@store_color:
     sta s_powerup_current_color
 
     ldx #0                      ; Row offset: 0 = Row R, 1 = Row R + 1
@@ -372,12 +421,25 @@ powerups_update:
     lda g_powerup_active
     beq @check_spawn
 
-    ; Decrement color animation timer (25 frames = 0.5s at 50 Hz PAL)
+    ; Decrement color animation timer (20 frames = 0.4s at 50 Hz PAL)
     dec s_powerup_color_timer
     bne @apply_recolor
-    lda #25
+    lda #20
     sta s_powerup_color_timer
     inc s_powerup_color_idx
+
+    lda g_powerup_type
+    beq @wrap_p                 ; P has 4 colors
+
+    ; B and E have 3 colors (0..2)
+    lda s_powerup_color_idx
+    cmp #3
+    bcc @apply_recolor
+    lda #0
+    sta s_powerup_color_idx
+    jmp @apply_recolor
+
+@wrap_p:
     lda s_powerup_color_idx
     and #$03
     sta s_powerup_color_idx

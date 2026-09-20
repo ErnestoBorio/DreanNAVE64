@@ -84,12 +84,12 @@ hud_show:
     jsr hud_clear
 
     ; 1. Draw '1UP' at Cols 39 and 38 (Rotated Top of screen)
-    ; Col 39 = '1' (Char 49), Col 38 = 'UP' (Char 107) in Light Blue
+    ; Col 39 = '1' (Char 49), Col 38 = 'UP' (Char 107) in White
     lda #49
     sta $0427
     lda #107
     sta $0426
-    lda #COLOR_LIGHT_BLUE
+    lda #COLOR_WHITE
     sta $d827
     sta $d826
 
@@ -98,8 +98,8 @@ hud_show:
     sta $0420
     sta $041f
 
-    ; Set Color RAM for 1UP score digits & bulk zeroes (Cols 37..31: $D825..$D81F) in Light Blue
-    lda #COLOR_LIGHT_BLUE
+    ; Set Color RAM for 1UP score digits & bulk zeroes (Cols 37..31: $D825..$D81F) in White
+    lda #COLOR_WHITE
     ldx #6
 -   sta $d81f, x
     dex
@@ -353,12 +353,12 @@ hud_render_score:
     sta s_score_val_hi
     jsr hud_convert_16bit_to_digits
 
-    ; Write digits to Screen RAM (Cols 37..33: $0425..$0421) and set Color to Light Blue
+    ; Write digits to Screen RAM (Cols 37..33: $0425..$0421) and set Color to White
     ldx #0
     ldy #$25
 -   lda s_score_digits, x
     sta $0400, y
-    lda #COLOR_LIGHT_BLUE
+    lda #COLOR_WHITE
     sta $d800, y
     dey
     inx
