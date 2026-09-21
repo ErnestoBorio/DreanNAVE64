@@ -365,3 +365,492 @@ hiscore_screen_update:
 @done:
     rts
 
+; ==============================================================================
+; Top 10 Initials Entry & High Score Subsystem
+; ==============================================================================
+
+type_your_name_text:
+    !byte 84, 89, 80, 69, 32, 89, 79, 85, 82, 32, 78, 65, 77, 69 ; "TYPE YOUR NAME"
+
+col_scan_table:
+    !byte $fe, $fd, $fb, $f7, $ef, $df, $bf, $7f
+
+; 64-Byte Keyboard Matrix Mapping: Unshifted
+hiscore_matrix_unshifted:
+    ; Col 0 ($FE): DEL, RETURN, CRSR L/R, F7, F1, F3, F5, CRSR U/D
+    !byte $08, $0d,   0,   0,   0,   0,   0,   0
+    ; Col 1 ($FD): '3', 'W', 'A', '4', 'Z', 'S', 'E', L-Shift
+    !byte  51,  87,  65,  52,  90,  83,  69,   0
+    ; Col 2 ($FB): '5', 'R', 'D', '6', 'C', 'F', 'T', 'X'
+    !byte  53,  82,  68,  54,  67,  70,  84,  88
+    ; Col 3 ($F7): '7', 'Y', 'G', '8', 'B', 'H', 'U', 'V'
+    !byte  55,  89,  71,  56,  66,  72,  85,  86
+    ; Col 4 ($EF): '9', 'I', 'J', '0', 'M', 'K', 'O', 'N'
+    !byte  57,  73,  74,  48,  77,  75,  79,  78
+    ; Col 5 ($DF): '+', 'P', 'L', '-', '.', ':', '@', ','
+    !byte   0,  80,  76,   0,   0,   0,  64,   0
+    ; Col 6 ($BF): '£', '*', ';', HOME, R-Shift, '=', '↑' (nave), '/'
+    !byte   0,  42,   0,   0,   0,   0,  92,   0
+    ; Col 7 ($7F): '1', '←' (heart), CTRL, '2', SPACE, C=, 'Q', RUN/STOP
+    !byte  49,  98,   0,  50,  32,   0,  81,   0
+
+; 64-Byte Keyboard Matrix Mapping: Shifted
+hiscore_matrix_shifted:
+    ; Col 0 ($FE)
+    !byte $08, $0d,   0,   0,   0,   0,   0,   0
+    ; Col 1 ($FD): Shift+3 = '#'(35), W, A, Shift+4 = '$'(36), Z, S, E, L-Shift
+    !byte  35,  87,  65,  36,  90,  83,  69,   0
+    ; Col 2 ($FB): Shift+5 = '%'(37), R, D, Shift+6 = '&'(38), C, F, T, X
+    !byte  37,  82,  68,  38,  67,  70,  84,  88
+    ; Col 3 ($F7): Shift+7 = '\''(39), Y, G, Shift+8 = '('(40), B, H, U, V
+    !byte  39,  89,  71,  40,  66,  72,  85,  86
+    ; Col 4 ($EF): Shift+9 = ')'(41), I, J, '0', M, K, O, N
+    !byte  41,  73,  74,  48,  77,  75,  79,  78
+    ; Col 5 ($DF): '+', 'P', 'L', '-', '.', ':', '@'(64), ','
+    !byte   0,  80,  76,   0,   0,   0,  64,   0
+    ; Col 6 ($BF): '£', '*'(42), ';', HOME, R-Shift, '=', '↑'(92), '/'
+    !byte   0,  42,   0,   0,   0,   0,  92,   0
+    ; Col 7 ($7F): Shift+1 = '!'(33), '←'(98), CTRL, Shift+2 = '"'(34), SPACE, C=, 'Q', RUN/STOP
+    !byte  33,  98,   0,  34,  32,   0,  81,   0
+
+; Initials Entry RAM Variables
+s_initials_buf:         !byte 95, 95, 95    ; 3 characters ('_' = 95)
+s_initials_pos:         !byte 0             ; 0..3 (current input slot)
+s_entry_blink:          !byte 25            ; Cursor blink timer
+s_entry_cursor_vis:     !byte 1             ; 1 = cursor visible (108), 0 = '_' (95)
+s_last_matrix_code:     !byte $ff           ; Debounce edge-trigger code ($FF = no key)
+s_key_is_shifted:       !byte 0             ; 1 = Shift active, 0 = unshifted
+s_insert_rank:          !byte 0             ; Target insertion index (0..9)
+s_shift_y_save:         !byte 0             ; Loop math scratch
+s_scan_temp_row:        !byte 0             ; Row scan scratch
+s_entry_timeout_lo:     !byte <500          ; Inactivity countdown (500 frames = 10.0s)
+s_entry_timeout_hi:     !byte >500
+
+; ==============================================================================
+; Subroutine: hiscore_check_qualify
+; Purpose: Checks if g_score is high enough to enter Top 10 high score table.
+; Returns: Carry = 1 if qualified (score > 0 and >= top10_scores[9]), Carry = 0 if not.
+; ==============================================================================
+hiscore_check_qualify:
+    ; Score of 0 never qualifies
+    lda g_score + 0
+    ora g_score + 1
+    beq @not_qualified
+
+    lda g_score + 1
+    cmp top10_scores_hi + 9
+    bcc @not_qualified
+    bne @qualified
+    lda g_score + 0
+    cmp top10_scores_lo + 9
+    bcc @not_qualified
+
+@qualified:
+    sec
+    rts
+
+@not_qualified:
+    clc
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_entry_init
+; Purpose: Sets up initials entry on Game Over screen: prints "TYPE YOUR NAME"
+;          in White, 3 underscores in Cyan, and arms cursor blink timer.
+; ==============================================================================
+hiscore_entry_init:
+    ; 1. Reset entry state
+    lda #0
+    sta s_initials_pos
+    lda #25
+    sta s_entry_blink
+    lda #1
+    sta s_entry_cursor_vis
+    lda #$ff
+    sta s_last_matrix_code
+    lda #<500
+    sta s_entry_timeout_lo
+    lda #>500
+    sta s_entry_timeout_hi
+
+    lda #95                     ; '_'
+    sta s_initials_buf + 0
+    sta s_initials_buf + 1
+    sta s_initials_buf + 2
+
+    ; 2. Print "TYPE YOUR NAME" at Column 16, Rows 5..18 in White
+    lda #COLOR_WHITE
+    sta s_char_color
+    lda #5
+    sta s_cur_row
+    ldy #16
+    ldx #0
+-   lda type_your_name_text, x
+    jsr hud_draw_char
+    inx
+    cpx #14
+    bne -
+
+    ; 3. Render 3 slots at Column 14 (Rows 11..13)
+    jsr hiscore_render_initials_slots
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_render_slot
+; Purpose: Draws character in A at slot X (0..2 -> Rows 11..13, Col 14) in Cyan.
+; ==============================================================================
+hiscore_render_slot:
+    pha
+    txa
+    clc
+    adc #11
+    tay                         ; Y = row (11..13)
+    lda screen_row_table_lo, y
+    sta $fb
+    sta $fd
+    lda screen_row_table_hi, y
+    sta $fc
+    lda color_row_table_hi, y
+    sta $fe
+    pla
+    ldy #14                     ; Column 14
+    sta ($fb), y
+    lda #COLOR_CYAN
+    sta ($fd), y
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_render_initials_slots
+; Purpose: Redraws all 3 slots based on s_initials_buf, s_initials_pos, and cursor.
+; ==============================================================================
+hiscore_render_initials_slots:
+    ldx #0
+@slot_loop:
+    cpx s_initials_pos
+    bne @draw_buf_char
+    ; This is the active cursor slot (if s_initials_pos < 3)
+    cpx #3
+    beq @draw_buf_char
+    lda s_entry_cursor_vis
+    beq @draw_buf_char          ; Blink off phase: show underscore
+    lda #108                    ; Solid cursor block
+    bne @do_render
+
+@draw_buf_char:
+    lda s_initials_buf, x
+
+@do_render:
+    jsr hiscore_render_slot
+    inx
+    cpx #3
+    bne @slot_loop
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_scan_key
+; Purpose: Scans CIA1 keyboard matrix with edge detection and Shift handling.
+; Returns: A = key character/code (0 = none, $0D = RETURN, $08 = DEL, 32..98 = char)
+; ==============================================================================
+hiscore_scan_key:
+    ; Configure Port A as outputs, Port B as inputs
+    lda #$ff
+    sta CIA1_DIR_A
+    lda #$00
+    sta CIA1_DIR_B
+
+    ; 1. Check Shift state (Left Shift: Col 1 PB7; Right Shift: Col 6 PB4)
+    lda #$fd                    ; Column 1
+    sta CIA1_DATA_A
+    lda CIA1_DATA_B
+    bpl @shift_active           ; Bit 7 = 0 -> Left Shift down
+
+    lda #$bf                    ; Column 6
+    sta CIA1_DATA_A
+    lda CIA1_DATA_B
+    and #$10                    ; Bit 4 = 0 -> Right Shift down
+    beq @shift_active
+    lda #0
+    sta s_key_is_shifted
+    jmp @scan_columns
+
+@shift_active:
+    lda #1
+    sta s_key_is_shifted
+
+@scan_columns:
+    ldx #0
+@col_loop:
+    lda col_scan_table, x
+    sta CIA1_DATA_A
+    lda CIA1_DATA_B
+    ; Mask out Shift bits so holding Shift doesn't block character keys
+    cpx #1                      ; Col 1?
+    bne +
+    ora #$80                    ; Mask out PB7 (Left Shift)
++   cpx #6                      ; Col 6?
+    bne +
+    ora #$10                    ; Mask out PB4 (Right Shift)
++   cmp #$ff
+    bne @found_key_in_col
+    inx
+    cpx #8
+    bne @col_loop
+
+    ; No keyboard key pressed!
+    ; Check Joystick Port 2 Fire button
+    lda #$00
+    sta CIA1_DIR_A              ; Port A = inputs
+    lda CIA1_DATA_A             ; Read Joystick 2
+    and #$10                    ; Bit 4 = Fire (0 = pressed)
+    beq @joy_fire_detected
+
+    ; No key and no joystick fire: reset edge-trigger latch
+    lda #$ff
+    sta s_last_matrix_code
+    lda #0
+    rts
+
+@joy_fire_detected:
+    lda s_last_matrix_code
+    cmp #$fe                    ; Code $FE for Joystick Fire
+    beq @no_new_key
+    lda #$fe
+    sta s_last_matrix_code
+    lda #$0d                    ; Treat Joystick Fire as RETURN ($0D)
+    rts
+
+@no_new_key:
+    lda #0
+    rts
+
+@found_key_in_col:
+    ; Find which bit (0..7) is 0
+    ldy #0
+-   lsr
+    bcc @got_row
+    iny
+    cpy #8
+    bne -
+    lda #0
+    rts
+
+@got_row:
+    sty s_scan_temp_row
+    ; Matrix index = X * 8 + Y (0..63)
+    txa
+    asl
+    asl
+    asl
+    clc
+    adc s_scan_temp_row
+
+    ; Edge detection: ignore if identical to previous frame
+    cmp s_last_matrix_code
+    beq @no_new_key
+    sta s_last_matrix_code
+
+    ; Translate matrix index to character
+    tay
+    lda s_key_is_shifted
+    bne +
+    lda hiscore_matrix_unshifted, y
+    rts
++   lda hiscore_matrix_shifted, y
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_entry_update
+; Purpose: Frame update for initials entry during STATE_GAME_OVER.
+; ==============================================================================
+hiscore_entry_update:
+    ; 1. Inactivity timeout (500 frames = 10.0s @ 50 Hz PAL)
+    lda s_entry_timeout_lo
+    bne +
+    dec s_entry_timeout_hi
++   dec s_entry_timeout_lo
+    lda s_entry_timeout_lo
+    ora s_entry_timeout_hi
+    beq @commit_entry           ; 10s of inactivity: record current name and go to Top 10 screen
+
+    ; 2. Blink cursor (25 frames on, 25 frames off)
+    dec s_entry_blink
+    bne @check_keys
+    lda #25
+    sta s_entry_blink
+    lda s_entry_cursor_vis
+    eor #$01
+    sta s_entry_cursor_vis
+    jsr hiscore_render_initials_slots
+
+@check_keys:
+    ; 3. Scan for keypress
+    jsr hiscore_scan_key
+    tax                         ; X = key code
+    beq @done
+
+    ; Key pressed! Reset 10-second inactivity countdown
+    lda #<500
+    sta s_entry_timeout_lo
+    lda #>500
+    sta s_entry_timeout_hi
+
+    ; Check for RETURN ($0D)
+    cpx #$0d
+    beq @commit_entry
+
+    ; Check for INST DEL ($08)
+    cpx #$08
+    beq @handle_del
+
+    ; It's a character! Check if we can enter it (s_initials_pos < 3)
+    lda s_initials_pos
+    cmp #3
+    bcs @done                   ; Buffer full, ignore
+
+    ; Store character into buffer
+    ldy s_initials_pos
+    txa
+    sta s_initials_buf, y
+    inc s_initials_pos
+
+    ; Reset cursor blink to visible for new position
+    lda #25
+    sta s_entry_blink
+    lda #1
+    sta s_entry_cursor_vis
+    jsr hiscore_render_initials_slots
+    rts
+
+@handle_del:
+    ; [INST DEL]: back up one position and replace with '_'
+    lda s_initials_pos
+    beq @done                   ; At 0: nothing to delete
+
+    dec s_initials_pos
+    ldy s_initials_pos
+    lda #95                     ; '_'
+    sta s_initials_buf, y
+
+    lda #25
+    sta s_entry_blink
+    lda #1
+    sta s_entry_cursor_vis
+    jsr hiscore_render_initials_slots
+    rts
+
+@commit_entry:
+    ; Return or Fire pressed!
+    ; Pad any remaining '_' with space ($20)
+    ldx #0
+-   lda s_initials_buf, x
+    cmp #95
+    bne +
+    lda #$20
+    sta s_initials_buf, x
++   inx
+    cpx #3
+    bne -
+
+    ; Insert score into Top 10 table
+    jsr hiscore_insert_score
+
+    ; Erase game over screen elements
+    jsr hud_clear_game_over
+
+    ; Set flag to start attract mode directly on Top 10 Directory screen
+    lda #1
+    sta g_title_show_hiscore_first
+
+    ; Transition to STATE_TITLE
+    lda #STATE_TITLE
+    jsr change_state
+
+@done:
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_insert_score
+; Purpose: Inserts g_score and s_initials_buf into Top 10 table, shifts lower
+;          entries down, and updates g_high_score.
+; ==============================================================================
+hiscore_insert_score:
+    ; 1. Find target insertion rank (0..9)
+    ldx #0
+@find_rank_loop:
+    lda g_score + 1
+    cmp top10_scores_hi, x
+    bcc @next_rank
+    bne @found_rank
+    lda g_score + 0
+    cmp top10_scores_lo, x
+    bcc @next_rank
+    jmp @found_rank
+
+@next_rank:
+    inx
+    cpx #10
+    bne @find_rank_loop
+    rts                         ; Did not qualify (safeguard)
+
+@found_rank:
+    stx s_insert_rank           ; Target rank 0..9
+
+    ; 2. Shift lower ranks down from 8 down to s_insert_rank
+    ldy #8
+@shift_loop:
+    cpy s_insert_rank
+    bcc @do_insert
+
+    ; Shift scores: top10_scores[Y+1] = top10_scores[Y]
+    lda top10_scores_lo, y
+    sta top10_scores_lo + 1, y
+    lda top10_scores_hi, y
+    sta top10_scores_hi + 1, y
+
+    ; Shift initials: 3 bytes at Y * 3 -> (Y+1) * 3
+    sty s_shift_y_save
+    tya
+    asl                         ; * 2
+    clc
+    adc s_shift_y_save          ; * 3
+    tax                         ; X = Y * 3
+    lda top10_initials + 0, x
+    sta top10_initials + 3, x
+    lda top10_initials + 1, x
+    sta top10_initials + 4, x
+    lda top10_initials + 2, x
+    sta top10_initials + 5, x
+
+    ldy s_shift_y_save
+    dey
+    bpl @shift_loop
+
+@do_insert:
+    ; 3. Insert new score at s_insert_rank
+    ldx s_insert_rank
+    lda g_score + 0
+    sta top10_scores_lo, x
+    lda g_score + 1
+    sta top10_scores_hi, x
+
+    ; Insert initials: dest = s_insert_rank * 3
+    txa
+    asl
+    clc
+    adc s_insert_rank
+    tax
+    lda s_initials_buf + 0
+    sta top10_initials + 0, x
+    lda s_initials_buf + 1
+    sta top10_initials + 1, x
+    lda s_initials_buf + 2
+    sta top10_initials + 2, x
+
+    ; 4. Update g_high_score to rank 1 score
+    lda top10_scores_lo + 0
+    sta g_high_score + 0
+    lda top10_scores_hi + 0
+    sta g_high_score + 1
+    rts
+
+

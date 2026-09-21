@@ -23,6 +23,7 @@ STATE_GAME_OVER = 4
 ; ------------------------------------------------------------------------------
 g_game_state:   !byte STATE_TITLE
 g_state_timer:  !byte 0         ; General state countdown timer (PAL frames)
+g_entering_initials: !byte 0    ; 1 = Player entering initials on Game Over screen
 
 ; Text for READY! banner
 ready_banner_text:
@@ -277,12 +278,33 @@ state_game_over_enter:
     ; 1. Despawn enemies, disable sprites, draw GAME OVER & final SCORE
     jsr game_over_trigger
 
-    ; 2. Set 5.0-second countdown timer (250 PAL frames)
+    ; 2. Check if player score qualifies for Top 10
+    jsr hiscore_check_qualify
+    bcc @no_initials
+
+    ; Qualifies! Enable initials entry
+    jsr hiscore_entry_init
+    lda #1
+    sta g_entering_initials
+    rts
+
+@no_initials:
+    lda #0
+    sta g_entering_initials
+    ; Set 5.0-second countdown timer (250 PAL frames)
     lda #250
     sta g_state_timer
     rts
 
 state_game_over_update:
+    lda g_entering_initials
+    beq @normal_game_over_timer
+
+    ; Player is entering initials: update initials entry (keyboard, cursor blink, commit)
+    jsr hiscore_entry_update
+    rts
+
+@normal_game_over_timer:
     ; 1. Decrement 5.0-second countdown
     dec g_state_timer
     beq @to_title
@@ -292,9 +314,8 @@ state_game_over_update:
     cmp #240
     bcs @done
 
-    ; 3. Check for Fire button / Fire key or Space newly pressed to skip early
+    ; 3. Check for Fire button / Fire key newly pressed to skip early
     lda g_input_fire_pressed
-    ora g_input_start_pressed
     beq @done
 
 @to_title:

@@ -27,26 +27,23 @@
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
-; Input State RAM Variables: Frame-cleared (0..11)
+; Input State RAM Variables: Frame-cleared (0..9)
 g_input_up:            !byte 0   ; 0:  1 = Move Up active, 0 = Inactive
 g_input_down:          !byte 0   ; 1:  1 = Move Down active, 0 = Inactive
 g_input_left:          !byte 0   ; 2:  1 = Move Left active, 0 = Inactive
 g_input_right:         !byte 0   ; 3:  1 = Move Right active, 0 = Inactive
 g_input_fire:          !byte 0   ; 4:  1 = Fire button held down (level-triggered)
 g_input_fire_pressed:  !byte 0   ; 5:  1 = Fire button newly pressed (edge-triggered)
-g_input_start:         !byte 0   ; 6:  1 = Space key held down (level-triggered)
-g_input_start_pressed: !byte 0   ; 7:  1 = Space key newly pressed (edge-triggered)
-s_col2_active:         !byte 0   ; 8:  1 = Horizontal Column 2 active (R, D, F)
-s_col4_active:         !byte 0   ; 9:  1 = TATE Column 4 active (J, K)
-s_shift_held:          !byte 0   ; 10: 1 = SHIFT held down, 0 = SHIFT not pressed
-s_current_debug_key:   !byte 0   ; 11: Digit key active in current frame (0 = none, 1..8, 9=C)
+s_col2_active:         !byte 0   ; 6:  1 = Horizontal Column 2 active (R, D, F)
+s_col4_active:         !byte 0   ; 7:  1 = TATE Column 4 active (J, K)
+s_shift_held:          !byte 0   ; 8:  1 = SHIFT held down, 0 = SHIFT not pressed
+s_current_debug_key:   !byte 0   ; 9:  Digit key active in current frame (0 = none, 1..8, 9=C)
 
-; Frame-preserved State Variables (12..16)
-s_prev_fire:           !byte 0   ; 12: Previous frame fire state (used for edge-detection)
-s_prev_start:          !byte 0   ; 13: Previous frame start state (used for edge-detection)
-s_prev_debug_key:      !byte 0   ; 14: Digit key active in previous frame (edge detector)
-g_debug_border_timer:  !byte 0   ; 15: Countdown frames for border flash feedback
-s_scan_portb:          !byte 0   ; 16: Saved Port B reading to prevent register clobbering
+; Frame-preserved State Variables (10..13)
+s_prev_fire:           !byte 0   ; 10: Previous frame fire state (used for edge-detection)
+s_prev_debug_key:      !byte 0   ; 11: Digit key active in previous frame (edge detector)
+g_debug_border_timer:  !byte 0   ; 12: Countdown frames for border flash feedback
+s_scan_portb:          !byte 0   ; 13: Saved Port B reading to prevent register clobbering
 
 ; ==============================================================================
 ; Subroutine: input_init
@@ -57,7 +54,7 @@ input_init:
     sta CIA1_DIR_A      ; Port A = Input mode
     sta CIA1_DIR_B      ; Port B = Input mode
 
-    ldx #16
+    ldx #13
 -   sta g_input_up, x
     dex
     bpl -
@@ -80,7 +77,7 @@ input_update:
 +
     ; 1. Reset frame input flags to 0 (inactive)
     lda #$00
-    ldx #11
+    ldx #9
 -   sta g_input_up, x
     dex
     bpl -
@@ -114,12 +111,6 @@ input_update:
     lda CIA1_DATA_B     ; Read Rows (Port B)
     sta s_scan_portb
 
-    ; Check SPACE key (Row PB4: 0 = pressed)
-    lda s_scan_portb
-    and #$10
-    bne +
-    inc g_input_start
-+
     ; When Shift is held, scan debug keys '1' (PB0) and '2' (PB3)
     lda s_shift_held
     beq @col7_debug_done
@@ -233,19 +224,6 @@ input_update:
     bne +
     inc g_input_right
 +
-    ; Debug Key 'B' (Row PB4): Spawn Bomb Powerup (or trigger bomb directly if Shift held)
-    lda s_scan_portb
-    and #$10            ; Bit 4: Key 'B' (0 = pressed)
-    bne +
-    lda s_shift_held
-    bne @trigger_bomb_direct
-    lda #12             ; Debug Key 12: Spawn Bomb Powerup
-    sta s_current_debug_key
-    jmp +
-@trigger_bomb_direct:
-    lda #13             ; Debug Key 13: Direct Smart Bomb trigger
-    sta s_current_debug_key
-+
     ; Debug Keys '7' (PB0) and '8' (PB3) - only scanned if Shift held
     lda s_shift_held
     beq @col3_debug_done
@@ -261,7 +239,7 @@ input_update:
     sta s_current_debug_key
 @col3_debug_done:
 
-    ; --- Column 1 ($FD = %11111101): Fire 'Z' (PB4), Debug '3' (PB0), '4' (PB3), 'E' (PB6) ---
+    ; --- Column 1 ($FD = %11111101): Fire 'Z' (PB4), Debug '3' (PB0), '4' (PB3) ---
     lda #$fd
     sta CIA1_DATA_A     ; Pull Column 1 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
@@ -269,13 +247,6 @@ input_update:
     and #$10            ; Bit 4: Key 'Z' (0 = pressed)
     bne +
     inc g_input_fire
-+
-    ; Debug Key 'E' (Row PB6): Spawn Powerup 'E'
-    lda s_scan_portb
-    and #$40            ; Bit 6: Key 'E' (0 = pressed)
-    bne +
-    lda #11             ; Debug Key 11: Spawn 'E' Powerup
-    sta s_current_debug_key
 +
     ; Debug Keys '3' (PB0) and '4' (PB3) - only scanned if Shift held
     lda s_shift_held
@@ -298,12 +269,6 @@ input_update:
     lda CIA1_DATA_B     ; Read Rows (Port B)
     and #$02            ; Bit 1: Key 'P' (0 = pressed)
     bne +
-    lda s_shift_held
-    beq @normal_p_fire
-    lda #10             ; Debug Key 10: SHIFT + P (Force Powerup P Spawn)
-    sta s_current_debug_key
-    bne +
-@normal_p_fire:
     inc g_input_fire
 +
 
@@ -398,35 +363,14 @@ input_update:
     sta s_prev_fire
 
     ; --------------------------------------------------------------------------
-    ; Step 5: Compute Edge-Triggered Start Key (start_pressed: SPACE)
-    ; --------------------------------------------------------------------------
-    lda g_input_start
-    beq @no_start_pressed
-
-    lda s_prev_start
-    bne @done_start_edge
-
-    lda #$01
-    sta g_input_start_pressed
-    jmp @done_start_edge
-
-@no_start_pressed:
-    lda #$00
-    sta g_input_start_pressed
-
-@done_start_edge:
-    lda g_input_start
-    sta s_prev_start
-
-    ; --------------------------------------------------------------------------
-    ; Step 6: Evaluate Edge-Triggered Debug Tier Jump (SHIFT + 1..8)
+    ; Step 5: Evaluate Edge-Triggered Debug Tier Jump (SHIFT + 1..8, SHIFT + C)
     ; --------------------------------------------------------------------------
     lda s_current_debug_key
     beq @no_debug_key
     cmp s_prev_debug_key
     beq @debug_eval_done        ; Same debug key held across frames: suppress re-trigger
     sta s_prev_debug_key        ; New keypress edge detected
-    jsr input_jump_to_tier      ; Jump to tier corresponding to key in A (1..8)
+    jsr input_jump_to_tier      ; Jump to tier corresponding to key in A (1..8, 9=C)
     jmp @debug_eval_done
 
 @no_debug_key:
@@ -441,32 +385,9 @@ input_update:
 ; Purpose: Sets game progression parameters to the unlock tier of Enemy N (1..8),
 ;          spawns Enemy N immediately by its own archetype rules, and allows
 ;          preceding unlocked enemies (1..N-1) to continue spawning under the tier.
-; Input: A = 1..8 (Enemy 1..8)
+; Input: A = 1..8 (Enemy 1..8), 9 = Clear all enemies
 ; ==============================================================================
 input_jump_to_tier:
-    cmp #10                     ; Debug Key 10: SHIFT + P (Spawn 'P' Powerup)
-    bne +
-    lda #POWERUP_TYPE_P
-    jsr powerups_spawn_forced_type
-    rts
-+
-    cmp #11                     ; Debug Key 11: Spawn 'E' Powerup
-    bne +
-    lda #POWERUP_TYPE_E
-    jsr powerups_spawn_forced_type
-    rts
-+
-    cmp #12                     ; Debug Key 12: Spawn Bomb Powerup
-    bne +
-    lda #POWERUP_TYPE_B
-    jsr powerups_spawn_forced_type
-    rts
-+
-    cmp #13                     ; Debug Key 13: Direct Smart Bomb trigger
-    bne +
-    jsr powerups_trigger_smart_bomb
-    rts
-+
     cmp #9
     bne @is_tier_jump
     lda #COLOR_WHITE

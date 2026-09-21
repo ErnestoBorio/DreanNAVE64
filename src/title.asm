@@ -27,6 +27,7 @@ s_digit_idx:        !byte 0     ; Digit buffer index during high score stamping
 s_attract_screen:   !byte 0     ; 0 = Title Bitmap screen, 1 = Top 10 Directory screen
 s_attract_timer_lo: !byte <500  ; Attract mode alternation countdown (500 frames = 10.0s)
 s_attract_timer_hi: !byte >500
+g_title_show_hiscore_first: !byte 0 ; 1 = jump directly to Top 10 Directory screen
 
 ; ------------------------------------------------------------------------------
 ; Screen RAM cell addresses for Column 8, Rows 3..21 (19 cells: $8000 + R * 40 + 8)
@@ -67,11 +68,21 @@ title_enter:
     sta s_title_lockout
     lda #0
     sta s_title_released
-    sta s_attract_screen        ; 0 = Title Bitmap screen
     lda #<500
     sta s_attract_timer_lo      ; 500 frames = 10.0s
     lda #>500
     sta s_attract_timer_hi
+
+    lda g_title_show_hiscore_first
+    beq +
+    lda #0
+    sta g_title_show_hiscore_first
+    lda #1
+    sta s_attract_screen
+    jmp hiscore_screen_show
+
++   lda #0
+    sta s_attract_screen        ; 0 = Title Bitmap screen
     ; Fall through to title_enter_bitmap
 
 ; ==============================================================================
@@ -285,9 +296,8 @@ title_update:
     ; --------------------------------------------------------------------------
     ; 1. Input Check: Check for Fire or Space newly pressed to start game
     ; --------------------------------------------------------------------------
-    ; Track button release: Fire and Space must be completely released first
+    ; Track button release: Fire must be completely released first
     lda g_input_fire
-    ora g_input_start
     bne @button_held
     lda #1
     sta s_title_released
@@ -304,9 +314,8 @@ title_update:
     lda s_title_released
     beq @update_screens
 
-    ; Check for FIRE or SPACE newly pressed
+    ; Check for FIRE newly pressed
     lda g_input_fire_pressed
-    ora g_input_start_pressed
     beq @update_screens
 
     ; Transition to STATE_READY

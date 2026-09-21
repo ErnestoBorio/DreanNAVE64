@@ -559,6 +559,26 @@ hud_clear_game_over:
     jsr hud_draw_char
     dex
     bne -
+
+    ; Erase Column 16 ("TYPE YOUR NAME": Rows 5..18: 14 characters)
+    lda #5
+    sta s_cur_row
+    ldy #16
+    ldx #14
+-   lda #$20
+    jsr hud_draw_char
+    dex
+    bne -
+
+    ; Erase Column 14 (Initials: Rows 11..13: 3 characters)
+    lda #11
+    sta s_cur_row
+    ldy #14
+    ldx #3
+-   lda #$20
+    jsr hud_draw_char
+    dex
+    bne -
     rts
 
 ; ==============================================================================
