@@ -165,6 +165,10 @@ state_ready_enter:
 
     ; 4. Render player ship so it is visible during READY
     jsr player_render
+
+    ; 5. Trigger stage start fanfare
+    lda #SFX_START
+    jsr sound_play_sfx
     rts
 
 state_ready_update:

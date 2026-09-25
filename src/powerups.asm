@@ -601,6 +601,10 @@ powerups_check_collision:
     lda #8
     sta g_debug_border_timer
 
+    ; Trigger bonus chime sound effect
+    lda #SFX_BONUS
+    jsr sound_play_sfx
+
     ; Award 500 bonus points for collecting 'P' (5 * 100)
     lda #5
     jsr hud_add_score
@@ -636,6 +640,10 @@ powerups_check_collision:
     sta VIC_BORDER_COLOR
     lda #8
     sta g_debug_border_timer
+
+    ; Trigger bonus chime sound effect
+    lda #SFX_BONUS
+    jsr sound_play_sfx
     rts
 
 @no_collision:
@@ -654,6 +662,11 @@ powerups_trigger_smart_bomb:
     sta g_debug_border_timer
 
     ; 2. Destroy all active living enemies
+    ; 2. Trigger smart bomb rumble sound effect
+    lda #SFX_BOMB
+    jsr sound_play_sfx
+
+    ; 3. Destroy all active living enemies
     ldx #0
 @bomb_enemy_loop:
     lda g_enemy_active, x

@@ -124,6 +124,10 @@ weapons_fire:
     lda #0
     sta g_fire_requested
 
+    ; Trigger laser shot sound effect
+    lda #SFX_LASER
+    jsr sound_play_sfx
+
 @fire_exit:
     rts
 

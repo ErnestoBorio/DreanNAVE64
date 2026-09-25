@@ -27,7 +27,8 @@
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
-; Input State RAM Variables: Frame-cleared (0..9)
+; Input State RAM Variables: Frame-cleared (0..7)
+; ------------------------------------------------------------------------------
 g_input_up:            !byte 0   ; 0:  1 = Move Up active, 0 = Inactive
 g_input_down:          !byte 0   ; 1:  1 = Move Down active, 0 = Inactive
 g_input_left:          !byte 0   ; 2:  1 = Move Left active, 0 = Inactive
@@ -36,14 +37,11 @@ g_input_fire:          !byte 0   ; 4:  1 = Fire button held down (level-triggere
 g_input_fire_pressed:  !byte 0   ; 5:  1 = Fire button newly pressed (edge-triggered)
 s_col2_active:         !byte 0   ; 6:  1 = Horizontal Column 2 active (R, D, F)
 s_col4_active:         !byte 0   ; 7:  1 = TATE Column 4 active (J, K)
-s_shift_held:          !byte 0   ; 8:  1 = SHIFT held down, 0 = SHIFT not pressed
-s_current_debug_key:   !byte 0   ; 9:  Digit key active in current frame (0 = none, 1..8, 9=C)
 
-; Frame-preserved State Variables (10..13)
-s_prev_fire:           !byte 0   ; 10: Previous frame fire state (used for edge-detection)
-s_prev_debug_key:      !byte 0   ; 11: Digit key active in previous frame (edge detector)
-g_debug_border_timer:  !byte 0   ; 12: Countdown frames for border flash feedback
-s_scan_portb:          !byte 0   ; 13: Saved Port B reading to prevent register clobbering
+; Frame-preserved State Variables (8..10)
+s_prev_fire:           !byte 0   ; 8:  Previous frame fire state (used for edge-detection)
+g_debug_border_timer:  !byte 0   ; 9:  Countdown frames for border flash feedback
+s_scan_portb:          !byte 0   ; 10: Saved Port B reading to prevent register clobbering
 
 ; ==============================================================================
 ; Subroutine: input_init
@@ -54,7 +52,7 @@ input_init:
     sta CIA1_DIR_A      ; Port A = Input mode
     sta CIA1_DIR_B      ; Port B = Input mode
 
-    ldx #13
+    ldx #10
 -   sta g_input_up, x
     dex
     bpl -
@@ -77,7 +75,7 @@ input_update:
 +
     ; 1. Reset frame input flags to 0 (inactive)
     lda #$00
-    ldx #9
+    ldx #7
 -   sta g_input_up, x
     dex
     bpl -
@@ -91,42 +89,7 @@ input_update:
     lda #$00
     sta CIA1_DIR_B
 
-    ; --- Shift Key Detection (Left Shift: Col 1, PB7; Right Shift: Col 6, PB4) ---
-    lda #$fd            ; Column 1 ($FD = %11111101)
-    sta CIA1_DATA_A
-    lda CIA1_DATA_B
-    bpl +               ; Bit 7 = 0 -> Left Shift pressed!
-
-    lda #$bf            ; Column 6 ($BF = %10111111)
-    sta CIA1_DATA_A
-    lda CIA1_DATA_B
-    and #$10            ; Bit 4 = 0 -> Right Shift pressed!
-    bne @no_shift
-+   inc s_shift_held
-@no_shift:
-
-    ; --- Column 7 ($7F = %01111111): Debug Keys '1' (PB0) and '2' (PB3) ---
-    lda #$7f
-    sta CIA1_DATA_A     ; Pull Column 7 low
-    lda CIA1_DATA_B     ; Read Rows (Port B)
-    sta s_scan_portb
-
-    ; When Shift is held, scan debug keys '1' (PB0) and '2' (PB3)
-    lda s_shift_held
-    beq @col7_debug_done
-    lda s_scan_portb
-    and #$01            ; Bit 0: '1' (0 = pressed)
-    bne +
-    lda #1
-    sta s_current_debug_key
-+   lda s_scan_portb
-    and #$08            ; Bit 3: '2' (0 = pressed)
-    bne @col7_debug_done
-    lda #2
-    sta s_current_debug_key
-@col7_debug_done:
-
-    ; --- Column 2 ($FB = %11111011): 'R' (PB1), 'D' (PB2), 'F' (PB5), Debug '5' (PB0), '6' (PB3), 'C' (PB4) ---
+    ; --- Column 2 ($FB = %11111011): 'R' (PB1), 'D' (PB2), 'F' (PB5) ---
     lda #$fb
     sta CIA1_DATA_A     ; Pull Column 2 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
@@ -148,27 +111,8 @@ input_update:
     inc g_input_down
     inc s_col2_active   ; Flag Column 2 active
 +
-    ; Debug Keys '5' (PB0), '6' (PB3), 'C' (PB4) - only scanned if Shift held
-    lda s_shift_held
-    beq @col2_debug_done
-    lda s_scan_portb
-    and #$01            ; Bit 0: Debug Key '5' (0 = pressed)
-    bne +
-    lda #5
-    sta s_current_debug_key
-+   lda s_scan_portb
-    and #$08            ; Bit 3: Debug Key '6' (0 = pressed)
-    bne +
-    lda #6
-    sta s_current_debug_key
-+   lda s_scan_portb
-    and #$10            ; Bit 4: Debug Key 'C' (Clear all enemies)
-    bne @col2_debug_done
-    lda #9
-    sta s_current_debug_key
-@col2_debug_done:
 
-    ; --- Column 4 ($EF = %11101111): TATE Keys 'J' (PB2), 'K' (PB5), Debug '0' (PB3) ---
+    ; --- Column 4 ($EF = %11101111): TATE Keys 'J' (PB2), 'K' (PB5) ---
     lda #$ef
     sta CIA1_DATA_A     ; Pull Column 4 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
@@ -183,16 +127,8 @@ input_update:
     inc g_input_down
     inc s_col4_active   ; Flag Column 4 active
 +
-    lda s_shift_held
-    beq @col4_debug_done
-    lda s_scan_portb
-    and #$08            ; Bit 3: Debug Key '0' (0 = pressed) -> Reset to Tier 0 (Enemy 1 at 0s)
-    bne @col4_debug_done
-    lda #1
-    sta s_current_debug_key
-@col4_debug_done:
 
-    ; --- Column 3 ($F7 = %11110111): Shared 'G', 'H', 'U', Debug '7' (PB0), '8' (PB3), 'B' (PB4) ---
+    ; --- Column 3 ($F7 = %11110111): Shared 'G', 'H', 'U' ---
     ; De-ghosting:
     ; 1) 'G' (Horizontal Right) is suppressed if Column 4 (J, K) is active,
     ;    preventing H+J+K in TATE mode from ghosting G and freezing controls.
@@ -224,22 +160,8 @@ input_update:
     bne +
     inc g_input_right
 +
-    ; Debug Keys '7' (PB0) and '8' (PB3) - only scanned if Shift held
-    lda s_shift_held
-    beq @col3_debug_done
-    lda s_scan_portb
-    and #$01            ; Bit 0: '7' (0 = pressed)
-    bne +
-    lda #7
-    sta s_current_debug_key
-+   lda s_scan_portb
-    and #$08            ; Bit 3: '8' (0 = pressed)
-    bne @col3_debug_done
-    lda #8
-    sta s_current_debug_key
-@col3_debug_done:
 
-    ; --- Column 1 ($FD = %11111101): Fire 'Z' (PB4), Debug '3' (PB0), '4' (PB3) ---
+    ; --- Column 1 ($FD = %11111101): Fire 'Z' (PB4) ---
     lda #$fd
     sta CIA1_DATA_A     ; Pull Column 1 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
@@ -248,20 +170,6 @@ input_update:
     bne +
     inc g_input_fire
 +
-    ; Debug Keys '3' (PB0) and '4' (PB3) - only scanned if Shift held
-    lda s_shift_held
-    beq @col1_debug_done
-    lda s_scan_portb
-    and #$01            ; Bit 0: Key '3' (0 = pressed)
-    bne +
-    lda #3
-    sta s_current_debug_key
-+   lda s_scan_portb
-    and #$08            ; Bit 3: Key '4' (0 = pressed)
-    bne @col1_debug_done
-    lda #4
-    sta s_current_debug_key
-@col1_debug_done:
 
     ; --- Column 5 ($DF = %11011111): Fire Key 'P' (Row PB1) [Right Side Fire] ---
     lda #$df
@@ -361,68 +269,4 @@ input_update:
 @done_edge:
     lda g_input_fire
     sta s_prev_fire
-
-    ; --------------------------------------------------------------------------
-    ; Step 5: Evaluate Edge-Triggered Debug Tier Jump (SHIFT + 1..8, SHIFT + C)
-    ; --------------------------------------------------------------------------
-    lda s_current_debug_key
-    beq @no_debug_key
-    cmp s_prev_debug_key
-    beq @debug_eval_done        ; Same debug key held across frames: suppress re-trigger
-    sta s_prev_debug_key        ; New keypress edge detected
-    jsr input_jump_to_tier      ; Jump to tier corresponding to key in A (1..8, 9=C)
-    jmp @debug_eval_done
-
-@no_debug_key:
-    lda #0
-    sta s_prev_debug_key        ; Key released
-
-@debug_eval_done:
     rts
-
-; ==============================================================================
-; Subroutine: input_jump_to_tier
-; Purpose: Sets game progression parameters to the unlock tier of Enemy N (1..8),
-;          spawns Enemy N immediately by its own archetype rules, and allows
-;          preceding unlocked enemies (1..N-1) to continue spawning under the tier.
-; Input: A = 1..8 (Enemy 1..8), 9 = Clear all enemies
-; ==============================================================================
-input_jump_to_tier:
-    cmp #9
-    bne @is_tier_jump
-    lda #COLOR_WHITE
-    sta VIC_BORDER_COLOR
-    bne @flash_and_clear
-
-@is_tier_jump:
-    sta g_first_spawn_force     ; 1..8: Force Enemy N on very first upcoming spawn
-    sec
-    sbc #1                      ; 1..8 -> 0..7
-    tax                         ; X = archetype / tier index (0..7)
-
-    ; 1. Flash border white
-    lda #COLOR_WHITE
-    sta VIC_BORDER_COLOR
-
-    ; 2. Set game elapsed time to unlock threshold of Enemy N
-    lda enemy_table_unlock_sec_lo, x
-    sta g_game_time_total_sec + 0
-    lda enemy_table_unlock_sec_hi, x
-    sta g_game_time_total_sec + 1
-    lda #0
-    sta g_game_time_frames
-    sta g_game_time_sec
-    sta g_game_time_min
-
-@flash_and_clear:
-    lda #8
-    sta g_debug_border_timer
-
-    ; 3. Despawn all active enemies and bullets for a clean wave start
-    jsr enemies_clear_all
-
-    ; 4. Trigger immediate wave spawn (2 frames)
-    lda #2
-    sta g_wave_spawn_timer
-    rts
-

@@ -110,6 +110,7 @@ s_mask_temp:        !byte 0
 s_active_count:     !byte 0
 s_spawn_y_temp:     !byte 0
 s_shot_slot_temp:   !byte 0
+s_enemy_slot_temp:  !byte 0
 
 ; ------------------------------------------------------------------------------
 ; Enemy Archetype Data Tables (8 Archetypes: Index 0 to 7)
@@ -963,6 +964,8 @@ enemies_update:
 ; Purpose: Spawns an aimed bullet from enemy slot X directed at player position.
 ; ==============================================================================
 enemies_fire_aimed_bullet:
+    stx s_enemy_slot_temp
+
     ; Find free bullet slot (0..3)
     ldy #0
 -   lda g_bullet_active, y
@@ -970,6 +973,7 @@ enemies_fire_aimed_bullet:
     iny
     cpy #MAX_ENEMY_BULLETS
     bne -
+    ldx s_enemy_slot_temp
     rts                         ; All 4 slots busy
 
 @bullet_slot_found:
@@ -1044,6 +1048,12 @@ enemies_fire_aimed_bullet:
 
 @store_vel_y:
     sta g_bullet_vel_y, y
+
+    ; Trigger enemy shot sound effect
+    lda #SFX_ENEMY_SHOT
+    jsr sound_play_sfx
+
+    ldx s_enemy_slot_temp
     rts
 
 ; ==============================================================================

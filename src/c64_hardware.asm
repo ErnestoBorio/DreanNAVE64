@@ -143,3 +143,52 @@ MAX_ENEMIES         = 12        ; 12 free-roaming enemy ships (0..11)
 MAX_ENEMY_BULLETS   = 4         ; 4 free-flying aimed bullets (0..3)
 MAX_VIRTUAL_SPRITES = 16        ; 12 enemies + 4 bullets
 
+; ------------------------------------------------------------------------------
+; SID Sound Chip Registers ($D400 - $D41C)
+; ------------------------------------------------------------------------------
+SID_BASE            = $d400
+
+; Voice 1 Registers ($D400 - $D406)
+SID_V1_FREQ_LO      = $d400     ; Voice 1 Frequency Low
+SID_V1_FREQ_HI      = $d401     ; Voice 1 Frequency High
+SID_V1_PW_LO        = $d402     ; Voice 1 Pulse Width Low
+SID_V1_PW_HI        = $d403     ; Voice 1 Pulse Width High
+SID_V1_CTRL         = $d404     ; Voice 1 Control Register
+SID_V1_AD           = $d405     ; Voice 1 Attack / Decay
+SID_V1_SR           = $d406     ; Voice 1 Sustain / Release
+
+; Voice 2 Registers ($D407 - $D40D)
+SID_V2_FREQ_LO      = $d407     ; Voice 2 Frequency Low
+SID_V2_FREQ_HI      = $d408     ; Voice 2 Frequency High
+SID_V2_PW_LO        = $d409     ; Voice 2 Pulse Width Low
+SID_V2_PW_HI        = $d40a     ; Voice 2 Pulse Width High
+SID_V2_CTRL         = $d40b     ; Voice 2 Control Register
+SID_V2_AD           = $d40c     ; Voice 2 Attack / Decay
+SID_V2_SR           = $d40d     ; Voice 2 Sustain / Release
+
+; Voice 3 Registers ($D40E - $D414)
+SID_V3_FREQ_LO      = $d40e     ; Voice 3 Frequency Low
+SID_V3_FREQ_HI      = $d40f     ; Voice 3 Frequency High
+SID_V3_PW_LO        = $d410     ; Voice 3 Pulse Width Low
+SID_V3_PW_HI        = $d411     ; Voice 3 Pulse Width High
+SID_V3_CTRL         = $d412     ; Voice 3 Control Register
+SID_V3_AD           = $d413     ; Voice 3 Attack / Decay
+SID_V3_SR           = $d414     ; Voice 3 Sustain / Release
+
+; Filter & Volume Registers ($D415 - $D418)
+SID_FLT_CUT_LO      = $d415     ; Filter Cutoff Low
+SID_FLT_CUT_HI      = $d416     ; Filter Cutoff High
+SID_FLT_CTRL        = $d417     ; Filter Resonance & Voice Routing
+SID_MODE_VOL        = $d418     ; Filter Mode & Master Volume (0-15)
+
+; SID Control Register Bitflags
+SID_GATE            = $01       ; Bit 0: 1 = Start Attack/Decay/Sustain, 0 = Release
+SID_SYNC            = $02       ; Bit 1: Synchronize oscillator with predecessor
+SID_RING            = $04       ; Bit 2: Ring modulation with predecessor
+SID_TEST            = $08       ; Bit 3: Test bit (resets oscillator)
+SID_TRIANGLE        = $10       ; Bit 4: Triangle waveform
+SID_SAWTOOTH        = $20       ; Bit 5: Sawtooth waveform
+SID_PULSE           = $40       ; Bit 6: Pulse / Square waveform
+SID_NOISE           = $80       ; Bit 7: White Noise waveform
+
+

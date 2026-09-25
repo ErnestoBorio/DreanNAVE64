@@ -83,6 +83,7 @@ start:
     bne @clear_screen_loop
 
     ; 7. Initialize all game subsystems
+    jsr sound_init
     jsr game_timer_init
     jsr input_init
     jsr starfield_init
@@ -137,6 +138,9 @@ main_loop:
 
     ; 4. Update Current Game Flow State Machine
     jsr gamestate_update
+
+    ; 5. Update SID Sound Engine (50 Hz PAL)
+    jsr sound_update
 
     jmp main_loop
 
@@ -304,7 +308,20 @@ title_bitmap_data:
 !src "src/hiscore.asm"
 
 ; Assert that high code and bitmap fit safely within RAM ($8000)
+; Assert that hiscore code fits safely below sound driver ($7000)
+!if * > $7000 {
+    !error "Fatal: Hiscore code exceeded $7000! Overflows into sound driver."
+}
+
+; ------------------------------------------------------------------------------
+; SID Sound Engine (SFX Subsystem) ($7000+)
+; ------------------------------------------------------------------------------
+* = $7000
+!src "src/sfx.asm"
+
+; Assert that sound driver fits safely within RAM ($8000)
 !if * > $8000 {
     !error "Fatal: High code and title bitmap exceeded $8000!"
+    !error "Fatal: Sound driver exceeded $8000!"
 }
 

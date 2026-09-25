@@ -179,6 +179,15 @@ hud_update:
     cmp #3
     bcs @solid_red
 
+    ; Trigger warning alarm sound on rising edge of flash (once every 16 frames = ~3.1 Hz)
+    lda g_game_time_frames
+    and #$0f
+    cmp #$08
+    bne @no_alarm_sound
+    lda #SFX_LOW_ENERGY
+    jsr sound_play_sfx
+@no_alarm_sound:
+
     ; Flash every 8 frames (~3.1 Hz heartbeat rate) between COLOR_RED and COLOR_WHITE
     lda g_game_time_frames
     and #$08

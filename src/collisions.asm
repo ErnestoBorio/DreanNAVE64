@@ -150,6 +150,10 @@ collisions_kill_enemy:
     lda #SPRITE_PTR_EXPLOSION_1
     sta g_enemy_type, x
 
+    ; Trigger enemy explosion sound effect
+    lda #SFX_EXPLOSION_ENEMY
+    jsr sound_play_sfx
+
     ; Award score points based on enemy archetype (0..7)
     ldy g_enemy_archetype, x
     lda enemy_score_table, y
@@ -378,6 +382,10 @@ collisions_check_player:
     sta g_debug_border_timer
     lda #150                    ; 150 frames = 3.0 seconds delay before Game Over
     sta g_game_over_timer
+
+    ; Trigger dramatic player destruction sound effect
+    lda #SFX_PLAYER_DEATH
+    jsr sound_play_sfx
     rts
 
 ; ------------------------------------------------------------------------------

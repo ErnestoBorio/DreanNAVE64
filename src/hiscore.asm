@@ -686,9 +686,10 @@ hiscore_entry_update:
     ; 3. Scan for keypress
     jsr hiscore_scan_key
     tax                         ; X = key code
-    beq @done
+    bne +
+    rts                         ; No key pressed
 
-    ; Key pressed! Reset 10-second inactivity countdown
++   ; Key pressed! Reset 10-second inactivity countdown
     lda #<500
     sta s_entry_timeout_lo
     lda #>500
@@ -705,9 +706,10 @@ hiscore_entry_update:
     ; It's a character! Check if we can enter it (s_initials_pos < 3)
     lda s_initials_pos
     cmp #3
-    bcs @done                   ; Buffer full, ignore
+    bcc +
+    rts                         ; Buffer full, ignore
 
-    ; Store character into buffer
++   ; Store character into buffer
     ldy s_initials_pos
     txa
     sta s_initials_buf, y
@@ -719,6 +721,10 @@ hiscore_entry_update:
     lda #1
     sta s_entry_cursor_vis
     jsr hiscore_render_initials_slots
+
+    ; Play typewriter click sound
+    lda #SFX_KEY_CLICK
+    jsr sound_play_sfx
     rts
 
 @handle_del:
@@ -736,6 +742,10 @@ hiscore_entry_update:
     lda #1
     sta s_entry_cursor_vis
     jsr hiscore_render_initials_slots
+
+    ; Play typewriter click sound
+    lda #SFX_KEY_CLICK
+    jsr sound_play_sfx
     rts
 
 @commit_entry:
@@ -753,6 +763,10 @@ hiscore_entry_update:
 
     ; Insert score into Top 10 table
     jsr hiscore_insert_score
+
+    ; Play bonus chime for submitting score
+    lda #SFX_BONUS
+    jsr sound_play_sfx
 
     ; Erase game over screen elements
     jsr hud_clear_game_over
