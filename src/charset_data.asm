@@ -199,7 +199,7 @@ g_custom_charset:
     ; Char $61 (97)
     !byte $18, $5c, $7e, $7f, $7e, $5c, $18, $00
     ; Char $62 (98)
-    !byte $1c, $3e, $7e, $fc, $7e, $3e, $1c, $00
+    !byte $0e, $1f, $3f, $7e, $3f, $1f, $0e, $00
     ; Char $63 (99)
     !byte $08, $1c, $3e, $7f, $3e, $1c, $08, $00
     ; Char $64 (100)
@@ -215,7 +215,7 @@ g_custom_charset:
     ; Char $69 (105)
     !byte $00, $00, $00, $40, $60, $30, $10, $00
     ; Char $6a (106)
-    !byte $22, $77, $77, $77, $77, $77, $55, $22
+    !byte $44, $ee, $ee, $ee, $ee, $ee, $aa, $44
     ; Char $6b (107)
     !byte $07, $0f, $08, $ff, $f7, $50, $70, $20
     ; Char $6c (108)
@@ -291,27 +291,27 @@ g_custom_charset:
     ; Char $8f (143)
     !byte $00, $00, $00, $00, $00, $00, $00, $00
     ; Char $90 (144)
-    !byte $00, $00, $00, $00, $00, $00, $00, $00
-    ; Char $91 (145)
     !byte $ff, $c1, $80, $b6, $ba, $80, $c1, $ff
-    ; Char $92 (146)
+    ; Char $91 (145)
     !byte $ff, $bf, $bb, $80, $80, $bf, $bf, $ff
-    ; Char $93 (147)
+    ; Char $92 (146)
     !byte $ff, $9d, $8c, $ae, $b6, $b0, $b9, $ff
-    ; Char $94 (148)
+    ; Char $93 (147)
     !byte $ff, $dd, $9c, $b6, $b6, $80, $c9, $ff
-    ; Char $95 (149)
+    ; Char $94 (148)
     !byte $ff, $e7, $e7, $eb, $e9, $80, $80, $ef
-    ; Char $96 (150)
+    ; Char $95 (149)
     !byte $ff, $d8, $98, $ba, $ba, $82, $c6, $ff
-    ; Char $97 (151)
+    ; Char $96 (150)
     !byte $ff, $c1, $80, $b6, $b6, $84, $cd, $ff
-    ; Char $98 (152)
+    ; Char $97 (151)
     !byte $ff, $fc, $fc, $8e, $82, $f0, $fc, $ff
-    ; Char $99 (153)
+    ; Char $98 (152)
     !byte $ff, $c9, $80, $b6, $b6, $80, $c9, $ff
-    ; Char $9a (154)
+    ; Char $99 (153)
     !byte $ff, $d9, $90, $b6, $b6, $80, $c1, $ff
+    ; Char $9a (154)
+    !byte $00, $00, $00, $00, $00, $00, $00, $00
     ; Char $9b (155)
     !byte $00, $00, $00, $00, $00, $00, $00, $00
     ; Char $9c (156)
@@ -323,63 +323,63 @@ g_custom_charset:
     ; Char $9f (159)
     !byte $00, $00, $00, $00, $00, $00, $00, $00
     ; Char $a0 (160)
-    !byte $00, $00, $00, $00, $00, $00, $00, $00
-    ; Char $a1 (161)
     !byte $c1, $80, $9c, $a2, $aa, $a0, $d1, $ff
-    ; Char $a2 (162)
+    ; Char $a1 (161)
     !byte $ff, $83, $81, $ec, $ec, $81, $83, $ff
-    ; Char $a3 (163)
+    ; Char $a2 (162)
     !byte $ff, $80, $80, $b6, $b6, $80, $c9, $ff
-    ; Char $a4 (164)
+    ; Char $a3 (163)
     !byte $ff, $c1, $80, $be, $be, $9c, $dd, $ff
-    ; Char $a5 (165)
+    ; Char $a4 (164)
     !byte $ff, $80, $80, $be, $9c, $c1, $e3, $ff
-    ; Char $a6 (166)
+    ; Char $a5 (165)
     !byte $ff, $80, $80, $b6, $b6, $be, $be, $ff
-    ; Char $a7 (167)
+    ; Char $a6 (166)
     !byte $ff, $80, $80, $f6, $f6, $fe, $fe, $ff
-    ; Char $a8 (168)
+    ; Char $a7 (167)
     !byte $ff, $c1, $80, $be, $b6, $84, $c5, $ff
-    ; Char $a9 (169)
+    ; Char $a8 (168)
     !byte $ff, $80, $80, $f7, $f7, $80, $80, $ff
-    ; Char $aa (170)
+    ; Char $a9 (169)
     !byte $ff, $ff, $be, $80, $80, $be, $ff, $ff
-    ; Char $ab (171)
+    ; Char $aa (170)
     !byte $ff, $df, $9f, $be, $80, $c0, $fe, $ff
-    ; Char $ac (172)
+    ; Char $ab (171)
     !byte $ff, $80, $80, $e3, $c9, $9c, $be, $ff
-    ; Char $ad (173)
+    ; Char $ac (172)
     !byte $ff, $80, $80, $bf, $bf, $bf, $bf, $ff
-    ; Char $ae (174)
+    ; Char $ad (173)
     !byte $ff, $80, $80, $f9, $f3, $f9, $80, $80
-    ; Char $af (175)
+    ; Char $ae (174)
     !byte $ff, $80, $80, $f1, $e3, $80, $80, $ff
-    ; Char $b0 (176)
+    ; Char $af (175)
     !byte $ff, $c1, $80, $be, $be, $80, $c1, $ff
-    ; Char $b1 (177)
+    ; Char $b0 (176)
     !byte $ff, $80, $80, $f6, $f6, $f0, $f9, $ff
-    ; Char $b2 (178)
+    ; Char $b1 (177)
     !byte $c1, $80, $be, $ae, $9e, $c0, $a1, $ff
-    ; Char $b3 (179)
+    ; Char $b2 (178)
     !byte $ff, $80, $80, $e6, $c6, $90, $b9, $ff
-    ; Char $b4 (180)
+    ; Char $b3 (179)
     !byte $ff, $d9, $90, $b6, $b6, $84, $cd, $ff
-    ; Char $b5 (181)
+    ; Char $b4 (180)
     !byte $ff, $fe, $fe, $80, $80, $fe, $fe, $ff
-    ; Char $b6 (182)
+    ; Char $b5 (181)
     !byte $ff, $c0, $80, $bf, $bf, $80, $c0, $ff
-    ; Char $b7 (183)
+    ; Char $b6 (182)
     !byte $ff, $f0, $c0, $8f, $8f, $c0, $f0, $ff
-    ; Char $b8 (184)
+    ; Char $b7 (183)
     !byte $ff, $80, $80, $cf, $e7, $cf, $80, $80
-    ; Char $b9 (185)
+    ; Char $b8 (184)
     !byte $ff, $9c, $88, $e3, $e3, $88, $9c, $ff
-    ; Char $ba (186)
+    ; Char $b9 (185)
     !byte $ff, $f8, $f0, $87, $87, $f0, $f8, $ff
-    ; Char $bb (187)
+    ; Char $ba (186)
     !byte $ff, $9e, $8e, $a6, $b2, $b8, $bc, $ff
-    ; Char $bc (188)
+    ; Char $bb (187)
     !byte $ff, $81, $82, $e6, $ce, $82, $81, $ff
+    ; Char $bc (188)
+    !byte $00, $00, $00, $00, $00, $00, $00, $00
     ; Char $bd (189)
     !byte $00, $00, $00, $00, $00, $00, $00, $00
     ; Char $be (190)

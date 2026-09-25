@@ -498,40 +498,6 @@ enemies_spawn:
     adc #1
     sta g_enemy_speed, y
 +
-    ; Movement pattern setup
-    lda enemy_table_pattern_mode, x
-    cmp #PATTERN_MODE_HUNT_ONLY
-    beq @set_pat_tracking
-    cmp #PATTERN_MODE_HUNT_MIX
-    beq @set_pat_hunt_mix
-
-    ; PATTERN_MODE_SINE_MIX (Enemies 1..5): 50% straight, 50% wide sine
-    jsr starfield_rand
-    and #$01
-    beq @set_pat_straight
-    jmp @set_pat_sine
-
-@set_pat_hunt_mix:
-    ; Enemy 6: 50% wide sine, 50% unpredictable tracking
-    jsr starfield_rand
-    and #$01
-    beq @set_pat_sine
-    jmp @set_pat_tracking
-
-@set_pat_straight:
-    lda #PATTERN_STRAIGHT
-    beq +
-
-@set_pat_tracking:
-    lda #PATTERN_TRACKING
-    bne +
-
-@set_pat_sine:
-    jsr starfield_rand
-    and #$1f
-    sta g_enemy_phase, y
-    lda #PATTERN_SINE
-+   sta g_enemy_pattern, y
     rts
 
 ; ==============================================================================
@@ -673,176 +639,26 @@ enemies_update:
 
 @not_exploding:
     ; --------------------------------------------------------------------------
-    ; Horizontal Motion & Free-Roaming AI
-    ; Phase 1: Enter screen from right roughly one third in (X <= 235)
-    ; Phase 2: Free roaming across playfield (75 <= X <= 280) with unpredictable
-    ;          direction reversals and dynamic pattern switching.
+    ; Horizontal Motion: Move Left by speed
     ; --------------------------------------------------------------------------
-    lda g_enemy_roam_timer, x
-    beq @do_move_left
-
-    ; === Phase 2: Free Roaming ===
-    dec g_enemy_roam_timer, x
-    bne @check_dir
-
-    ; Roam decision timer fired: make unpredictable AI adjustments
-    jsr starfield_rand
-    and #$1f
-    clc
-    adc #25
-    sta g_enemy_roam_timer, x
-
-    ; 1. Randomly choose horizontal direction (50% left, 50% right)
-    jsr starfield_rand
-    and #$01
-    sta g_enemy_dir_x, x
-
-    ; 2. Dynamically switch vertical pattern ("can be a sine but not all the time")
-    ldy g_enemy_archetype, x
-    cpy #5
-    bcs @roam_pat_high
-
-    ; Enemies 1..5: 50% wide sine, 50% straight cruise
-    jsr starfield_rand
-    and #$01
-    sta g_enemy_pattern, x
-    jmp @roam_drift_y
-
-@roam_pat_high:
-    ; Enemies 6, 7, 8: 65% altitude tracking, 35% wide sine
-    jsr starfield_rand
-    and #$07
-    cmp #3
-    bcc +
-    lda #PATTERN_TRACKING
-    bne ++
-+   lda #PATTERN_SINE
-++  sta g_enemy_pattern, x
-
-@roam_drift_y:
-    ; Organically nudge baseline altitude by +-3 pixels
-    jsr starfield_rand
-    and #$07                    ; 0..7
-    sec
-    sbc #3                      ; -3..+4
-    clc
-    adc g_enemy_base_y, x
-    cmp #60
-    bcc +
-    cmp #216
-    bcs +
-    sta g_enemy_base_y, x
-+
-
-@check_dir:
-    lda g_enemy_dir_x, x
-    bne @roam_right
-
-@do_move_left:
-    ; Moving Left at current speed (Phase 1 entry or Phase 2 roam left)
     lda g_enemy_x_lo, x
     sec
     sbc g_enemy_speed, x
     sta g_enemy_x_lo, x
     bcs +
     dec g_enemy_x_hi, x
-+
+
++   ; Despawn check: if X_hi == 0 and X_lo < 16 (fully exited left visible border)
     lda g_enemy_x_hi, x
-    bne @apply_vert             ; If X >= 256, done with boundary checks
-
-    lda g_enemy_roam_timer, x
-    bne @check_roam_left_boundary
-
-    ; Phase 1 check: reached 1/3 screen (X <= 235)?
+    bne @check_shooting
     lda g_enemy_x_lo, x
-    cmp #235
-    bcs @apply_vert
-    ; Reached 1/3 into screen: Transition to Free Roaming!
-    jsr starfield_rand
-    and #$1f
-    clc
-    adc #25
-    sta g_enemy_roam_timer, x
-    jmp @apply_vert
+    cmp #16
+    bcs @check_shooting
 
-@check_roam_left_boundary:
-    lda g_enemy_x_lo, x
-    cmp #75
-    bcs @apply_vert
-    ; Reached left roam boundary: turn right!
-    lda #75
-    sta g_enemy_x_lo, x
-    lda #1
-    sta g_enemy_dir_x, x
-    jmp @apply_vert
-
-@roam_right:
-    ; Roam Moving Right at current speed
-    lda g_enemy_x_lo, x
-    clc
-    adc g_enemy_speed, x
-    sta g_enemy_x_lo, x
-    bcc +
-    inc g_enemy_x_hi, x
-+
-    ; Right roam limit check (X >= 280)
-    lda g_enemy_x_hi, x
-    beq @apply_vert             ; If X_hi == 0, X <= 255 < 280
-    lda g_enemy_x_lo, x
-    cmp #24                     ; 256 + 24 = 280
-    bcc @apply_vert
-    ; Reached right roam boundary: turn left!
-    lda #24
-    sta g_enemy_x_lo, x
+    ; Deactivate enemy slot
     lda #0
-    sta g_enemy_dir_x, x
-
-@apply_vert:
-    lda g_enemy_pattern, x
-    beq @check_shooting         ; 0 = Straight horizontal flight
-    cmp #PATTERN_SINE
-    beq @apply_sine             ; 1 = Wide sinusoidal wave oscillation
-
-    ; 2 = PATTERN_TRACKING: Unpredictable dynamic vertical tracking (Enemies 6, 7, 8)
-    jsr starfield_rand
-    and #$03                    ; Add natural jitter (75% movement rate)
-    beq @check_shooting
-
-    lda g_enemy_y, x
-    cmp g_player_y
-    beq @check_shooting
-    bcc @track_down
-
-    ; Enemy is below player: drift upwards
-    sec
-    sbc #1
-    bne @clamp_y
-
-@track_down:
-    ; Enemy is above player: drift downwards
-    clc
-    adc #1
-    bne @clamp_y
-
-@apply_sine:
-    ; Wide Sine wave: Y = base_y + sine[phase] clamped to 52..226
-    inc g_enemy_phase, x
-    lda g_enemy_phase, x
-    and #$1f
-    sta g_enemy_phase, x
-    tay
-    lda g_enemy_sine_table, y
-    clc
-    adc g_enemy_base_y, x
-
-@clamp_y:
-    cmp #52
-    bcs +
-    lda #52
-+   cmp #227
-    bcc +
-    lda #226
-+   sta g_enemy_y, x
+    sta g_enemy_active, x
+    jmp @next_enemy_upd
 
 @check_shooting:
     ; Check if within firing range: 60 <= X <= 300

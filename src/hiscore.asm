@@ -45,16 +45,16 @@ top10_initials:
 ; TOP 10 NAVE PILOTS     2A
 ; Reverse chars from custom charset:
 ; 108: Rev Space
-; 181: Rev 'T', 176: Rev 'O', 177: Rev 'P', 146: Rev '1', 145: Rev '0'
-; 175: Rev 'N', 162: Rev 'A', 183: Rev 'V', 166: Rev 'E'
-; 177: Rev 'P', 170: Rev 'I', 173: Rev 'L', 176: Rev 'O', 181: Rev 'T', 180: Rev 'S'
-; 147: Rev '2', 162: Rev 'A'
+; 180: Rev 'T', 175: Rev 'O', 176: Rev 'P', 145: Rev '1', 144: Rev '0'
+; 174: Rev 'N', 161: Rev 'A', 182: Rev 'V', 165: Rev 'E'
+; 176: Rev 'P', 169: Rev 'I', 172: Rev 'L', 175: Rev 'O', 180: Rev 'T', 179: Rev 'S'
+; 146: Rev '2', 161: Rev 'A'
 hiscore_header_text:
-    !byte 181, 176, 177, 108, 146, 145, 108
-    !byte 175, 162, 183, 166, 108
-    !byte 177, 170, 173, 176, 181, 180
+    !byte 180, 175, 176, 108, 145, 144, 108
+    !byte 174, 161, 182, 165, 108
+    !byte 176, 169, 172, 175, 180, 179
     !byte 108, 108, 108, 108, 108
-    !byte 147, 162
+    !byte 146, 161
 
 text_blocks_free:
     !text "64 BLOCKS FREE." ; 15 characters
