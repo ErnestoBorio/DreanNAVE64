@@ -51,40 +51,42 @@ collisions_check:
 
 @enemy_is_valid:
     ; 2. Vertical Range Check across all 5 shot types:
-    ; diff_y = missile_y + shot_h_add[phase] - enemy_y
-    ; Overlap if 0 <= diff_y < shot_v_threshold[phase]
+    ; diff_y = (enemy_y + 21) - missile_y
+    ; Overlap if 0 < diff_y < shot_v_threshold[phase]
     ldy g_player_phase
     dey                         ; 1..5 -> 0..4
-    lda g_missile_y
+    lda g_enemy_y, x
     clc
-    adc shot_h_add_table, y
+    adc #21
     sec
-    sbc g_enemy_y, x
-    bcc @skip_enemy             ; diff_y < 0 (missile above enemy)
+    sbc g_missile_y
+    bcc @skip_enemy             ; enemy_y + 21 < missile_y (enemy is above missile)
+    beq @skip_enemy
     cmp shot_v_threshold_table, y
-    bcs @skip_enemy             ; diff_y >= threshold (missile below enemy)
+    bcs @skip_enemy             ; diff_y >= threshold (enemy is below missile)
 
     ; 3. Horizontal Swept Check (PLAYER_SHOT_SPEED px/frame sweep + shot_w vs 24 px wide enemy):
-    ; diff_x = missile_x - enemy_x + shot_w[phase]
-    ; Overlap if 0 <= diff_x < shot_h_thresh[phase]
+    ; T = missile_x + shot_sweep_table[phase]
+    ; diff_x = T - enemy_x
+    ; Overlap if 0 < diff_x < shot_h_thresh_table[phase]
     lda g_missile_x + 0
+    clc
+    adc shot_sweep_table, y
+    sta s_coll_diff_lo
+    lda g_missile_x + 1
+    adc #0
+    sta s_coll_diff_hi
+
+    lda s_coll_diff_lo
     sec
     sbc g_enemy_x_lo, x
     sta s_coll_diff_lo
-    lda g_missile_x + 1
-    sbc g_enemy_x_hi, x
-    sta s_coll_diff_hi
-
-    ; Add shot_w
-    lda s_coll_diff_lo
-    clc
-    adc shot_w_table, y
-    sta s_coll_diff_lo
     lda s_coll_diff_hi
-    adc #0
+    sbc g_enemy_x_hi, x
     bne @skip_enemy             ; Out of horizontal range (diff < 0 or diff >= 256)
 
     lda s_coll_diff_lo
+    beq @skip_enemy
     cmp shot_h_thresh_table, y
     bcs @skip_enemy
 
@@ -186,8 +188,8 @@ collisions_check_player:
     bne @next_enemy_ship
 
     ; Vertical range check:
-    ; diff_y = enemy_y + 21 - player_y
-    ; Overlap if 0 <= diff_y < (player_h + 21)
+    ; diff_y = (enemy_y + 21) - player_y
+    ; Overlap if 0 < diff_y < (player_h + 21)
     ; Unscaled player: player_h = 21 -> threshold = 42
     ; Scaled player:   player_h = 42 -> threshold = 63
     lda g_enemy_y, x
@@ -196,6 +198,7 @@ collisions_check_player:
     sec
     sbc g_player_y
     bcc @next_enemy_ship
+    beq @next_enemy_ship
     sta s_coll_diff_lo
 
     ldy g_player_phase
@@ -215,25 +218,29 @@ collisions_check_player:
 
 @check_h_enemy:
     ; Horizontal range check:
-    ; diff_x = enemy_x - player_x
-    ; Overlap if 0 <= (diff_x + 24) < (player_w + 24)
+    ; T = enemy_x + 24
+    ; diff_x = T - player_x
+    ; Overlap if 0 < diff_x < (player_w + 24)
     ; Unscaled: player_w = 24 -> threshold = 48
     ; Scaled:   player_w = 48 -> threshold = 72
     lda g_enemy_x_lo, x
-    sec
-    sbc g_player_x + 0
-    sta s_coll_diff_lo
-    lda g_enemy_x_hi, x
-    sbc g_player_x + 1
-    sta s_coll_diff_hi
-
-    lda s_coll_diff_lo
     clc
     adc #24
     sta s_coll_diff_lo
-    lda s_coll_diff_hi
+    lda g_enemy_x_hi, x
     adc #0
-    bne @next_enemy_ship        ; Out of horizontal range
+    sta s_coll_diff_hi
+
+    lda s_coll_diff_lo
+    sec
+    sbc g_player_x + 0
+    sta s_coll_diff_lo
+    lda s_coll_diff_hi
+    sbc g_player_x + 1
+    bne @next_enemy_ship        ; Out of horizontal range (diff < 0 or diff >= 256)
+
+    lda s_coll_diff_lo
+    beq @next_enemy_ship
 
     ldy g_player_phase
     dey
@@ -265,8 +272,8 @@ collisions_check_player:
     beq @next_bullet
 
     ; Vertical range check (bullet height = 8 px):
-    ; diff_y = bullet_y + 8 - player_y
-    ; Overlap if 0 <= diff_y < (player_h + 8)
+    ; diff_y = (bullet_y + 8) - player_y
+    ; Overlap if 0 < diff_y < (player_h + 8)
     ; Unscaled: player_h = 21 -> threshold = 29
     ; Scaled:   player_h = 42 -> threshold = 50
     lda g_bullet_y, x
@@ -275,6 +282,7 @@ collisions_check_player:
     sec
     sbc g_player_y
     bcc @next_bullet
+    beq @next_bullet
     sta s_coll_diff_lo
 
     ldy g_player_phase
@@ -294,25 +302,29 @@ collisions_check_player:
 
 @check_h_bullet:
     ; Horizontal range check (bullet width = 8 px):
-    ; diff_x = bullet_x - player_x
-    ; Overlap if 0 <= (diff_x + 8) < (player_w + 8)
+    ; T = bullet_x + 8
+    ; diff_x = T - player_x
+    ; Overlap if 0 < diff_x < (player_w + 8)
     ; Unscaled: player_w = 24 -> threshold = 32
     ; Scaled:   player_w = 48 -> threshold = 56
     lda g_bullet_x_lo, x
-    sec
-    sbc g_player_x + 0
-    sta s_coll_diff_lo
-    lda g_bullet_x_hi, x
-    sbc g_player_x + 1
-    sta s_coll_diff_hi
-
-    lda s_coll_diff_lo
     clc
     adc #8
     sta s_coll_diff_lo
-    lda s_coll_diff_hi
+    lda g_bullet_x_hi, x
     adc #0
+    sta s_coll_diff_hi
+
+    lda s_coll_diff_lo
+    sec
+    sbc g_player_x + 0
+    sta s_coll_diff_lo
+    lda s_coll_diff_hi
+    sbc g_player_x + 1
     bne @next_bullet
+
+    lda s_coll_diff_lo
+    beq @next_bullet
 
     ldy g_player_phase
     dey
@@ -391,18 +403,28 @@ collisions_check_player:
 ; ------------------------------------------------------------------------------
 ; Player Shot Collision Geometry Tables (Phases 1..5)
 ; ------------------------------------------------------------------------------
-shot_h_add_table:
-    !byte  4, 13, 20, 26, 40
-
+; Vertical thresholds: 21 (enemy height) + visual laser height
+; Phase 1: Single laser (~5 px)   -> 26
+; Phase 2: Dual laser (~14 px)    -> 35
+; Phase 3: Triple laser (~21 px)  -> 42
+; Phase 4: Scaled Dual (42 px)    -> 63
+; Phase 5: Scaled Triple (42 px)  -> 63
 shot_v_threshold_table:
-    !byte 25, 34, 41, 47, 61
+    !byte 26, 35, 42, 63, 63
 
-shot_w_table:
-    !byte 24, 24, 24, 48, 48
+; Horizontal swept advance lead: shot_w + PLAYER_SHOT_SPEED
+; Unscaled (Phases 1..3): 24 + 45 = 69
+; Scaled   (Phases 4..5): 48 + 45 = 93
+shot_sweep_table:
+    !byte (24 + PLAYER_SHOT_SPEED), (24 + PLAYER_SHOT_SPEED), (24 + PLAYER_SHOT_SPEED)
+    !byte (48 + PLAYER_SHOT_SPEED), (48 + PLAYER_SHOT_SPEED)
 
+; Horizontal overlap threshold: shot_w + PLAYER_SHOT_SPEED + 24 (enemy width)
+; Unscaled (Phases 1..3): 69 + 24 = 93
+; Scaled   (Phases 4..5): 93 + 24 = 117
 shot_h_thresh_table:
-    !byte (24 + 24 + PLAYER_SHOT_SPEED), (24 + 24 + PLAYER_SHOT_SPEED), (24 + 24 + PLAYER_SHOT_SPEED)
-    !byte (48 + 24 + PLAYER_SHOT_SPEED), (48 + 24 + PLAYER_SHOT_SPEED)
+    !byte (24 + PLAYER_SHOT_SPEED + 24), (24 + PLAYER_SHOT_SPEED + 24), (24 + PLAYER_SHOT_SPEED + 24)
+    !byte (48 + PLAYER_SHOT_SPEED + 24), (48 + PLAYER_SHOT_SPEED + 24)
 
 ; ------------------------------------------------------------------------------
 ; Enemy Point Values Table (Archetypes 1..8, index 0 is dummy)

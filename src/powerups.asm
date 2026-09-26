@@ -494,21 +494,23 @@ powerups_check_collision:
 @do_check:
     ; --------------------------------------------------------------------------
     ; 1. Vertical Range Check:
-    ; diff_y = (player_y + 16) - powerup_y[row]
-    ; Overlap if: 0 <= diff_y < (player_h + 16)
-    ; Unscaled player: player_h = 21 -> threshold = 37
-    ; Scaled player:   player_h = 42 -> threshold = 58
+    ; diff_y = (powerup_y[row] + 16) - player_y
+    ; Overlap if: 0 < diff_y < (player_h + 16)
+    ; Unscaled player: player_h = 21 -> threshold = 37 (16 + 21)
+    ; Scaled player:   player_h = 42 -> threshold = 58 (16 + 42)
     ; --------------------------------------------------------------------------
     ldy g_powerup_row
-    lda g_player_y
+    lda powerup_y_coords, y
     clc
     adc #16
     sec
-    sbc powerup_y_coords, y     ; diff_y in Accumulator
+    sbc g_player_y             ; diff_y in Accumulator
+    bcc @exit_no_coll          ; diff_y < 0 (powerup entirely above player)
+    beq @exit_no_coll
 
     ldx g_player_phase
     dex                         ; 1..5 -> 0..4
-    ldy player_phase_scaled, x
+    lda player_phase_scaled, x
     bne @scaled_v_test
 
     cmp #37                     ; 21 + 16 = 37
@@ -522,48 +524,42 @@ powerups_check_collision:
 @check_horizontal:
     ; --------------------------------------------------------------------------
     ; 2. Horizontal Range Check:
-    ; diff_x = player_x - powerup_x[col]
-    ; Overlap if: 0 <= (diff_x + player_w) < (player_w + 16)
-    ; Unscaled player: player_w = 24 -> threshold = 40 (24 + 16)
-    ; Scaled player:   player_w = 48 -> threshold = 64 (48 + 16)
+    ; diff_x = (powerup_x[col] + 16) - player_x
+    ; Overlap if: 0 < diff_x < (player_w + 16)
+    ; Unscaled player: player_w = 24 -> threshold = 40 (16 + 24)
+    ; Scaled player:   player_w = 48 -> threshold = 64 (16 + 48)
     ; --------------------------------------------------------------------------
     ldy g_powerup_col
-    lda g_player_x + 0
-    sec
-    sbc powerup_x_coords_lo, y
+    lda powerup_x_coords_lo, y
+    clc
+    adc #16
     sta s_powerup_diff_lo
-    lda g_player_x + 1
-    sbc powerup_x_coords_hi, y
+    lda powerup_x_coords_hi, y
+    adc #0
     sta s_powerup_diff_hi
 
-    ; Check if scaled
+    lda s_powerup_diff_lo
+    sec
+    sbc g_player_x + 0
+    sta s_powerup_diff_lo
+    lda s_powerup_diff_hi
+    sbc g_player_x + 1
+    bne @exit_no_coll           ; diff_x < 0 or diff_x >= 256
+
+    lda s_powerup_diff_lo
+    beq @exit_no_coll
+
     ldx g_player_phase
     dex                         ; 0..4
     lda player_phase_scaled, x
     bne @scaled_h_test
 
-    ; Unscaled: add player_w (24)
-    lda s_powerup_diff_lo
-    clc
-    adc #24
-    sta s_powerup_diff_lo
-    lda s_powerup_diff_hi
-    adc #0
-    bne @exit_no_coll           ; Out of horizontal range
     lda s_powerup_diff_lo
     cmp #40                     ; 24 + 16 = 40
     bcs @exit_no_coll
     bcc @powerup_collected
 
 @scaled_h_test:
-    ; Scaled: add player_w (48)
-    lda s_powerup_diff_lo
-    clc
-    adc #48
-    sta s_powerup_diff_lo
-    lda s_powerup_diff_hi
-    adc #0
-    bne @exit_no_coll           ; Out of horizontal range
     lda s_powerup_diff_lo
     cmp #64                     ; 48 + 16 = 64
     bcs @exit_no_coll
