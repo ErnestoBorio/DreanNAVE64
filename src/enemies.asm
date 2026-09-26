@@ -113,6 +113,8 @@ s_spawn_y_temp:     !byte 0
 s_shot_slot_temp:   !byte 0
 s_enemy_slot_temp:  !byte 0
 s_patrol_limit:     !byte 0
+s_curve_dy_temp:    !byte 0
+s_curve_dx_temp:    !byte 0
 
 ; ------------------------------------------------------------------------------
 ; Enemy Archetype Data Tables (8 Archetypes: Index 1 to 8, Index 0 is dummy)
@@ -235,6 +237,15 @@ scorp_dy_tab:
 ; ------------------------------------------------------------------------------
 death_vel_tab:
     !byte -2, -1,  1,  2
+
+; ------------------------------------------------------------------------------
+; Soft Curved Swoop Delta Tables for Side Entry (24-frame curve: 6 segments x 4 frames)
+; Index = countdown timer >> 2 (values 5..0)
+; ------------------------------------------------------------------------------
+curve_dy_tab:
+    !byte 0, 1, 2, 2, 3, 3      ; dy: 3 at entry -> 0 at exit (horizontal -> vertical)
+curve_dx_tab:
+    !byte 3, 3, 3, 2, 1, 0      ; dx: 0 at entry -> 3 at exit (horizontal -> vertical)
 
 ; ==============================================================================
 ; Subroutine: enemies_clear_all
@@ -506,47 +517,65 @@ enemies_spawn:
     beq @spawn_from_right       ; 1 -> Right side spawn (25%)
 
 @spawn_from_left:
-    ; Spawn on Left side (Y = 48, entering rightwards into screen)
+    ; Spawn on Left side (Y = 48, entering along soft curve into screen)
     lda #1
     sta g_enemy_entry_dir, y
     lda #48
     sta g_enemy_y, y
-    ; Target depth into playfield: Y = 75..135
-    jsr starfield_rand
-    and #$3f                    ; 0..63
-    clc
-    adc #75
-    sta g_enemy_base_y, y
+    lda #23
+    sta g_enemy_roam_timer, y   ; 24-frame soft curve countdown (23..0)
     ; Random altitude/height along vertical screen: X = 85..260
     jsr enemies_get_random_spawn_x
     sta g_enemy_x_lo, y
     txa
     sta g_enemy_x_hi, y
+    ; Altitude-based curve direction: if X >= 160 swoop down, else swoop up
+    lda g_enemy_x_hi, y
+    bne @swoop_down_l
+    lda g_enemy_x_lo, y
+    cmp #160
+    bcs @swoop_down_l
+    lda #1
+    sta g_enemy_dir_x, y        ; Swoop upwards
+    jmp @finish_spawn_pos
+@swoop_down_l:
+    lda #0
+    sta g_enemy_dir_x, y        ; Swoop downwards
     jmp @finish_spawn_pos
 
 @spawn_from_right:
-    ; Spawn on Right side (Y = 224, entering leftwards into screen)
+    ; Spawn on Right side (Y = 224, entering along soft curve into screen)
     lda #2
     sta g_enemy_entry_dir, y
     lda #224
     sta g_enemy_y, y
-    ; Target depth into playfield: Y = 135..195
-    jsr starfield_rand
-    and #$3f                    ; 0..63
-    clc
-    adc #135
-    sta g_enemy_base_y, y
+    lda #23
+    sta g_enemy_roam_timer, y   ; 24-frame soft curve countdown (23..0)
     ; Random altitude/height along vertical screen: X = 85..260
     jsr enemies_get_random_spawn_x
     sta g_enemy_x_lo, y
     txa
     sta g_enemy_x_hi, y
+    ; Altitude-based curve direction: if X >= 160 swoop down, else swoop up
+    lda g_enemy_x_hi, y
+    bne @swoop_down_r
+    lda g_enemy_x_lo, y
+    cmp #160
+    bcs @swoop_down_r
+    lda #1
+    sta g_enemy_dir_x, y        ; Swoop upwards
+    jmp @finish_spawn_pos
+@swoop_down_r:
+    lda #0
+    sta g_enemy_dir_x, y        ; Swoop downwards
     jmp @finish_spawn_pos
 
 @spawn_from_top:
     ; Spawn from Top (X = 344, off-screen top in TATE)
     lda #0
     sta g_enemy_entry_dir, y
+    sta g_enemy_dir_x, y        ; Move down
+    sta g_enemy_roam_timer, y   ; 0 = Normal straight descent
     lda #88
     sta g_enemy_x_lo, y
     lda #1
@@ -557,12 +586,10 @@ enemies_spawn:
     sta g_enemy_base_y, y
 
 @finish_spawn_pos:
-    ; Direction setup
+    ; State cleanup
     lda #0
-    sta g_enemy_dir_x, y        ; Move left / default
     sta g_enemy_exploding, y
     sta g_enemy_flash, y
-    sta g_enemy_roam_timer, y   ; 0 = Entering screen state
 
     ; Select archetype (via one-shot debug spawn or progression timeline)
     lda g_first_spawn_force
@@ -959,48 +986,79 @@ enemies_update:
 +   jmp @next_enemy_upd
 
 @move_side_entry:
+    ; 1. Look up curve velocity deltas from countdown timer (23..0)
+    lda g_enemy_roam_timer, x
+    lsr
+    lsr                         ; Timer / 4 -> Segment 5..0
+    tay
+    lda curve_dy_tab, y
+    sta s_curve_dy_temp
+    lda curve_dx_tab, y
+    sta s_curve_dx_temp
+
+    ; 2. Apply horizontal movement (Y)
     lda g_enemy_entry_dir, x
     cmp #1
-    beq @side_entry_from_left
+    bne @side_curve_from_right
 
-@side_entry_from_right:
-    ; Move left into screen (decreasing Y)
-    lda g_enemy_y, x
-    sec
-    sbc g_enemy_speed, x
-    sta g_enemy_y, x
-    ; Check if reached target depth Y (g_enemy_base_y, x)
-    cmp g_enemy_base_y, x
-    beq @side_entry_done
-    bcc @side_entry_done
-    jmp @side_entry_check_shoot
-
-@side_entry_from_left:
-    ; Move right into screen (increasing Y)
+@side_curve_from_left:
+    ; Left entry: Y increases into screen
     lda g_enemy_y, x
     clc
-    adc g_enemy_speed, x
+    adc s_curve_dy_temp
     sta g_enemy_y, x
-    ; Check if reached target depth Y (g_enemy_base_y, x)
-    cmp g_enemy_base_y, x
-    bcs @side_entry_done
-    jmp @side_entry_check_shoot
+    jmp @side_curve_apply_x
 
-@side_entry_done:
-    ; Reached target depth! Side entry complete!
+@side_curve_from_right:
+    ; Right entry: Y decreases into screen
+    lda g_enemy_y, x
+    sec
+    sbc s_curve_dy_temp
+    sta g_enemy_y, x
+
+@side_curve_apply_x:
+    ; 3. Apply vertical movement (X)
+    lda g_enemy_dir_x, x
+    bne @side_curve_up
+
+@side_curve_down:
+    ; Move down (decreasing X)
+    lda g_enemy_x_lo, x
+    sec
+    sbc s_curve_dx_temp
+    sta g_enemy_x_lo, x
+    bcs +
+    dec g_enemy_x_hi, x
++   jmp @side_curve_advance
+
+@side_curve_up:
+    ; Move up (increasing X)
+    lda g_enemy_x_lo, x
+    clc
+    adc s_curve_dx_temp
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++
+@side_curve_advance:
+    ; 4. Advance countdown timer
+    dec g_enemy_roam_timer, x
+    bne @side_curve_shoot
+
+    ; Timer expired: soft curve is complete!
+    ; Clear entry flag to transition into archetype flight:
     lda #0
     sta g_enemy_entry_dir, x
-    sta g_enemy_dir_x, x
-    ; If Archetype 4 (Scorpion), sync circle center X_c to current X
+    ; For Archetype 4 (Scorpion), sync circle center X_c to current X
     lda g_enemy_archetype, x
     cmp #4
-    bne @side_entry_check_shoot
+    bne @side_curve_shoot
     lda g_enemy_x_lo, x
     sta g_enemy_pattern, x
     lda g_enemy_x_hi, x
     sta g_enemy_dir_x, x
 
-@side_entry_check_shoot:
+@side_curve_shoot:
     ; Check if within screen boundaries (50 <= Y <= 222) to allow shooting
     lda g_enemy_y, x
     cmp #50
@@ -1156,37 +1214,51 @@ enemies_update:
     ; "Enemy 3 will spawn in either side, go straight down, sweep throught the bottom and go back up on the other side."
     ; "namely enemy 3 should do its round and repeat it indefinitely"
     lda g_enemy_phase, x
-    beq @e3_phase0
-    cmp #1
-    beq @e3_phase1
-    cmp #2
-    beq @e3_phase2
-    jmp @e3_phase3
+    bne +
+    jmp @e3_phase0
++   cmp #1
+    bne +
+    jmp @e3_phase1
++   cmp #2
+    bne +
+    jmp @e3_phase2
++   jmp @e3_phase3
 
 @e3_phase0:
-    ; Phase 0: Go straight down (decreasing X)
+    ; Phase 0: Go down (decreasing X)
     lda g_enemy_x_lo, x
     sec
     sbc g_enemy_speed, x
     sta g_enemy_x_lo, x
     bcs +
     dec g_enemy_x_hi, x
-+   ; Check if reached bottom sweep altitude (X <= 70)
++   ; Soft curve into bottom sweep when approaching bottom (X <= 90)
     lda g_enemy_x_hi, x
-    bne +
+    bne @e3_p0_done             ; X >= 256
+    lda g_enemy_x_lo, x
+    cmp #90
+    bcs @e3_p0_done             ; X > 90 -> purely vertical
+    ; In curve zone: also advance Y towards destination flank!
+    lda g_enemy_dir_x, x
+    bne @e3_p0_curve_left
+@e3_p0_curve_right:
+    inc g_enemy_y, x
+    jmp @e3_p0_check_bottom
+@e3_p0_curve_left:
+    dec g_enemy_y, x
+@e3_p0_check_bottom:
     lda g_enemy_x_lo, x
     cmp #70
-    bcs +
+    bcs @e3_p0_done
     lda #70
     sta g_enemy_x_lo, x
     lda #1
-    sta g_enemy_phase, x        ; Enter Phase 1 (sweep bottom)
-+   jmp @e3_shoot
+    sta g_enemy_phase, x        ; Bottom reached: enter Phase 1 (horizontal sweep)
+@e3_p0_done:
+    jmp @check_shooting
 
 @e3_phase1:
-    ; Phase 1: Sweep through the bottom (moving Y)
-    ; Check start side: g_enemy_dir_x = 0 (Left -> sweeping Right)
-    ;                   g_enemy_dir_x = 1 (Right -> sweeping Left)
+    ; Phase 1: Sweep through bottom
     lda g_enemy_dir_x, x
     bne @e3_p1_sweep_left
 
@@ -1194,27 +1266,39 @@ enemies_update:
     lda g_enemy_y, x
     clc
     adc g_enemy_speed, x
+    sta g_enemy_y, x
+    ; Soft curve upwards when approaching right flank (Y >= 196)
+    cmp #196
+    bcc @e3_p1_done
+    inc g_enemy_x_lo, x         ; Curve up!
+    lda g_enemy_y, x
     cmp #216
-    bcc +
+    bcc @e3_p1_done
     lda #216
+    sta g_enemy_y, x
     lda #2
-    sta g_enemy_phase, x        ; Reached other side: Enter Phase 2 (go up)
-    lda #216
-+   sta g_enemy_y, x
-    jmp @e3_shoot
+    sta g_enemy_phase, x        ; Reached right flank: enter Phase 2 (go up)
+    jmp @e3_p1_done
 
 @e3_p1_sweep_left:
     lda g_enemy_y, x
     sec
     sbc g_enemy_speed, x
+    sta g_enemy_y, x
+    ; Soft curve upwards when approaching left flank (Y <= 76)
+    cmp #77
+    bcs @e3_p1_done
+    inc g_enemy_x_lo, x         ; Curve up!
+    lda g_enemy_y, x
     cmp #56
-    bcs +
+    bcs @e3_p1_done
     lda #56
+    sta g_enemy_y, x
     lda #2
-    sta g_enemy_phase, x        ; Reached other side: Enter Phase 2 (go up)
-    lda #56
-+   sta g_enemy_y, x
-    jmp @e3_shoot
+    sta g_enemy_phase, x        ; Reached left flank: enter Phase 2 (go up)
+
+@e3_p1_done:
+    jmp @check_shooting
 
 @e3_phase2:
     ; Phase 2: Go back up on the other side (increasing X)
@@ -1224,22 +1308,34 @@ enemies_update:
     sta g_enemy_x_lo, x
     bcc +
     inc g_enemy_x_hi, x
-+   ; Check if reached top turnaround point (X >= 280: X_hi >= 1 and X_lo >= 24)
++   ; Soft curve into top sweep when approaching top (X >= 260: X_hi=1 and X_lo >= 4)
     lda g_enemy_x_hi, x
-    beq @e3_shoot               ; X < 256
+    beq @e3_p2_done             ; X < 256
+    lda g_enemy_x_lo, x
+    cmp #4
+    bcc @e3_p2_done             ; X < 260
+    ; In curve zone: also advance Y towards return flank!
+    lda g_enemy_dir_x, x
+    bne @e3_p2_curve_right
+@e3_p2_curve_left:
+    dec g_enemy_y, x
+    jmp @e3_p2_check_top
+@e3_p2_curve_right:
+    inc g_enemy_y, x
+@e3_p2_check_top:
     lda g_enemy_x_lo, x
     cmp #24                     ; 256 + 24 = 280
-    bcc @e3_shoot
+    bcc @e3_p2_done
     lda #24
     sta g_enemy_x_lo, x
     lda #3
-    sta g_enemy_phase, x        ; Reached top: Enter Phase 3 (sweep top)
-    jmp @e3_shoot
+    sta g_enemy_phase, x        ; Top reached: enter Phase 3 (sweep top)
+
+@e3_p2_done:
+    jmp @check_shooting
 
 @e3_phase3:
     ; Phase 3: Sweep through the top back to starting flank
-    ; If started Left (g_enemy_dir_x = 0), currently at Right (Y=216) -> sweep Left (decreasing Y)
-    ; If started Right (g_enemy_dir_x = 1), currently at Left (Y=56) -> sweep Right (increasing Y)
     lda g_enemy_dir_x, x
     bne @e3_p3_sweep_right
 
@@ -1247,26 +1343,38 @@ enemies_update:
     lda g_enemy_y, x
     sec
     sbc g_enemy_speed, x
+    sta g_enemy_y, x
+    ; Soft curve downwards when approaching starting flank (Y <= 76)
+    cmp #77
+    bcs @e3_p3_done
+    dec g_enemy_x_lo, x         ; Curve down!
+    lda g_enemy_y, x
     cmp #56
-    bcs +
-    lda #0
-    sta g_enemy_phase, x        ; Reached starting flank: Enter Phase 0 (dive down)!
+    bcs @e3_p3_done
     lda #56
-+   sta g_enemy_y, x
-    jmp @e3_shoot
+    sta g_enemy_y, x
+    lda #0
+    sta g_enemy_phase, x        ; Reached starting flank: enter Phase 0 (dive down)!
+    jmp @e3_p3_done
 
 @e3_p3_sweep_right:
     lda g_enemy_y, x
     clc
     adc g_enemy_speed, x
+    sta g_enemy_y, x
+    ; Soft curve downwards when approaching starting flank (Y >= 196)
+    cmp #196
+    bcc @e3_p3_done
+    dec g_enemy_x_lo, x         ; Curve down!
+    lda g_enemy_y, x
     cmp #216
-    bcc +
-    lda #0
-    sta g_enemy_phase, x        ; Reached starting flank: Enter Phase 0 (dive down)!
+    bcc @e3_p3_done
     lda #216
-+   sta g_enemy_y, x
+    sta g_enemy_y, x
+    lda #0
+    sta g_enemy_phase, x        ; Reached starting flank: enter Phase 0 (dive down)!
 
-@e3_shoot:
+@e3_p3_done:
     jmp @check_shooting
 
 ; ==============================================================================
