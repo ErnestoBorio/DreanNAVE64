@@ -21,8 +21,8 @@ POWERUP_TYPE_B      = 1         ; Smart Bomb ('B')
 POWERUP_TYPE_E      = 2         ; Energy Recovery ('E')
 NUM_POWERUP_TYPES   = 3
 
-POWERUP_INITIAL_DELAY   = 200   ; 200 frames = 4.0 seconds at 50 Hz PAL (was 12s)
-POWERUP_SPAWN_INTERVAL  = 400   ; 400 frames = 8.0 seconds at 50 Hz PAL (was 18s)
+POWERUP_INITIAL_DELAY   = 150   ; 150 frames = 3.0 seconds at 50 Hz PAL
+POWERUP_SPAWN_INTERVAL  = 350   ; 350 frames = 7.0 seconds at 50 Hz PAL
 
 ; 2x2 Custom Charset Tiles for P, B, and E
 powerup_tile_tl:

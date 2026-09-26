@@ -352,8 +352,8 @@ collisions_check_player:
     lda #6
     sta g_debug_border_timer
 
-    ; 2. 50-frame invulnerability window (1.0 second at 50 Hz PAL)
-    lda #50
+    ; 2. 70-frame invulnerability window (1.4 seconds at 50 Hz PAL)
+    lda #70
     sta g_player_invuln_timer
 
     ; 3. Phase demotion & HP damage

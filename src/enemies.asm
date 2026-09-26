@@ -149,10 +149,10 @@ enemy_table_speed:
     !byte 0, 1, 2, 2, 3, 2, 2, 2, 1
 
 enemy_table_reload:
-    !byte 0, 60, 50, 40, 35, 30, 28, 25, 20
+    !byte 0, 85, 75, 65, 55, 50, 45, 42, 38
 
 enemy_table_shot_speed:
-    !byte 0, 3, 4, 4, 4, 4, 5, 5, 4
+    !byte 0, 3, 3, 3, 3, 3, 4, 4, 4
 
 enemy_table_shot_type:
     !byte 0
@@ -166,11 +166,12 @@ enemy_table_shot_type:
     !byte SPRITE_PTR_ENEMY_SHOT_2   ; Enemy 8 (Death - Spread)
 
 ; Unlock thresholds in total elapsed seconds (16-bit)
+; Progresses smoothly every ~15..25s; Death (Enemy 8) unlocks at 140s (~2.3 min)
 enemy_table_unlock_sec_lo:
-    !byte <0, <25, <60, <110, <170, <240, <320, <400
+    !byte <0, <15, <30, <48, <68, <90, <115, <140
 
 enemy_table_unlock_sec_hi:
-    !byte >0, >25, >60, >110, >170, >240, >320, >400
+    !byte >0, >15, >30, >48, >68, >90, >115, >140
 
 ; ------------------------------------------------------------------------------
 ; 32-Entry Weighted Tier Spawn Tables (8 Tiers x 32 bytes = 256 bytes total)
@@ -179,37 +180,37 @@ tier_offsets:
     !byte 0, 32, 64, 96, 128, 160, 192, 224
 
 tier_spawn_table:
-    ; Tier 0 (0..29s): 100% Enemy 1 (32 entries)
+    ; Tier 0 (0..14s): 100% Enemy 1 (32 entries)
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 
-    ; Tier 1 (30..59s): 69% E1 (22), 31% E2 (10)
+    ; Tier 1 (15..29s): 69% E1 (22), 31% E2 (10)
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     !byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
 
-    ; Tier 2 (60..99s): 50% E1 (16), 31% E2 (10), 19% E3 (6)
+    ; Tier 2 (30..47s): 50% E1 (16), 31% E2 (10), 19% E3 (6)
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     !byte 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3
 
-    ; Tier 3 (100..149s): E1..E4 equal distribution (8 each = 25% each)
+    ; Tier 3 (48..67s): E1..E4 equal distribution (8 each = 25% each)
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2
     !byte 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4
 
-    ; Tier 4 (150..209s): E1: 6, E2: 6, E3: 6, E4: 7, E5: 7
+    ; Tier 4 (68..89s): E1: 6, E2: 6, E3: 6, E4: 7, E5: 7
     !byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3
     !byte 3, 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5
 
-    ; Tier 5 (210..279s): E1: 4, E2: 4, E3: 5, E4: 6, E5: 7, E6: 6
+    ; Tier 5 (90..114s): E1: 4, E2: 4, E3: 5, E4: 6, E5: 7, E6: 6
     !byte 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4
     !byte 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6
 
-    ; Tier 6 (280..359s): E1: 3, E2: 3, E3: 4, E4: 5, E5: 6, E6: 6, E7: 5
+    ; Tier 6 (115..139s): E1: 3, E2: 3, E3: 4, E4: 5, E5: 6, E6: 6, E7: 5
     !byte 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5
     !byte 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7
 
-    ; Tier 7 (360s+): E1: 2, E2: 2, E3: 3, E4: 5, E5: 5, E6: 5, E7: 7, E8: 3
-    !byte 1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5
-    !byte 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8
+    ; Tier 7 (140s+): E1: 2, E2: 2, E3: 2, E4: 3, E5: 4, E6: 5, E7: 6, E8: 8 (Death 25% of spawns)
+    !byte 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6
+    !byte 6, 6, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8
 
 ; ------------------------------------------------------------------------------
 ; 32-Entry Signed Sine Wave Lookup Table (Amplitude ±25 pixels, 1 full cycle)
@@ -420,51 +421,31 @@ enemies_spawn:
     bne -
 
     ; Max allowed active enemies (driven by elapsed game timeline):
+    ; Lower density (max 5 simultaneous enemies) keeps the screen readable
     lda g_game_time_total_sec + 1
-    bne @density_high           ; T >= 256s (4.2m+)
+    bne @density_late           ; T >= 256s -> max 5
 
     lda g_game_time_total_sec + 0
-    cmp #15
+    cmp #30
     bcs +
-    ldy #2                      ; 0..14s: max 2
+    ldy #2                      ; 0..29s: max 2
     jmp @check_density_limit
 
-+   cmp #40
++   cmp #60
     bcs +
-    ldy #3                      ; 15..39s: max 3
+    ldy #3                      ; 30..59s: max 3
     jmp @check_density_limit
 
-+   cmp #80
++   cmp #100
     bcs +
-    ldy #4                      ; 40..79s (~1.3m): max 4
+    ldy #4                      ; 60..99s: max 4
     jmp @check_density_limit
 
-+   cmp #130
-    bcs +
-    ldy #5                      ; 80..129s (~2.1m): max 5
++   ldy #5                      ; 100s+: max 5
     jmp @check_density_limit
 
-+   cmp #190
-    bcs +
-    ldy #6                      ; 130..189s (~3.1m): max 6
-    jmp @check_density_limit
-
-+   ldy #8                      ; 190..255s (~3.1..4.2m): max 8
-    jmp @check_density_limit
-
-@density_high:
-    lda g_game_time_total_sec + 1
-    cmp #>340
-    bne +
-    lda g_game_time_total_sec + 0
-    cmp #<340
-+   bcs @density_max            ; T >= 340s (~5.6m) -> max 12
-
-    ldy #10                     ; 256..339s: max 10
-    jmp @check_density_limit
-
-@density_max:
-    ldy #MAX_ENEMIES            ; 340s+ (5.6m+): max 12
+@density_late:
+    ldy #5                      ; Deep game cap: max 5 enemies
 
 @check_density_limit:
     cpy s_active_count
@@ -759,59 +740,50 @@ enemies_update:
 
     ; Reset timer based on elapsed time:
     lda g_game_time_total_sec + 1
-    bne @mid_late_spawn         ; T >= 256s (4.2m+)
+    bne @late_spawn             ; T >= 256s
 
     lda g_game_time_total_sec + 0
-    cmp #40
-    bcs @after_40s
+    cmp #45
+    bcs @after_45s
 
-    ; Phase 1 (0..39s): 35..50 frames (~0.7..1.0s per spawn)
+    ; Phase 1 (0..44s): 50..65 frames (~1.0..1.3s per spawn)
     jsr starfield_rand
     and #$0f
+    clc
+    adc #50
+    sta g_wave_spawn_timer
+    jmp @update_entities
+
+@after_45s:
+    cmp #90
+    bcs @after_90s
+
+    ; Phase 2 (45..89s): 40..55 frames (~0.8..1.1s per spawn)
+    jsr starfield_rand
+    and #$0f
+    clc
+    adc #40
+    sta g_wave_spawn_timer
+    jmp @update_entities
+
+@after_90s:
+    cmp #150
+    bcs @late_spawn
+
+    ; Phase 3 (90..149s): 35..48 frames (~0.7..1.0s per spawn)
+    jsr starfield_rand
+    and #$0d
     clc
     adc #35
     sta g_wave_spawn_timer
     jmp @update_entities
 
-@after_40s:
-    cmp #90
-    bcs @after_90s
-
-    ; Phase 2 (40..89s, ~1.5 min): 28..42 frames (~0.55..0.85s per spawn)
+@late_spawn:
+    ; Phase 4 (150s+): 30..42 frames (~0.6..0.85s per spawn)
     jsr starfield_rand
-    and #$0f
+    and #$0c
     clc
-    adc #28
-    sta g_wave_spawn_timer
-    jmp @update_entities
-
-@after_90s:
-    cmp #180
-    bcs @after_180s
-
-    ; Phase 3 (90..179s, 1.5..3 min): 22..35 frames (~0.45..0.70s per spawn)
-    jsr starfield_rand
-    and #$0f
-    clc
-    adc #22
-    sta g_wave_spawn_timer
-    jmp @update_entities
-
-@after_180s:
-    ; Phase 4 (180..255s, 3..4.2 min): 18..28 frames (~0.35..0.55s per spawn)
-    jsr starfield_rand
-    and #$0b
-    clc
-    adc #18
-    sta g_wave_spawn_timer
-    jmp @update_entities
-
-@mid_late_spawn:
-    ; Phase 5 (256s+, 4.2 min+): 14..22 frames (~0.28..0.44s per spawn)
-    jsr starfield_rand
-    and #$07
-    clc
-    adc #14
+    adc #30
     sta g_wave_spawn_timer
 
 @update_entities:
@@ -1825,19 +1797,19 @@ enemies_update:
     adc enemy_table_reload, y
     sta s_reload_temp
 
-    ; Post-Enemy 8 cadence acceleration (T >= 360s)
+    ; Post-Death cadence acceleration (T >= 180s)
     lda g_game_time_total_sec + 1
-    cmp #>360
+    cmp #>180
     bne ++
     lda g_game_time_total_sec + 0
-    cmp #<360
+    cmp #<180
 ++  bcc @rearm_done
     lda s_reload_temp
     sec
-    sbc #12
-    cmp #15
+    sbc #6
+    cmp #28
     bcs +++
-    lda #15
+    lda #28
 +++ sta s_reload_temp
 
 @rearm_done:
