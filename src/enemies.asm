@@ -166,12 +166,12 @@ enemy_table_shot_type:
     !byte SPRITE_PTR_ENEMY_SHOT_2   ; Enemy 8 (Death - Spread)
 
 ; Unlock thresholds in total elapsed seconds (16-bit)
-; Progresses smoothly every ~15..25s; Death (Enemy 8) unlocks at 140s (~2.3 min)
+; Spaced out late-game progression: Spider @ 155s (2:35), Eye @ 215s (3:35), Death @ 285s (4:45)
 enemy_table_unlock_sec_lo:
-    !byte <0, <15, <30, <48, <68, <90, <115, <140
+    !byte <0, <20, <45, <75, <110, <155, <215, <285
 
 enemy_table_unlock_sec_hi:
-    !byte >0, >15, >30, >48, >68, >90, >115, >140
+    !byte >0, >20, >45, >75, >110, >155, >215, >285
 
 ; ------------------------------------------------------------------------------
 ; 32-Entry Weighted Tier Spawn Tables (8 Tiers x 32 bytes = 256 bytes total)
@@ -180,35 +180,35 @@ tier_offsets:
     !byte 0, 32, 64, 96, 128, 160, 192, 224
 
 tier_spawn_table:
-    ; Tier 0 (0..14s): 100% Enemy 1 (32 entries)
+    ; Tier 0 (0..19s): 100% Enemy 1 (32 entries)
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 
-    ; Tier 1 (15..29s): 69% E1 (22), 31% E2 (10)
+    ; Tier 1 (20..44s): 69% E1 (22), 31% E2 (10)
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     !byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
 
-    ; Tier 2 (30..47s): 50% E1 (16), 31% E2 (10), 19% E3 (6)
+    ; Tier 2 (45..74s): 50% E1 (16), 31% E2 (10), 19% E3 (6)
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     !byte 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3
 
-    ; Tier 3 (48..67s): E1..E4 equal distribution (8 each = 25% each)
+    ; Tier 3 (75..109s): E1..E4 equal distribution (8 each = 25% each)
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2
     !byte 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4
 
-    ; Tier 4 (68..89s): E1: 6, E2: 6, E3: 6, E4: 7, E5: 7
+    ; Tier 4 (110..154s): E1: 6, E2: 6, E3: 6, E4: 7, E5: 7
     !byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3
     !byte 3, 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5
 
-    ; Tier 5 (90..114s): E1: 4, E2: 4, E3: 5, E4: 6, E5: 7, E6: 6
+    ; Tier 5 (155..214s): E1: 4, E2: 4, E3: 5, E4: 6, E5: 7, E6: 6
     !byte 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4
     !byte 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6
 
-    ; Tier 6 (115..139s): E1: 3, E2: 3, E3: 4, E4: 5, E5: 6, E6: 6, E7: 5
+    ; Tier 6 (215..284s): E1: 3, E2: 3, E3: 4, E4: 5, E5: 6, E6: 6, E7: 5
     !byte 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5
     !byte 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7
 
-    ; Tier 7 (140s+): E1: 2, E2: 2, E3: 2, E4: 3, E5: 4, E6: 5, E7: 6, E8: 8 (Death 25% of spawns)
+    ; Tier 7 (285s+ / 4:45+): E1: 2, E2: 2, E3: 2, E4: 3, E5: 4, E6: 5, E7: 6, E8: 8 (Death 25% of spawns)
     !byte 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6
     !byte 6, 6, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8
 
@@ -1803,12 +1803,12 @@ enemies_update:
     adc enemy_table_reload, y
     sta s_reload_temp
 
-    ; Post-Death cadence acceleration (T >= 180s)
+    ; Post-Death cadence acceleration (T >= 345s / 5:45)
     lda g_game_time_total_sec + 1
-    cmp #>180
+    cmp #>345
     bne ++
     lda g_game_time_total_sec + 0
-    cmp #<180
+    cmp #<345
 ++  bcc @rearm_done
     lda s_reload_temp
     sec

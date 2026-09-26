@@ -13,6 +13,7 @@
 ; ==============================================================================
 
 NUM_ENERGY_COLORS   = 8         ; 8-color Energy Palette sequence length
+PLAYER_SHOT_SPEED   = 45        ; Player missile speed (pixels per frame at 50 Hz PAL)
 
 ; ------------------------------------------------------------------------------
 ; Shared Energy Color Palette Sequence (8 vibrant colors)
@@ -40,7 +41,7 @@ s_shot_spawn_offset: !byte 0    ; Temporary randomized spawn X offset
 weapons_init:
     ; 1. Reset all missile state variables
     lda #0
-    ldx #6
+    ldx #7
 -   sta g_missile_x, x
     dex
     bpl -
@@ -75,9 +76,7 @@ weapons_init:
 ; Purpose: Spawns a new player missile aligned with ship nose if slot is free.
 ; ==============================================================================
 weapons_fire:
-    ; Check if cooldown is active or player is dead
-    lda g_fire_cooldown
-    bne @fire_exit
+    ; Check if player is alive
     lda g_player_alive
     beq @fire_exit
 
@@ -116,10 +115,6 @@ weapons_fire:
     adc shot_spawn_y_offset, x
     sta g_missile_y
 
-    ; Set fire cooldown = 6 frames (~8.3 shots per second max rate)
-    lda #6
-    sta g_fire_cooldown
-
     ; Consume latched fire request
     lda #0
     sta g_fire_requested
@@ -133,8 +128,9 @@ weapons_fire:
 
 ; ==============================================================================
 ; Subroutine: weapons_update
-; Purpose: Cycles Energy color palette, advances active missile by 50 px/frame,
-;          recycles missile when X >= 320, and processes latched fire requests.
+; Purpose: Cycles Energy color palette, advances active missile by PLAYER_SHOT_SPEED,
+;          recycles missile when X >= 320, and processes latched/held fire requests.
+;          (As soon as a shot reaches the top, the ship can shoot again immediately).
 ; ==============================================================================
 weapons_update:
     ; 1. Advance Energy palette index each frame (0..7)
@@ -143,22 +139,16 @@ weapons_update:
     and #$07
     sta g_energy_cycle_idx
 
-    ; 2. Decrement fire cooldown timer
-    lda g_fire_cooldown
-    beq +
-    dec g_fire_cooldown
-+
-
-    ; 3. Move existing active missile rightward or update hit spark countdown
+    ; 2. Move existing active missile rightward or update hit spark countdown
     lda g_missile_active
     beq @check_fire_latch
     cmp #1
     bne @update_hit_spark
 
-    ; Add 50 pixels to 16-bit missile X coordinate
+    ; Add PLAYER_SHOT_SPEED pixels to 16-bit missile X coordinate
     lda g_missile_x + 0
     clc
-    adc #50
+    adc #PLAYER_SHOT_SPEED
     sta g_missile_x + 0
     lda g_missile_x + 1
     adc #0
@@ -177,7 +167,7 @@ weapons_update:
     bcc @check_fire_latch       ; LSB < 64 -> X < 320 (in playfield)
 
 @despawn_missile:
-    ; Despawn missile when reaching right border
+    ; Despawn missile when reaching right border (top of Tate screen)
     lda #0
     sta g_missile_active
     beq @check_fire_latch
@@ -189,21 +179,31 @@ weapons_update:
     beq @despawn_missile
 
 @check_fire_latch:
-    ; 4. Latch new single-shot keydown event (strictly single-shot: 1 shot per tap, NO auto-fire)
+    ; 3. Strictly manual single-shot: latch ONLY on new button press (NO autofire)
     ; Acknowledge/clear VIC-II hardware collision latches
     bit VIC_SPR_COLL_SPR
     bit VIC_SPR_COLL_BG
 
     lda g_input_fire_pressed
     beq @check_pending
-    lda #1
+    lda #6                      ; Buffer tap for up to 6 frames
     sta g_fire_requested
 
-    ; 5. Execute latched fire request if available
+    ; 4. Execute fire request if missile slot is free
 @check_pending:
     lda g_fire_requested
     beq @update_done
+
+    lda g_missile_active
+    bne @buffer_tick
+
     jsr weapons_fire
+    lda #0
+    sta g_fire_requested
+    rts
+
+@buffer_tick:
+    dec g_fire_requested        ; Countdown buffer frames until timeout
 
 @update_done:
     rts

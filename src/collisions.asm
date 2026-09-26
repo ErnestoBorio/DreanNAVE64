@@ -64,7 +64,7 @@ collisions_check:
     cmp shot_v_threshold_table, y
     bcs @skip_enemy             ; diff_y >= threshold (missile below enemy)
 
-    ; 3. Horizontal Swept Check (50 px/frame sweep + shot_w vs 24 px wide enemy):
+    ; 3. Horizontal Swept Check (PLAYER_SHOT_SPEED px/frame sweep + shot_w vs 24 px wide enemy):
     ; diff_x = missile_x - enemy_x + shot_w[phase]
     ; Overlap if 0 <= diff_x < shot_h_thresh[phase]
     lda g_missile_x + 0
@@ -401,7 +401,8 @@ shot_w_table:
     !byte 24, 24, 24, 48, 48
 
 shot_h_thresh_table:
-    !byte 98, 98, 98, 122, 122
+    !byte (24 + 24 + PLAYER_SHOT_SPEED), (24 + 24 + PLAYER_SHOT_SPEED), (24 + 24 + PLAYER_SHOT_SPEED)
+    !byte (48 + 24 + PLAYER_SHOT_SPEED), (48 + 24 + PLAYER_SHOT_SPEED)
 
 ; ------------------------------------------------------------------------------
 ; Enemy Point Values Table (Archetypes 1..8, index 0 is dummy)
