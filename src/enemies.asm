@@ -73,6 +73,7 @@ g_enemy_speed:      !fill MAX_ENEMIES, 0
 g_enemy_hp:         !fill MAX_ENEMIES, 0
 g_enemy_archetype:  !fill MAX_ENEMIES, 0
 g_enemy_dir_x:      !fill MAX_ENEMIES, 0 ; 0 = Moving Left, 1 = Moving Right
+g_enemy_entry_dir:  !fill MAX_ENEMIES, 0 ; 0 = Top, 1 = Left side, 2 = Right side
 g_enemy_exploding:  !fill MAX_ENEMIES, 0 ; Explosion timer (12..0)
 g_enemy_flash:      !fill MAX_ENEMIES, 0 ; Damage flash timer (3..0)
 g_enemy_reload_timer: !fill MAX_ENEMIES, 60
@@ -248,6 +249,7 @@ enemies_clear_all:
 
     ldx #MAX_ENEMIES - 1
 -   sta g_enemy_active, x
+    sta g_enemy_entry_dir, x
     sta g_enemy_exploding, x
     sta g_enemy_flash, x
     dex
@@ -267,6 +269,7 @@ enemies_init:
     ldx #0
 -   lda #0
     sta g_enemy_active, x
+    sta g_enemy_entry_dir, x
     sta g_enemy_x_lo, x
     sta g_enemy_x_hi, x
     sta g_enemy_y, x
@@ -376,6 +379,7 @@ enemies_spawn_archetype:
     ; Reset enemy state flags
     lda #0
     sta g_enemy_dir_x, y
+    sta g_enemy_entry_dir, y    ; Debug forced spawns use top spawn
     sta g_enemy_exploding, y
     sta g_enemy_flash, y
     sta g_enemy_roam_timer, y
@@ -403,6 +407,30 @@ enemies_get_random_spawn_y:
     bcc +
     lda #220
 +   rts
+
+; ==============================================================================
+; Helper Subroutine: enemies_get_random_spawn_x
+; Returns: A = random X low byte, X = random X high byte (X coordinate = 85..260)
+; ==============================================================================
+enemies_get_random_spawn_x:
+    jsr starfield_rand
+    and #$7f                    ; 0..127
+    sta s_spawn_y_temp
+    jsr starfield_rand
+    and #$3f                    ; 0..63
+    clc
+    adc s_spawn_y_temp          ; 0..190
+    cmp #176
+    bcc +
+    lda #175
++   clc
+    adc #85                     ; 85..260 (with carry if >= 256)
+    sta s_spawn_y_temp
+    lda #0
+    adc #0                      ; High byte (0 or 1)
+    tax                         ; X = high byte
+    lda s_spawn_y_temp          ; A = low byte
+    rts
 
 ; ==============================================================================
 ; Subroutine: enemies_spawn
@@ -469,37 +497,71 @@ enemies_spawn:
     lda #1
     sta g_enemy_active, y
 
-    ; Spawn X off-screen right: X = 344 (X_lo = 88, X_hi = 1)
+    ; Random entry selector: 50% Top, 25% Left side, 25% Right side
+    jsr starfield_rand
+    and #$03                    ; 0..3
+    cmp #2
+    bcs @spawn_from_top         ; 2, 3 -> Top spawn (50%)
+    cmp #1
+    beq @spawn_from_right       ; 1 -> Right side spawn (25%)
+
+@spawn_from_left:
+    ; Spawn on Left side (Y = 48, entering rightwards into screen)
+    lda #1
+    sta g_enemy_entry_dir, y
+    lda #48
+    sta g_enemy_y, y
+    ; Target depth into playfield: Y = 75..135
+    jsr starfield_rand
+    and #$3f                    ; 0..63
+    clc
+    adc #75
+    sta g_enemy_base_y, y
+    ; Random altitude/height along vertical screen: X = 85..260
+    jsr enemies_get_random_spawn_x
+    sta g_enemy_x_lo, y
+    txa
+    sta g_enemy_x_hi, y
+    jmp @finish_spawn_pos
+
+@spawn_from_right:
+    ; Spawn on Right side (Y = 224, entering leftwards into screen)
+    lda #2
+    sta g_enemy_entry_dir, y
+    lda #224
+    sta g_enemy_y, y
+    ; Target depth into playfield: Y = 135..195
+    jsr starfield_rand
+    and #$3f                    ; 0..63
+    clc
+    adc #135
+    sta g_enemy_base_y, y
+    ; Random altitude/height along vertical screen: X = 85..260
+    jsr enemies_get_random_spawn_x
+    sta g_enemy_x_lo, y
+    txa
+    sta g_enemy_x_hi, y
+    jmp @finish_spawn_pos
+
+@spawn_from_top:
+    ; Spawn from Top (X = 344, off-screen top in TATE)
+    lda #0
+    sta g_enemy_entry_dir, y
     lda #88
     sta g_enemy_x_lo, y
     lda #1
     sta g_enemy_x_hi, y
-
-    ; Spawn Y: random full-screen altitude (52..220)
-    jsr starfield_rand
-    and #$7f                    ; 0..127
-    clc
-    adc #52
-    sta s_spawn_y_temp
-    jsr starfield_rand
-    and #$1f                    ; 0..31
-    clc
-    adc s_spawn_y_temp
-    cmp #222
-    bcc +
-    lda #220
-+   sta g_enemy_y, y
+    ; Random horizontal position (52..220)
     jsr enemies_get_random_spawn_y
     sta g_enemy_y, y
     sta g_enemy_base_y, y
 
+@finish_spawn_pos:
     ; Direction setup
     lda #0
-    sta g_enemy_dir_x, y        ; Move left
+    sta g_enemy_dir_x, y        ; Move left / default
     sta g_enemy_exploding, y
     sta g_enemy_flash, y
-
-    lda #0
     sta g_enemy_roam_timer, y   ; 0 = Entering screen state
 
     ; Select archetype (via one-shot debug spawn or progression timeline)
@@ -617,6 +679,8 @@ enemy_setup_archetype_slot:
     lda #0
     sta g_enemy_phase, y
     sta g_enemy_dir_x, y
+    lda g_enemy_entry_dir, y
+    bne +                       ; Side spawn preserves position
     lda #56
     sta g_enemy_y, y
     sta g_enemy_base_y, y
@@ -631,12 +695,14 @@ enemy_setup_archetype_slot:
 +   rts
 
 @setup_scorpion:
+    lda g_enemy_entry_dir, y
+    bne +
     ; Archetype 7 (The Eye): Start at X = 280, random 8-direction bounce
     lda #24
     sta g_enemy_x_lo, y
     lda #1
     sta g_enemy_x_hi, y         ; Start at X = 280
-    jsr starfield_rand
++   jsr starfield_rand
     and #$07
     sta g_enemy_pattern, y
     jsr starfield_rand
@@ -650,9 +716,11 @@ enemy_setup_archetype_slot:
     lda #0
     sta g_enemy_phase, y
     sta g_enemy_pattern, y
+    lda g_enemy_entry_dir, y
+    bne +                       ; Side spawn already has target depth in base_y
     lda g_enemy_y, y
     sta g_enemy_base_y, y
-    jsr starfield_rand
++   jsr starfield_rand
     and #$1f
     clc
     adc #40
@@ -675,6 +743,8 @@ enemy_setup_archetype_slot:
     rts
 
 @setup_eye:
+    lda g_enemy_entry_dir, y
+    bne @setup_eye_side
     ; Archetype 4 (Scorpion): Start at top of screen (X = 280), ready to make half circles down
     lda #24
     sta g_enemy_x_lo, y
@@ -693,18 +763,21 @@ enemy_setup_archetype_slot:
     lda #190
 +   sta g_enemy_base_y, y       ; Y_c = 80..190
     sta g_enemy_y, y
+@setup_eye_side:
     jsr starfield_rand
     and #$40                    ; Random swing direction (0=right, $40=left)
     sta g_enemy_phase, y
     rts
 
 @setup_death:
+    lda g_enemy_entry_dir, y
+    bne +
     ; Death starts at X = 260, random Vx and Vy in any direction
     lda #4
     sta g_enemy_x_lo, y
     lda #1
     sta g_enemy_x_hi, y         ; Start at X = 260
-    jsr starfield_rand
++   jsr starfield_rand
     and #$03
     tax
     lda death_vel_tab, x
@@ -853,6 +926,11 @@ enemies_update:
     jmp @next_enemy_upd
 
 @not_exploding:
+    lda g_enemy_entry_dir, x
+    beq @normal_archetype_movement
+    jmp @move_side_entry
+
+@normal_archetype_movement:
     lda g_enemy_archetype, x
     cmp #1
     bne +
@@ -878,6 +956,58 @@ enemies_update:
 +   cmp #8
     bne +
     jmp @move_death             ; Archetype 8: Death
++   jmp @next_enemy_upd
+
+@move_side_entry:
+    lda g_enemy_entry_dir, x
+    cmp #1
+    beq @side_entry_from_left
+
+@side_entry_from_right:
+    ; Move left into screen (decreasing Y)
+    lda g_enemy_y, x
+    sec
+    sbc g_enemy_speed, x
+    sta g_enemy_y, x
+    ; Check if reached target depth Y (g_enemy_base_y, x)
+    cmp g_enemy_base_y, x
+    beq @side_entry_done
+    bcc @side_entry_done
+    jmp @side_entry_check_shoot
+
+@side_entry_from_left:
+    ; Move right into screen (increasing Y)
+    lda g_enemy_y, x
+    clc
+    adc g_enemy_speed, x
+    sta g_enemy_y, x
+    ; Check if reached target depth Y (g_enemy_base_y, x)
+    cmp g_enemy_base_y, x
+    bcs @side_entry_done
+    jmp @side_entry_check_shoot
+
+@side_entry_done:
+    ; Reached target depth! Side entry complete!
+    lda #0
+    sta g_enemy_entry_dir, x
+    sta g_enemy_dir_x, x
+    ; If Archetype 4 (Scorpion), sync circle center X_c to current X
+    lda g_enemy_archetype, x
+    cmp #4
+    bne @side_entry_check_shoot
+    lda g_enemy_x_lo, x
+    sta g_enemy_pattern, x
+    lda g_enemy_x_hi, x
+    sta g_enemy_dir_x, x
+
+@side_entry_check_shoot:
+    ; Check if within screen boundaries (50 <= Y <= 222) to allow shooting
+    lda g_enemy_y, x
+    cmp #50
+    bcc +
+    cmp #223
+    bcs +
+    jmp @check_shooting
 +   jmp @next_enemy_upd
 
 @move_scout:

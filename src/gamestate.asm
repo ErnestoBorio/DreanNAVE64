@@ -282,7 +282,11 @@ state_game_over_enter:
     ; 1. Despawn enemies, disable sprites, draw GAME OVER & final SCORE
     jsr game_over_trigger
 
-    ; 2. Check if player score qualifies for Top 10
+    ; 2. Play heroic after-action game over anthem
+    lda #SFX_GAME_OVER
+    jsr sound_play_sfx
+
+    ; 3. Check if player score qualifies for Top 10
     jsr hiscore_check_qualify
     bcc @no_initials
 
@@ -330,5 +334,7 @@ state_game_over_update:
     rts
 
 state_game_over_exit:
+    ; Silence any lingering Game Over anthem
+    jsr sound_init
     ; Erase "GAME OVER" and "SCORE" text from screen
     jmp hud_clear_game_over

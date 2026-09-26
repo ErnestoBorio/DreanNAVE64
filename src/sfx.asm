@@ -24,6 +24,7 @@ SFX_LOW_ENERGY      = 6     ; Low energy flashing alarm (Voice 3: warning beep)
 SFX_EXPLOSION_ENEMY = 7     ; Enemy destroyed (Voice 2: noise burst)
 SFX_PLAYER_DEATH    = 8     ; Player destruction (Voice 2+3: crash & dive)
 SFX_KEY_CLICK       = 9     ; Initials typewriter click (Voice 3: short blip)
+SFX_GAME_OVER       = 10    ; Heroic after-action anthem (Voice 1+2+3)
 
 ; ------------------------------------------------------------------------------
 ; Subroutine: sound_init
@@ -123,8 +124,13 @@ sound_play_sfx:
     jmp @sfx_restore
 
 +   cmp #SFX_KEY_CLICK
-    bne @sfx_restore
+    bne +
     jsr sfx_play_key_click
+    jmp @sfx_restore
+
++   cmp #SFX_GAME_OVER
+    bne @sfx_restore
+    jsr sfx_play_game_over
 
 @sfx_restore:
     ldy sfx_y_temp
@@ -508,6 +514,84 @@ sfx_play_key_click:
     rts
 
 ; ==============================================================================
+; 10. SFX_GAME_OVER: Heroic After-Action Anthem
+; 3-Voice Polyphonic Solemn Hymn / Post-Battle Commemoration:
+;   Voice 1: Lead Trumpet (Heroic melody, warm pulse wave)
+;   Voice 2: Harmony Tenor (Sawtooth brass, rich thirds and fifths)
+;   Voice 3: Bass Foundation (Deep, solemn triangle root notes)
+; Total duration: 216 frames (~4.32s at 50 Hz PAL)
+; ==============================================================================
+sfx_play_game_over:
+    lda #$0f                    ; Ensure master volume is at maximum
+    sta SID_MODE_VOL
+
+    ; Voice 1: Lead Trumpet - Initial Note: G3 ($0D0A)
+    lda #0
+    sta SID_V1_CTRL
+    lda #$0a
+    sta SID_V1_FREQ_LO
+    lda #$0d
+    sta SID_V1_FREQ_HI
+    lda #$18                    ; Attack 5ms, Decay 300ms
+    sta SID_V1_AD
+    lda #$d4                    ; Sustain level 13, Release 200ms
+    sta SID_V1_SR
+    lda #$08                    ; 50% pulse width (classic clear brass)
+    sta SID_V1_PW_HI
+    lda #$00
+    sta SID_V1_PW_LO
+    lda #(SID_PULSE | SID_GATE)
+    sta SID_V1_CTRL
+
+    lda #SFX_GAME_OVER
+    sta sfx_v1_id
+    lda #216
+    sta sfx_v1_timer
+
+    ; Voice 2: Harmony Tenor - Initial Note: E3 ($0AF6)
+    lda #0
+    sta SID_V2_CTRL
+    lda #$f6
+    sta SID_V2_FREQ_LO
+    lda #$0a
+    sta SID_V2_FREQ_HI
+    lda #$18
+    sta SID_V2_AD
+    lda #$c4                    ; Sustain level 12, Release 200ms
+    sta SID_V2_SR
+    lda #(SID_SAWTOOTH | SID_GATE)
+    sta SID_V2_CTRL
+
+    lda #SFX_GAME_OVER
+    sta sfx_v2_id
+    lda #216
+    sta sfx_v2_timer
+    lda #4                      ; Priority 4 (locked during tune)
+    sta sfx_v2_priority
+
+    ; Voice 3: Bass Foundation - Initial Note: C3 ($08B4)
+    lda #0
+    sta SID_V3_CTRL
+    lda #$b4
+    sta SID_V3_FREQ_LO
+    lda #$08
+    sta SID_V3_FREQ_HI
+    lda #$08                    ; Attack 2ms, Decay 300ms
+    sta SID_V3_AD
+    lda #$e4                    ; Sustain level 14, Release 200ms
+    sta SID_V3_SR
+    lda #(SID_TRIANGLE | SID_GATE)
+    sta SID_V3_CTRL
+
+    lda #SFX_GAME_OVER
+    sta sfx_v3_id
+    lda #216
+    sta sfx_v3_timer
+    lda #4                      ; Priority 4
+    sta sfx_v3_priority
+    rts
+
+; ==============================================================================
 ; Subroutine: sound_update
 ; Purpose: Called once per PAL frame (50 Hz). Updates active SFX channels.
 ; Notes:   Preserves ALL registers (A, X, Y).
@@ -589,6 +673,8 @@ sound_update_v1:
     beq @v1_mod_laser
     cmp #SFX_START
     beq @v1_mod_start
+    cmp #SFX_GAME_OVER
+    beq @v1_mod_game_over
     rts
 
 @v1_mod_laser:
@@ -597,6 +683,80 @@ sound_update_v1:
     lda laser_freq_hi_table, x
     sta SID_V1_FREQ_HI
     rts
+
+@v1_mod_game_over:
+    ; Voice 1 Lead Trumpet Melody:
+    ; 216: G3 ($0D0A) -> starts in sfx_play_game_over
+    ; 200: C4 ($1168) (proud call)
+    ; 176: E4 ($15EC)
+    ; 152: D4 ($1389)
+    ; 128: F4 ($173B)
+    ; 112: A4 ($1D44) (noble emotional peak!)
+    ; 96:  G4 ($1A13)
+    ; 80:  E4 ($15EC) (poignant, solemn)
+    ; 56:  D4 ($1389)
+    ; 36:  C4 ($1168) (resolving proudly to tonic!)
+    ; 1:   Release envelope
+    lda sfx_v1_timer
+    cmp #200
+    bne +
+    lda #$11                    ; C4 ($1168)
+    ldx #$68
+    jmp sfx_retrigger_v1
+
++   cmp #176
+    bne +
+    lda #$15                    ; E4 ($15EC)
+    ldx #$ec
+    jmp sfx_retrigger_v1
+
++   cmp #152
+    bne +
+    lda #$13                    ; D4 ($1389)
+    ldx #$89
+    jmp sfx_retrigger_v1
+
++   cmp #128
+    bne +
+    lda #$17                    ; F4 ($173B)
+    ldx #$3b
+    jmp sfx_retrigger_v1
+
++   cmp #112
+    bne +
+    lda #$1d                    ; A4 ($1D44)
+    ldx #$44
+    jmp sfx_retrigger_v1
+
++   cmp #96
+    bne +
+    lda #$1a                    ; G4 ($1A13)
+    ldx #$13
+    jmp sfx_retrigger_v1
+
++   cmp #80
+    bne +
+    lda #$15                    ; E4 ($15EC)
+    ldx #$ec
+    jmp sfx_retrigger_v1
+
++   cmp #56
+    bne +
+    lda #$13                    ; D4 ($1389)
+    ldx #$89
+    jmp sfx_retrigger_v1
+
++   cmp #36
+    bne +
+    lda #$11                    ; C4 ($1168)
+    ldx #$68
+    jmp sfx_retrigger_v1
+
++   cmp #1
+    bne +
+    lda #$04                    ; Release fade
+    sta SID_V1_SR
++   rts
 
 @v1_mod_start:
     ; Voice 1 Lead Fanfare Melody (Heroic Call)
@@ -676,6 +836,10 @@ sound_update_v2:
     bne +
     jmp @v2_mod_start
 
++   cmp #SFX_GAME_OVER
+    bne +
+    jmp @v2_mod_game_over
+
 +   cmp #SFX_EXPLOSION_ENEMY
     bne +
     jmp @v2_mod_explosion
@@ -688,6 +852,66 @@ sound_update_v2:
     bne +
     jmp @v2_mod_death
 
++   rts
+
+@v2_mod_game_over:
+    ; Voice 2 Harmony Tenor (Sawtooth Horn):
+    ; Timer 216: E3 ($0AF6) -> starts in sfx_play_game_over
+    ; Timer 176: G3 ($0D0A)
+    ; Timer 152: B3 ($106D)
+    ; Timer 128: C4 ($1168)
+    ; Timer 96:  D4 ($1389)
+    ; Timer 80:  C4 ($1168)
+    ; Timer 56:  B3 ($106D)
+    ; Timer 36:  G3 ($0D0A) (resolving to G3)
+    ; Timer 1:   Release envelope
+    lda sfx_v2_timer
+    cmp #176
+    bne +
+    lda #$0d                    ; G3 ($0D0A)
+    ldx #$0a
+    jmp sfx_retrigger_v2
+
++   cmp #152
+    bne +
+    lda #$10                    ; B3 ($106D)
+    ldx #$6d
+    jmp sfx_retrigger_v2
+
++   cmp #128
+    bne +
+    lda #$11                    ; C4 ($1168)
+    ldx #$68
+    jmp sfx_retrigger_v2
+
++   cmp #96
+    bne +
+    lda #$13                    ; D4 ($1389)
+    ldx #$89
+    jmp sfx_retrigger_v2
+
++   cmp #80
+    bne +
+    lda #$11                    ; C4 ($1168)
+    ldx #$68
+    jmp sfx_retrigger_v2
+
++   cmp #56
+    bne +
+    lda #$10                    ; B3 ($106D)
+    ldx #$6d
+    jmp sfx_retrigger_v2
+
++   cmp #36
+    bne +
+    lda #$0d                    ; G3 ($0D0A)
+    ldx #$0a
+    jmp sfx_retrigger_v2
+
++   cmp #1
+    bne +
+    lda #$04
+    sta SID_V2_SR
 +   rts
 
 @v2_mod_enemy_shot:
@@ -804,10 +1028,68 @@ sound_update_v3:
     bne +
     jmp @v3_mod_start
 
++   cmp #SFX_GAME_OVER
+    bne +
+    jmp @v3_mod_game_over
+
 +   cmp #SFX_PLAYER_DEATH
     bne +
     jmp @v3_mod_death
 
++   rts
+
+@v3_mod_game_over:
+    ; Voice 3 Bass Foundation (Triangle):
+    ; Timer 216: C3 ($08B4) -> starts in sfx_play_game_over
+    ; Timer 176: C3 ($08B4)
+    ; Timer 152: G3 ($0D0A)
+    ; Timer 128: F3 ($0B9D)
+    ; Timer 96:  G3 ($0D0A)
+    ; Timer 80:  A3 ($0EA2) (poignant Am root!)
+    ; Timer 56:  G3 ($0D0A)
+    ; Timer 36:  C3 ($08B4) (tonic resolution)
+    ; Timer 1:   Release envelope
+    lda sfx_v3_timer
+    cmp #152
+    bne +
+    lda #$0d                    ; G3 ($0D0A)
+    ldx #$0a
+    jmp sfx_retrigger_v3
+
++   cmp #128
+    bne +
+    lda #$0b                    ; F3 ($0B9D)
+    ldx #$9d
+    jmp sfx_retrigger_v3
+
++   cmp #96
+    bne +
+    lda #$0d                    ; G3 ($0D0A)
+    ldx #$0a
+    jmp sfx_retrigger_v3
+
++   cmp #80
+    bne +
+    lda #$0e                    ; A3 ($0EA2)
+    ldx #$a2
+    jmp sfx_retrigger_v3
+
++   cmp #56
+    bne +
+    lda #$0d                    ; G3 ($0D0A)
+    ldx #$0a
+    jmp sfx_retrigger_v3
+
++   cmp #36
+    bne +
+    lda #$08                    ; C3 ($08B4)
+    ldx #$b4
+    jmp sfx_retrigger_v3
+
++   cmp #1
+    bne +
+    lda #$04
+    sta SID_V3_SR
 +   rts
 
 @v3_mod_bonus:
