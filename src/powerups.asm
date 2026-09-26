@@ -507,17 +507,20 @@ powerups_check_collision:
     sbc g_player_y             ; diff_y in Accumulator
     bcc @exit_no_coll          ; diff_y < 0 (powerup entirely above player)
     beq @exit_no_coll
+    sta s_powerup_diff_lo      ; Preserve diff_y for threshold tests
 
     ldx g_player_phase
     dex                         ; 1..5 -> 0..4
     lda player_phase_scaled, x
     bne @scaled_v_test
 
+    lda s_powerup_diff_lo      ; Reload diff_y
     cmp #37                     ; 21 + 16 = 37
     bcs @exit_no_coll
     bcc @check_horizontal
 
 @scaled_v_test:
+    lda s_powerup_diff_lo      ; Reload diff_y
     cmp #58                     ; 42 + 16 = 58
     bcs @exit_no_coll
 
