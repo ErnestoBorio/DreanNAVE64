@@ -583,7 +583,7 @@ enemy_setup_archetype_slot:
     jmp @setup_enemy3
 +   cpx #4
     bne +
-    jmp @setup_scorpion
+    jmp @setup_eye              ; Archetype 4: Scorpion (half circles towards bottom)
 +   cpx #5
     bne +
     jmp @setup_batplane
@@ -592,7 +592,7 @@ enemy_setup_archetype_slot:
     jmp @setup_spider
 +   cpx #7
     bne +
-    jmp @setup_eye
+    jmp @setup_scorpion         ; Archetype 7: The Eye (8-direction random bounce)
 +   cpx #8
     bne +
     jmp @setup_death
@@ -631,6 +631,11 @@ enemy_setup_archetype_slot:
 +   rts
 
 @setup_scorpion:
+    ; Archetype 7 (The Eye): Start at X = 280, random 8-direction bounce
+    lda #24
+    sta g_enemy_x_lo, y
+    lda #1
+    sta g_enemy_x_hi, y         ; Start at X = 280
     jsr starfield_rand
     and #$07
     sta g_enemy_pattern, y
@@ -670,7 +675,7 @@ enemy_setup_archetype_slot:
     rts
 
 @setup_eye:
-    ; The Eye starts at top of screen (X = 280), ready to make half circles down
+    ; Archetype 4 (Scorpion): Start at top of screen (X = 280), ready to make half circles down
     lda #24
     sta g_enemy_x_lo, y
     lda #1
@@ -860,7 +865,7 @@ enemies_update:
     jmp @move_enemy3            ; Archetype 3: Interceptor
 +   cmp #4
     bne +
-    jmp @move_scorpion          ; Archetype 4: Scorpion
+    jmp @move_eye               ; Archetype 4: Scorpion (half circles towards bottom)
 +   cmp #5
     bne +
     jmp @move_batplane          ; Archetype 5: Batplane
@@ -869,7 +874,7 @@ enemies_update:
     jmp @move_spider            ; Archetype 6: Spider
 +   cmp #7
     bne +
-    jmp @move_eye               ; Archetype 7: The Eye
+    jmp @move_scorpion          ; Archetype 7: The Eye (8-direction random bounce)
 +   cmp #8
     bne +
     jmp @move_death             ; Archetype 8: Death
@@ -1135,12 +1140,13 @@ enemies_update:
     jmp @check_shooting
 
 ; ==============================================================================
-; Archetype 3: The Scorpion
-; "the scorpion will randomly move in diagonal or in 4 straight directions."
+; Archetype 7: The Eye (and Batplane Straight Mode)
+; "the eye will randomly move in diagonal or in 4 straight directions"
 ; "don't make any enemy escape the screen, let them hang out until destroyed"
 ; Directions (0..7):
 ; 0: Down (-X), 1: Up (+X), 2: Left (-Y), 3: Right (+Y)
 ; 4: Down-Left (-X,-Y), 5: Down-Right (-X,+Y), 6: Up-Left (+X,-Y), 7: Up-Right (+X,+Y)
+; ==============================================================================
 @move_scorpion:
     dec g_enemy_roam_timer, x
     bne @scorp_move
@@ -1494,8 +1500,8 @@ enemies_update:
     jmp @check_shooting
 
 ; ==============================================================================
-; Archetype 7: The Eye
-; "the eye should move making half circles towards the bottom"
+; Archetype 4: The Scorpion
+; "the scorpion will move making half circles towards the bottom"
 ; "don't make any enemy escape the screen, let them hang out until destroyed"
 ; ==============================================================================
 @move_eye:
