@@ -251,9 +251,7 @@ g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s
 !src "src/player.asm"
 !src "src/weapons.asm"
 !src "src/starfield.asm"
-!src "src/powerups.asm"
 !src "src/enemies.asm"
-!src "src/collisions.asm"
 
 ; Assert that all executable code and variables fit safely below Charset RAM ($2800)
 !if * > $2800 {
@@ -280,6 +278,18 @@ g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s
 ; Assert that all sprite data fits safely within $3600
 !if * > $3600 {
     !error "Fatal: Sprite data exceeded $3600! Sprite collision."
+}
+
+; ------------------------------------------------------------------------------
+; Intermediate Code Section: Collisions & Powerups Subsystem ($3600+)
+; ------------------------------------------------------------------------------
+* = $3600
+!src "src/collisions.asm"
+!src "src/powerups.asm"
+
+; Assert that intermediate code fits safely below High Memory Code ($4000)
+!if * > $4000 {
+    !error "Fatal: Intermediate code exceeded $4000! High Code collision."
 }
 
 ; ------------------------------------------------------------------------------

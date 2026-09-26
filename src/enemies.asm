@@ -111,55 +111,59 @@ s_active_count:     !byte 0
 s_spawn_y_temp:     !byte 0
 s_shot_slot_temp:   !byte 0
 s_enemy_slot_temp:  !byte 0
+s_patrol_limit:     !byte 0
 
 ; ------------------------------------------------------------------------------
-; Enemy Archetype Data Tables (8 Archetypes: Index 0 to 7)
+; Enemy Archetype Data Tables (8 Archetypes: Index 1 to 8, Index 0 is dummy)
 ; ------------------------------------------------------------------------------
-PATTERN_MODE_SINE_MIX   = 0     ; Sometimes straight, sometimes sine (Enemies 1..5)
-PATTERN_MODE_HUNT_MIX   = 1     ; Sometimes sine, sometimes tracking (Enemy 6)
-PATTERN_MODE_HUNT_ONLY  = 2     ; Dynamic unpredictable vertical tracking (Enemies 7..8)
+PATTERN_MODE_SINE_MIX   = 0     ; Sometimes straight, sometimes sine
+PATTERN_MODE_HUNT_MIX   = 1     ; Sometimes sine, sometimes tracking
+PATTERN_MODE_HUNT_ONLY  = 2     ; Dynamic unpredictable vertical tracking
 
 enemy_table_sprite:
-    !byte SPRITE_PTR_ENEMY_1    ; 131: Enemy 1 (Scout)
-    !byte SPRITE_PTR_ENEMY_2    ; 132: Enemy 2 (Light Fighter)
-    !byte SPRITE_PTR_ENEMY_3    ; 133: Enemy 3 (Interceptor)
-    !byte SPRITE_PTR_ENEMY_4    ; 134: Enemy 4 (Scorpion)
-    !byte SPRITE_PTR_ENEMY_5    ; 135: Enemy 5 (Batplane)
-    !byte SPRITE_PTR_ENEMY_6    ; 136: Enemy 6 (Spider)
-    !byte SPRITE_PTR_ENEMY_7    ; 137: Enemy 7 (The Eye)
-    !byte SPRITE_PTR_ENEMY_8    ; 138: Enemy 8 (Death)
+    !byte 0                     ; Index 0 dummy
+    !byte SPRITE_PTR_ENEMY_1    ; Archetype 1: Sprite 4: Enemy 1 (Scout)
+    !byte SPRITE_PTR_ENEMY_2    ; Archetype 2: Sprite 5: Enemy 2 (Light Fighter)
+    !byte SPRITE_PTR_ENEMY_3    ; Archetype 3: Sprite 6: Enemy 3 (Interceptor)
+    !byte SPRITE_PTR_ENEMY_4    ; Archetype 4: Sprite 7: Enemy 4 (Scorpion)
+    !byte SPRITE_PTR_ENEMY_5    ; Archetype 5: Sprite 8: Enemy 5 (Batplane)
+    !byte SPRITE_PTR_ENEMY_6    ; Archetype 6: Sprite 9: Enemy 6 (Spider)
+    !byte SPRITE_PTR_ENEMY_7    ; Archetype 7: Sprite 10: Enemy 7 (The Eye)
+    !byte SPRITE_PTR_ENEMY_8    ; Archetype 8: Sprite 11: Enemy 8 (Death)
 
 enemy_table_hp:
-    !byte 1, 1, 1, 2, 2, 3, 3, 3
+    !byte 0, 1, 1, 1, 2, 2, 3, 3, 3
 
 enemy_table_pattern_mode:
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 1: straight or sine wave
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 2: straight or sine wave
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 3: straight or sine wave
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 4: straight or sine wave
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 5: straight or sine wave
-    !byte PATTERN_MODE_HUNT_MIX     ; Enemy 6: sine wave or unpredictable tracking
-    !byte PATTERN_MODE_HUNT_ONLY    ; Enemy 7: unpredictable vertical tracking
-    !byte PATTERN_MODE_HUNT_ONLY    ; Enemy 8: unpredictable vertical tracking
+    !byte 0
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 1
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 2
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 3
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 4
+    !byte PATTERN_MODE_SINE_MIX     ; Enemy 5
+    !byte PATTERN_MODE_HUNT_MIX     ; Enemy 6
+    !byte PATTERN_MODE_HUNT_ONLY    ; Enemy 7
+    !byte PATTERN_MODE_HUNT_ONLY    ; Enemy 8
 
 enemy_table_speed:
-    !byte 1, 2, 2, 3, 2, 2, 2, 1
+    !byte 0, 1, 2, 2, 3, 2, 2, 2, 1
 
 enemy_table_reload:
-    !byte 60, 50, 40, 35, 30, 28, 25, 20
+    !byte 0, 60, 50, 40, 35, 30, 28, 25, 20
 
 enemy_table_shot_speed:
-    !byte 3, 4, 4, 4, 4, 5, 5, 4
+    !byte 0, 3, 4, 4, 4, 4, 5, 5, 4
 
 enemy_table_shot_type:
-    !byte SPRITE_PTR_ENEMY_SHOT_1   ; 142: Single shot
-    !byte SPRITE_PTR_ENEMY_SHOT_1   ; 142: Single shot
-    !byte SPRITE_PTR_ENEMY_SHOT_1   ; 142: Single shot
-    !byte SPRITE_PTR_ENEMY_SHOT_1   ; 142: Single shot
-    !byte SPRITE_PTR_ENEMY_SHOT_1   ; 142: Single shot
-    !byte SPRITE_PTR_ENEMY_SHOT_1   ; 142: Single shot
-    !byte SPRITE_PTR_ENEMY_SHOT_2   ; 143: Spread shot
-    !byte SPRITE_PTR_ENEMY_SHOT_2   ; 143: Spread shot
+    !byte 0
+    !byte SPRITE_PTR_ENEMY_SHOT_1   ; Enemy 1
+    !byte SPRITE_PTR_ENEMY_SHOT_1   ; Enemy 2
+    !byte SPRITE_PTR_ENEMY_SHOT_1   ; Enemy 3
+    !byte SPRITE_PTR_ENEMY_SHOT_1   ; Enemy 4
+    !byte SPRITE_PTR_ENEMY_SHOT_1   ; Enemy 5
+    !byte SPRITE_PTR_ENEMY_SHOT_1   ; Enemy 6
+    !byte SPRITE_PTR_ENEMY_SHOT_2   ; Enemy 7 (The Eye - Spread)
+    !byte SPRITE_PTR_ENEMY_SHOT_2   ; Enemy 8 (Death - Spread)
 
 ; Unlock thresholds in total elapsed seconds (16-bit)
 enemy_table_unlock_sec_lo:
@@ -176,36 +180,36 @@ tier_offsets:
 
 tier_spawn_table:
     ; Tier 0 (0..29s): 100% Enemy 1 (32 entries)
-    !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 
     ; Tier 1 (30..59s): 69% E1 (22), 31% E2 (10)
-    !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    !byte 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    !byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
 
     ; Tier 2 (60..99s): 50% E1 (16), 31% E2 (10), 19% E3 (6)
-    !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2
+    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    !byte 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3
 
     ; Tier 3 (100..149s): E1..E4 equal distribution (8 each = 25% each)
-    !byte 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1
-    !byte 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3
+    !byte 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2
+    !byte 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4
 
-    ; Tier 4 (150..209s): E1: 6 (19%), E2: 6 (19%), E3: 6 (19%), E4: 7 (22%), E5: 7 (22%)
-    !byte 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2
-    !byte 2, 2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4
+    ; Tier 4 (150..209s): E1: 6, E2: 6, E3: 6, E4: 7, E5: 7
+    !byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3
+    !byte 3, 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5
 
-    ; Tier 5 (210..279s): E1: 4 (12%), E2: 4 (12%), E3: 5 (16%), E4: 6 (19%), E5: 7 (22%), E6: 6 (19%)
-    !byte 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3
-    !byte 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5
+    ; Tier 5 (210..279s): E1: 4, E2: 4, E3: 5, E4: 6, E5: 7, E6: 6
+    !byte 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4
+    !byte 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6
 
-    ; Tier 6 (280..359s): E1: 3 (9%), E2: 3 (9%), E3: 4 (12%), E4: 5 (16%), E5: 6 (19%), E6: 6 (19%), E7: 5 (16%)
-    !byte 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4
-    !byte 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6
+    ; Tier 6 (280..359s): E1: 3, E2: 3, E3: 4, E4: 5, E5: 6, E6: 6, E7: 5
+    !byte 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5
+    !byte 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7
 
-    ; Tier 7 (360s+): E1: 2 (6%), E2: 2 (6%), E3: 3 (9%), E4: 5 (16%), E5: 5 (16%), E6: 5 (16%), E7: 7 (22%), E8: 3 (9%)
-    !byte 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4
-    !byte 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7
+    ; Tier 7 (360s+): E1: 2, E2: 2, E3: 3, E4: 5, E5: 5, E6: 5, E7: 7, E8: 3
+    !byte 1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5
+    !byte 5, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8
 
 ; ------------------------------------------------------------------------------
 ; 32-Entry Signed Sine Wave Lookup Table (Amplitude ±25 pixels, 1 full cycle)
@@ -215,6 +219,20 @@ g_enemy_sine_table:
     !byte  25,  25,  24,  22,  18,  14,  10,   5
     !byte   0,  -5, -10, -14, -18, -22, -24, -25
     !byte -25, -25, -24, -22, -18, -14, -10,  -5
+
+; ------------------------------------------------------------------------------
+; 8-Direction Movement Delta Tables (4 Straight: 0..3, 4 Diagonal: 4..7)
+; ------------------------------------------------------------------------------
+scorp_dx_tab:
+    !byte -1,  1,  0,  0, -1, -1,  1,  1
+scorp_dy_tab:
+    !byte  0,  0, -1,  1, -1,  1, -1,  1
+
+; ------------------------------------------------------------------------------
+; Death Random Velocity Components (-2, -1, 1, 2)
+; ------------------------------------------------------------------------------
+death_vel_tab:
+    !byte -2, -1,  1,  2
 
 ; ==============================================================================
 ; Subroutine: enemies_clear_all
@@ -304,6 +322,86 @@ enemies_init:
     and #$03
     sta VIC_SPR_PRIORITY
     rts
+
+; ==============================================================================
+; Subroutine: enemies_spawn_archetype
+; Purpose: Spawns an enemy of specified archetype (0..7) in a free slot.
+; Input: A = archetype (0..7)
+; ==============================================================================
+enemies_spawn_archetype:
+    pha                         ; Save archetype on stack
+
+    ; Find free slot
+    ldx #0
+-   lda g_enemy_active, x
+    beq @archetype_slot_found
+    inx
+    cpx #MAX_ENEMIES
+    bne -
+
+    ; All slots full: steal slot 0
+    ldx #0
+
+@archetype_slot_found:
+    txa
+    tay                         ; Y = enemy slot (0..11)
+    lda #1
+    sta g_enemy_active, y
+
+    ; Spawn X off-screen right (X = 344: X_lo = 88, X_hi = 1)
+    lda #88
+    sta g_enemy_x_lo, y
+    lda #1
+    sta g_enemy_x_hi, y
+
+    ; Spawn Y: random altitude (52..220)
+    jsr starfield_rand
+    and #$7f
+    clc
+    adc #52
+    sta s_spawn_y_temp
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc s_spawn_y_temp
+    cmp #222
+    bcc +
+    lda #220
++   sta g_enemy_y, y
+    jsr enemies_get_random_spawn_y
+    sta g_enemy_y, y
+    sta g_enemy_base_y, y
+
+    ; Reset enemy state flags
+    lda #0
+    sta g_enemy_dir_x, y
+    sta g_enemy_exploding, y
+    sta g_enemy_flash, y
+    sta g_enemy_roam_timer, y
+    sta g_enemy_phase, y
+    sta g_enemy_pattern, y
+
+    pla                         ; Restore archetype (0..7)
+    jmp enemy_setup_archetype_slot
+
+; ==============================================================================
+; Helper Subroutine: enemies_get_random_spawn_y
+; Returns: A = random Y coordinate (52..220)
+; ==============================================================================
+enemies_get_random_spawn_y:
+    jsr starfield_rand
+    and #$7f
+    clc
+    adc #52
+    sta s_spawn_y_temp
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc s_spawn_y_temp
+    cmp #221
+    bcc +
+    lda #220
++   rts
 
 ; ==============================================================================
 ; Subroutine: enemies_spawn
@@ -410,6 +508,8 @@ enemies_spawn:
     bcc +
     lda #220
 +   sta g_enemy_y, y
+    jsr enemies_get_random_spawn_y
+    sta g_enemy_y, y
     sta g_enemy_base_y, y
 
     ; Direction setup
@@ -424,8 +524,6 @@ enemies_spawn:
     ; Select archetype (via one-shot debug spawn or progression timeline)
     lda g_first_spawn_force
     beq @use_timeline
-    sec
-    sbc #1                      ; 1..8 -> 0..7
     ldx #0
     stx g_first_spawn_force     ; Reset one-shot flag after use
     jmp @setup_archetype
@@ -450,29 +548,30 @@ enemies_spawn:
     clc
     adc s_tier_offset_temp
     tax
-    lda tier_spawn_table, x     ; A = selected archetype (0..7)
+    lda tier_spawn_table, x     ; A = selected archetype (1..8)
 
     ; Enemy 8 Presence Guard: ensure at most 1 Enemy 8 active on screen
-    cmp #7
+    cmp #8
     bne @setup_archetype
     ldx #0
 -   lda g_enemy_active, x
     beq +
     lda g_enemy_archetype, x
-    cmp #7
+    cmp #8
     beq @downgrade_e8
 +   inx
     cpx #MAX_ENEMIES
     bne -
-    lda #7
+    lda #8
     jmp @setup_archetype
 
 @downgrade_e8:
-    lda #6                      ; Downgrade to Battleship (Enemy 7)
+    lda #7                      ; Downgrade to Enemy 7 (The Eye)
 
 @setup_archetype:
+enemy_setup_archetype_slot:
     sta g_enemy_archetype, y
-    tax                         ; X = archetype index (0..7)
+    tax                         ; X = archetype index (1..8)
 
     ; Set sprite pointer & HP
     lda enemy_table_sprite, x
@@ -490,14 +589,150 @@ enemies_spawn:
     ; Set speed
     lda enemy_table_speed, x
     sta g_enemy_speed, y
-    cpx #0
+
+    ; Archetype-specific setup (1..8):
+    cpx #1
     bne +
+    jmp @setup_scout
++   cpx #2
+    bne +
+    jmp @setup_enemy2
++   cpx #3
+    bne +
+    jmp @setup_enemy3
++   cpx #4
+    bne +
+    jmp @setup_scorpion
++   cpx #5
+    bne +
+    jmp @setup_batplane
++   cpx #6
+    bne +
+    jmp @setup_spider
++   cpx #7
+    bne +
+    jmp @setup_eye
++   cpx #8
+    bne +
+    jmp @setup_death
++   rts
+
+@setup_scout:
+    lda #0
+    sta g_enemy_dir_x, y
+    rts
+
+@setup_enemy2:
+    lda #0
+    sta g_enemy_pattern, y
     jsr starfield_rand
-    and #$01
+    and #$0f
     clc
-    adc #1
-    sta g_enemy_speed, y
-+
+    adc #15
+    sta g_enemy_roam_timer, y
+    rts
+
+@setup_enemy3:
+    lda #0
+    sta g_enemy_phase, y
+    sta g_enemy_dir_x, y
+    lda #56
+    sta g_enemy_y, y
+    sta g_enemy_base_y, y
+    jsr starfield_rand
+    lsr
+    bcc +
+    lda #216
+    sta g_enemy_y, y
+    sta g_enemy_base_y, y
+    lda #1
+    sta g_enemy_dir_x, y
++   rts
+
+@setup_scorpion:
+    jsr starfield_rand
+    and #$07
+    sta g_enemy_pattern, y
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #24
+    sta g_enemy_roam_timer, y
+    rts
+
+@setup_batplane:
+    lda #0
+    sta g_enemy_phase, y
+    sta g_enemy_pattern, y
+    lda g_enemy_y, y
+    sta g_enemy_base_y, y
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #40
+    sta g_enemy_roam_timer, y
+    rts
+
+@setup_spider:
+    lda #0
+    sta g_enemy_phase, y        ; Entering mode (flying to center)
+    sta g_enemy_dir_x, y        ; Clockwise (0)
+    lda #170
+    sta g_enemy_pattern, y      ; Initial X_center = 170
+    lda #136
+    sta g_enemy_base_y, y       ; Initial Y_center = 136
+    jsr starfield_rand
+    and #$3f
+    clc
+    adc #50
+    sta g_enemy_roam_timer, y
+    rts
+
+@setup_eye:
+    ; The Eye starts at top of screen (X = 280), ready to make half circles down
+    lda #24
+    sta g_enemy_x_lo, y
+    lda #1
+    sta g_enemy_x_hi, y         ; Start at X = 280
+    lda #255
+    sta g_enemy_pattern, y      ; X_c low = 255
+    lda #0
+    sta g_enemy_dir_x, y        ; X_c high = 0
+    lda g_enemy_y, y
+    cmp #80
+    bcs +
+    lda #80
++   cmp #191
+    bcc +
+    lda #190
++   sta g_enemy_base_y, y       ; Y_c = 80..190
+    sta g_enemy_y, y
+    jsr starfield_rand
+    and #$40                    ; Random swing direction (0=right, $40=left)
+    sta g_enemy_phase, y
+    rts
+
+@setup_death:
+    ; Death starts at X = 260, random Vx and Vy in any direction
+    lda #4
+    sta g_enemy_x_lo, y
+    lda #1
+    sta g_enemy_x_hi, y         ; Start at X = 260
+    jsr starfield_rand
+    and #$03
+    tax
+    lda death_vel_tab, x
+    sta g_enemy_dir_x, y        ; Vx (-2, -1, 1, 2)
+    jsr starfield_rand
+    and #$03
+    tax
+    lda death_vel_tab, x
+    sta g_enemy_pattern, y      ; Vy (-2, -1, 1, 2)
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #30
+    sta g_enemy_roam_timer, y
     rts
 
 ; ==============================================================================
@@ -596,12 +831,15 @@ enemies_update:
     sta g_enemy_color, x
     bne @skip_color
 
-+   ; Spider (Archetype 5) always has main color = Light Gray ($0F)
-    lda #COLOR_LIGHT_GRAY
++   ; Spider (Archetype 6) always has main color = Light Gray ($0F)
+    ; All other enemies (including Archetype 7 The Eye and Archetype 8 Death) cycle energy colors
     ldy g_enemy_archetype, x
-    cpy #5
-    beq @store_color
+    cpy #6
+    bne @cycle_color
+    lda #COLOR_LIGHT_GRAY
+    bne @store_color
 
+@cycle_color:
     txa
     clc
     adc s_enemy_color_idx
@@ -638,27 +876,927 @@ enemies_update:
     jmp @next_enemy_upd
 
 @not_exploding:
-    ; --------------------------------------------------------------------------
-    ; Horizontal Motion: Move Left by speed
-    ; --------------------------------------------------------------------------
+    lda g_enemy_archetype, x
+    cmp #1
+    bne +
+    jmp @move_scout             ; Archetype 1: Scout
++   cmp #2
+    bne +
+    jmp @move_enemy2            ; Archetype 2: Light Fighter
++   cmp #3
+    bne +
+    jmp @move_enemy3            ; Archetype 3: Interceptor
++   cmp #4
+    bne +
+    jmp @move_scorpion          ; Archetype 4: Scorpion
++   cmp #5
+    bne +
+    jmp @move_batplane          ; Archetype 5: Batplane
++   cmp #6
+    bne +
+    jmp @move_spider            ; Archetype 6: Spider
++   cmp #7
+    bne +
+    jmp @move_eye               ; Archetype 7: The Eye
++   cmp #8
+    bne +
+    jmp @move_death             ; Archetype 8: Death
++   jmp @next_enemy_upd
+
+@move_scout:
+    lda #80
+
+@move_patrol:
+    sta s_patrol_limit
+    lda g_enemy_dir_x, x
+    bne @patrol_move_up
+
+@patrol_move_down:
     lda g_enemy_x_lo, x
     sec
     sbc g_enemy_speed, x
     sta g_enemy_x_lo, x
     bcs +
     dec g_enemy_x_hi, x
-
-+   ; Despawn check: if X_hi == 0 and X_lo < 16 (fully exited left visible border)
-    lda g_enemy_x_hi, x
-    bne @check_shooting
++   lda g_enemy_x_hi, x
+    bne @patrol_shoot
     lda g_enemy_x_lo, x
-    cmp #16
-    bcs @check_shooting
+    cmp s_patrol_limit
+    bcs @patrol_shoot
+    lda s_patrol_limit
+    sta g_enemy_x_lo, x
+    lda #1
+    sta g_enemy_dir_x, x
+    bne @patrol_shoot
 
-    ; Deactivate enemy slot
+@patrol_move_up:
+    lda g_enemy_x_lo, x
+    clc
+    adc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   lda g_enemy_x_hi, x
+    beq @patrol_shoot
+    lda g_enemy_x_lo, x
+    cmp #24                     ; 256 + 24 = 280
+    bcc @patrol_shoot
+    lda #24
+    sta g_enemy_x_lo, x
     lda #0
-    sta g_enemy_active, x
-    jmp @next_enemy_upd
+    sta g_enemy_dir_x, x
+
+@patrol_shoot:
+    jmp @check_shooting
+
+@move_enemy2:
+    ; "Enemy 2 will erratically go straight or in diagonals, randomly."
+    ; "don't make any enemy escape the screen, let them hang out until destroyed"
+    lda g_enemy_dir_x, x
+    bne @e2_move_up
+
+@e2_move_down:
+    lda g_enemy_x_lo, x
+    sec
+    sbc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcs +
+    dec g_enemy_x_hi, x
++   ; Check bottom bounce at X <= 60
+    lda g_enemy_x_hi, x
+    bne @e2_timer
+    lda g_enemy_x_lo, x
+    cmp #60
+    bcs @e2_timer
+    lda #60
+    sta g_enemy_x_lo, x
+    lda #1
+    sta g_enemy_dir_x, x        ; Bounce: now moving up!
+    jmp @e2_timer
+
+@e2_move_up:
+    lda g_enemy_x_lo, x
+    clc
+    adc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   ; Check top bounce at X >= 280 ($0118)
+    lda g_enemy_x_hi, x
+    beq @e2_timer
+    lda g_enemy_x_lo, x
+    cmp #24                     ; 256 + 24 = 280
+    bcc @e2_timer
+    lda #24
+    sta g_enemy_x_lo, x
+    lda #0
+    sta g_enemy_dir_x, x        ; Bounce: now moving down!
+
+@e2_timer:
+    ; 2. Erratic timer countdown
+    dec g_enemy_roam_timer, x
+    bne @e2_lateral
+    ; Timer expired: pick new random direction
+    jsr starfield_rand
+    and #$03                    ; 0..3
+    cmp #3
+    bne +
+    lda #0                      ; 0 or 3 = straight (dy = 0)
++   sta g_enemy_pattern, x
+    ; Reset timer to 16..39 frames
+    jsr starfield_rand
+    and #$17
+    clc
+    adc #16
+    sta g_enemy_roam_timer, x
+
+@e2_lateral:
+    ; 3. Lateral motion: 0 = straight, 1 = diagonal left, 2 = diagonal right
+    lda g_enemy_pattern, x
+    beq @e2_shoot               ; dy = 0
+    cmp #1
+    beq @e2_diag_left
+
+@e2_diag_right:
+    ; Move right (increasing Y)
+    lda g_enemy_y, x
+    clc
+    adc g_enemy_speed, x
+    cmp #220
+    bcc @e2_store_y
+    lda #1                      ; Hit right wall: bounce to diagonal left
+    sta g_enemy_pattern, x
+    lda #220
+    bne @e2_store_y
+
+@e2_diag_left:
+    ; Move left (decreasing Y)
+    lda g_enemy_y, x
+    sec
+    sbc g_enemy_speed, x
+    cmp #52
+    bcs @e2_store_y
+    lda #2                      ; Hit left wall: bounce to diagonal right
+    sta g_enemy_pattern, x
+    lda #52
+
+@e2_store_y:
+    sta g_enemy_y, x
+@e2_shoot:
+    jmp @check_shooting
+
+@move_enemy3:
+    ; "Enemy 3 will spawn in either side, go straight down, sweep throught the bottom and go back up on the other side."
+    ; "namely enemy 3 should do its round and repeat it indefinitely"
+    lda g_enemy_phase, x
+    beq @e3_phase0
+    cmp #1
+    beq @e3_phase1
+    cmp #2
+    beq @e3_phase2
+    jmp @e3_phase3
+
+@e3_phase0:
+    ; Phase 0: Go straight down (decreasing X)
+    lda g_enemy_x_lo, x
+    sec
+    sbc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcs +
+    dec g_enemy_x_hi, x
++   ; Check if reached bottom sweep altitude (X <= 70)
+    lda g_enemy_x_hi, x
+    bne +
+    lda g_enemy_x_lo, x
+    cmp #70
+    bcs +
+    lda #70
+    sta g_enemy_x_lo, x
+    lda #1
+    sta g_enemy_phase, x        ; Enter Phase 1 (sweep bottom)
++   jmp @e3_shoot
+
+@e3_phase1:
+    ; Phase 1: Sweep through the bottom (moving Y)
+    ; Check start side: g_enemy_dir_x = 0 (Left -> sweeping Right)
+    ;                   g_enemy_dir_x = 1 (Right -> sweeping Left)
+    lda g_enemy_dir_x, x
+    bne @e3_p1_sweep_left
+
+@e3_p1_sweep_right:
+    lda g_enemy_y, x
+    clc
+    adc g_enemy_speed, x
+    cmp #216
+    bcc +
+    lda #216
+    lda #2
+    sta g_enemy_phase, x        ; Reached other side: Enter Phase 2 (go up)
+    lda #216
++   sta g_enemy_y, x
+    jmp @e3_shoot
+
+@e3_p1_sweep_left:
+    lda g_enemy_y, x
+    sec
+    sbc g_enemy_speed, x
+    cmp #56
+    bcs +
+    lda #56
+    lda #2
+    sta g_enemy_phase, x        ; Reached other side: Enter Phase 2 (go up)
+    lda #56
++   sta g_enemy_y, x
+    jmp @e3_shoot
+
+@e3_phase2:
+    ; Phase 2: Go back up on the other side (increasing X)
+    lda g_enemy_x_lo, x
+    clc
+    adc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   ; Check if reached top turnaround point (X >= 280: X_hi >= 1 and X_lo >= 24)
+    lda g_enemy_x_hi, x
+    beq @e3_shoot               ; X < 256
+    lda g_enemy_x_lo, x
+    cmp #24                     ; 256 + 24 = 280
+    bcc @e3_shoot
+    lda #24
+    sta g_enemy_x_lo, x
+    lda #3
+    sta g_enemy_phase, x        ; Reached top: Enter Phase 3 (sweep top)
+    jmp @e3_shoot
+
+@e3_phase3:
+    ; Phase 3: Sweep through the top back to starting flank
+    ; If started Left (g_enemy_dir_x = 0), currently at Right (Y=216) -> sweep Left (decreasing Y)
+    ; If started Right (g_enemy_dir_x = 1), currently at Left (Y=56) -> sweep Right (increasing Y)
+    lda g_enemy_dir_x, x
+    bne @e3_p3_sweep_right
+
+@e3_p3_sweep_left:
+    lda g_enemy_y, x
+    sec
+    sbc g_enemy_speed, x
+    cmp #56
+    bcs +
+    lda #0
+    sta g_enemy_phase, x        ; Reached starting flank: Enter Phase 0 (dive down)!
+    lda #56
++   sta g_enemy_y, x
+    jmp @e3_shoot
+
+@e3_p3_sweep_right:
+    lda g_enemy_y, x
+    clc
+    adc g_enemy_speed, x
+    cmp #216
+    bcc +
+    lda #0
+    sta g_enemy_phase, x        ; Reached starting flank: Enter Phase 0 (dive down)!
+    lda #216
++   sta g_enemy_y, x
+
+@e3_shoot:
+    jmp @check_shooting
+
+; ==============================================================================
+; Archetype 3: The Scorpion
+; "the scorpion will randomly move in diagonal or in 4 straight directions."
+; "don't make any enemy escape the screen, let them hang out until destroyed"
+; Directions (0..7):
+; 0: Down (-X), 1: Up (+X), 2: Left (-Y), 3: Right (+Y)
+; 4: Down-Left (-X,-Y), 5: Down-Right (-X,+Y), 6: Up-Left (+X,-Y), 7: Up-Right (+X,+Y)
+@move_scorpion:
+    dec g_enemy_roam_timer, x
+    bne @scorp_move
+    ; Roam timer expired: pick new random direction (0..7)
+    jsr starfield_rand
+    and #$07
+    sta g_enemy_pattern, x
+    ; Reset timer to 24..55 frames (~0.5..1.1s)
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #24
+    sta g_enemy_roam_timer, x
+
+@scorp_move:
+    ; 1. Process X movement component
+    ldy g_enemy_pattern, x
+    lda scorp_dx_tab, y
+    beq @scorp_check_y
+    bmi @scorp_down
+
+@scorp_up:
+    lda g_enemy_x_lo, x
+    clc
+    adc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   ; Check top bounce: X >= 280 (X_hi >= 1 and X_lo >= 24)
+    lda g_enemy_x_hi, x
+    beq @scorp_check_y
+    lda g_enemy_x_lo, x
+    cmp #24
+    bcc @scorp_check_y
+    lda #24
+    sta g_enemy_x_lo, x
+    ; Bounce X: reverse vertical component
+    lda g_enemy_pattern, x
+    cmp #4
+    bcs +
+    eor #1                      ; 1 (Up) -> 0 (Down)
+    sta g_enemy_pattern, x
+    bne @scorp_check_y
++   eor #2                      ; 6,7 (Up-L/R) -> 4,5 (Down-L/R)
+    sta g_enemy_pattern, x
+    bne @scorp_check_y
+
+@scorp_down:
+    lda g_enemy_x_lo, x
+    sec
+    sbc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcs +
+    dec g_enemy_x_hi, x
++   ; Check bottom bounce: X <= 60
+    lda g_enemy_x_hi, x
+    bne @scorp_check_y
+    lda g_enemy_x_lo, x
+    cmp #60
+    bcs @scorp_check_y
+    lda #60
+    sta g_enemy_x_lo, x
+    ; Bounce X: reverse vertical component
+    lda g_enemy_pattern, x
+    cmp #4
+    bcs +
+    eor #1                      ; 0 (Down) -> 1 (Up)
+    sta g_enemy_pattern, x
+    bne @scorp_check_y
++   eor #2                      ; 4,5 (Down-L/R) -> 6,7 (Up-L/R)
+    sta g_enemy_pattern, x
+
+@scorp_check_y:
+    ; 2. Process Y movement component
+    ldy g_enemy_pattern, x
+    lda scorp_dy_tab, y
+    beq @scorp_shoot
+    bmi @scorp_left
+
+@scorp_right:
+    lda g_enemy_y, x
+    clc
+    adc g_enemy_speed, x
+    cmp #220
+    bcc @scorp_store_y
+    lda #220
+    sta g_enemy_y, x
+    ; Bounce Y: reverse horizontal component (always EOR #1)
+    lda g_enemy_pattern, x
+    eor #1
+    sta g_enemy_pattern, x
+    bne @scorp_shoot
+
+@scorp_left:
+    lda g_enemy_y, x
+    sec
+    sbc g_enemy_speed, x
+    cmp #52
+    bcs @scorp_store_y
+    lda #52
+    sta g_enemy_y, x
+    ; Bounce Y: reverse horizontal component (always EOR #1)
+    lda g_enemy_pattern, x
+    eor #1
+    sta g_enemy_pattern, x
+
+@scorp_store_y:
+    sta g_enemy_y, x
+
+@scorp_shoot:
+    jmp @check_shooting
+
+; ==============================================================================
+; Archetype 4: The Batplane
+; "the batplane will switch between 4 straight directions and a sinus."
+; "don't make any enemy escape the screen, let them hang out until destroyed"
+; State:
+; g_enemy_phase: Bit 7 = 0: 4 straight directions mode
+;                Bit 7 = 1: Sinus mode (Bits 0..4 = phase angle 0..31)
+; g_enemy_pattern: In straight: direction (0=Down, 1=Up, 2=Left, 3=Right)
+;                  In sinus: primary X direction (0=Down, 1=Up)
+; g_enemy_base_y: Baseline Y altitude for sinus oscillation
+; ==============================================================================
+
+
+@move_batplane:
+    dec g_enemy_roam_timer, x
+    bne @bat_execute
+
+    ; Timer expired: switch modes!
+    lda g_enemy_phase, x
+    bmi @bat_switch_to_straight
+
+@bat_switch_to_sinus:
+    ; Currently straight -> switch to sinus!
+    lda #$80                    ; Bit 7 = 1 (sinus mode), phase angle = 0
+    sta g_enemy_phase, x
+    lda g_enemy_y, x
+    sta g_enemy_base_y, x
+    ; Pick X direction: if X >= 160 move Down (0), else move Up (1)
+    lda g_enemy_x_hi, x
+    bne +
+    lda g_enemy_x_lo, x
+    cmp #160
++   bcs @bat_sin_down
+    lda #1                      ; Move Up
+    bne @bat_sin_dir_set
+@bat_sin_down:
+    lda #0                      ; Move Down
+@bat_sin_dir_set:
+    sta g_enemy_pattern, x
+    ; Sinus duration: 50..81 frames (~1.0..1.6s)
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #50
+    sta g_enemy_roam_timer, x
+    bne @bat_execute
+
+@bat_switch_to_straight:
+    ; Currently sinus -> switch to 4 straight directions!
+    lda #0
+    sta g_enemy_phase, x
+    jsr starfield_rand
+    and #$03                    ; 0..3: Down, Up, Left, Right
+    sta g_enemy_pattern, x
+    ; Straight duration: 40..71 frames (~0.8..1.4s)
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #40
+    sta g_enemy_roam_timer, x
+
+@bat_execute:
+    lda g_enemy_phase, x
+    bpl @bat_straight_move
+
+@bat_sinus_move:
+    ; 1. Primary X motion (0 = Down, 1 = Up)
+    lda g_enemy_pattern, x
+    bne @bat_sin_up
+
+@bat_sin_down_mv:
+    lda g_enemy_x_lo, x
+    sec
+    sbc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcs +
+    dec g_enemy_x_hi, x
++   ; Check bottom turnaround at X <= 60
+    lda g_enemy_x_hi, x
+    bne @bat_sin_y
+    lda g_enemy_x_lo, x
+    cmp #60
+    bcs @bat_sin_y
+    lda #60
+    sta g_enemy_x_lo, x
+    lda #1
+    sta g_enemy_pattern, x      ; Turn around: move Up
+    bne @bat_sin_y
+
+@bat_sin_up:
+    lda g_enemy_x_lo, x
+    clc
+    adc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   ; Check top turnaround at X >= 280
+    lda g_enemy_x_hi, x
+    beq @bat_sin_y
+    lda g_enemy_x_lo, x
+    cmp #24                     ; 280
+    bcc @bat_sin_y
+    lda #24
+    sta g_enemy_x_lo, x
+    lda #0
+    sta g_enemy_pattern, x      ; Turn around: move Down
+
+@bat_sin_y:
+    ; 2. Advance sinus phase angle and apply oscillation
+    inc g_enemy_phase, x
+    lda g_enemy_phase, x
+    and #$1f
+    tay
+    lda g_enemy_sine_table, y
+    clc
+    adc g_enemy_base_y, x
+    cmp #52
+    bcs +
+    lda #52
++   cmp #221
+    bcc +
+    lda #220
++   sta g_enemy_y, x
+    jmp @check_shooting
+
+@bat_straight_move:
+    ; Batplane in 4 straight directions (0=Down, 1=Up, 2=Left, 3=Right)
+    ; Directly executes @scorp_move with directions 0..3!
+    jmp @scorp_move
+
+; ==============================================================================
+; Archetype 6: The Spider
+; "the spider will roam in circles roughly around the center, randomly"
+; "don't make any enemy escape the screen, let them hang out until destroyed"
+; State:
+; g_enemy_phase: Bit 7 = 0: Entering screen (flying down towards center)
+;                Bit 7 = 1: Circling mode (Bits 0..4 = phase angle 0..31)
+; g_enemy_dir_x: 0 = Clockwise (+phase), 1 = Counter-clockwise (-phase)
+; g_enemy_pattern: Current center X coordinate (145..195)
+; g_enemy_base_y:  Current center Y coordinate (118..149)
+; ==============================================================================
+@move_spider:
+    lda g_enemy_phase, x
+    bmi @spider_circling
+
+@spider_entering:
+    ; Fly down towards center: X = X - speed
+    lda g_enemy_x_lo, x
+    sec
+    sbc g_enemy_speed, x
+    sta g_enemy_x_lo, x
+    bcs +
+    dec g_enemy_x_hi, x
++   ; Check if reached center vicinity: X <= 180 (X_hi == 0 and X_lo <= 180)
+    lda g_enemy_x_hi, x
+    bne +
+    lda g_enemy_x_lo, x
+    cmp #180
+    bcs +
+    ; Reached center: activate circling mode!
+    lda #$80
+    sta g_enemy_phase, x
+    lda #170
+    sta g_enemy_pattern, x      ; X_center = 170
+    lda #136
+    sta g_enemy_base_y, x       ; Y_center = 136
++   jmp @spider_shoot
+
+@spider_circling:
+    ; 1. Roam timer: randomly shift circle center and rotation direction
+    dec g_enemy_roam_timer, x
+    bne @spider_step_circle
+    ; Reset roam timer (40..71 frames)
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #40
+    sta g_enemy_roam_timer, x
+    ; 50% chance to reverse rotation direction
+    jsr starfield_rand
+    lsr
+    bcc +
+    lda g_enemy_dir_x, x
+    eor #1
+    sta g_enemy_dir_x, x
++   ; Randomly drift X_center within 145..195
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #155
+    sta g_enemy_pattern, x
+    ; Randomly drift Y_center within 118..149
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #118
+    sta g_enemy_base_y, x
+
+@spider_step_circle:
+    ; 2. Advance phase angle (Clockwise = +1, Counter-clockwise = -1)
+    lda g_enemy_phase, x
+    and #$1f
+    ldy g_enemy_dir_x, x
+    bne @spider_step_ccw
+@spider_step_cw:
+    clc
+    adc #1
+    jmp @spider_phase_wrapped
+@spider_step_ccw:
+    sec
+    sbc #1
+@spider_phase_wrapped:
+    and #$1f
+    ora #$80                    ; Preserve Bit 7 (circling active)
+    sta g_enemy_phase, x
+
+    ; 3. Calculate Y = Y_center + sin(phase)
+    and #$1f
+    tay
+    lda g_enemy_sine_table, y   ; Signed offset (-25..+25)
+    clc
+    adc g_enemy_base_y, x       ; + Y_center (118..149)
+    sta g_enemy_y, x
+
+    ; 4. Calculate X = X_center + cos(phase) = X_center + sin(phase + 8)
+    lda g_enemy_phase, x
+    clc
+    adc #8
+    and #$1f
+    tay
+    lda g_enemy_sine_table, y   ; Signed offset (-25..+25)
+    clc
+    adc g_enemy_pattern, x      ; + X_center (145..195)
+    sta g_enemy_x_lo, x
+    lda #0
+    sta g_enemy_x_hi, x
+
+@spider_shoot:
+    jmp @check_shooting
+
+; ==============================================================================
+; Archetype 7: The Eye
+; "the eye should move making half circles towards the bottom"
+; "don't make any enemy escape the screen, let them hang out until destroyed"
+; ==============================================================================
+@move_eye:
+    lda g_enemy_phase, x
+    bpl @eye_descend
+
+@eye_ascend:
+    ; Climb back to top of screen: X = X + 3
+    lda g_enemy_x_lo, x
+    clc
+    adc #3
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   lda g_enemy_x_hi, x
+    beq @eye_ascend_shoot       ; X < 256
+    lda g_enemy_x_lo, x
+    cmp #24                     ; 256 + 24 = 280
+    bcc @eye_ascend_shoot
+    ; Reached top: clamp and reset for descending half circles
+    lda #24
+    sta g_enemy_x_lo, x
+    lda #1
+    sta g_enemy_x_hi, x
+    lda #255
+    sta g_enemy_pattern, x      ; X_c low = 255
+    lda #0
+    sta g_enemy_dir_x, x        ; X_c high = 0
+    jsr starfield_rand
+    and #$3f
+    clc
+    adc #90                     ; Y_c = 90..153
+    sta g_enemy_base_y, x
+    sta g_enemy_y, x
+    jsr starfield_rand
+    and #$40                    ; Random initial swing direction
+    sta g_enemy_phase, x        ; Bit 7 = 0: enter descend mode, step = 0
+
+@eye_ascend_shoot:
+    jmp @check_shooting
+
+@eye_descend:
+    ; Advance step (0..16)
+    lda g_enemy_phase, x
+    clc
+    adc #1
+    sta g_enemy_phase, x
+    and #$1f
+    cmp #17
+    bcc @eye_compute_pos
+
+    ; Semicircle completed!
+    ; Next semicircle: X_c = X_c - 50
+    lda g_enemy_pattern, x
+    sec
+    sbc #50
+    sta g_enemy_pattern, x
+    bcs +
+    dec g_enemy_dir_x, x
++   ; Check if X_c reached bottom of dive (X_c <= 95)
+    lda g_enemy_dir_x, x
+    bne @eye_next_semi
+    lda g_enemy_pattern, x
+    cmp #95
+    bcs @eye_next_semi
+    ; Reached bottom: switch to ascend mode!
+    lda #$80
+    sta g_enemy_phase, x
+    jmp @check_shooting
+
+@eye_next_semi:
+    ; Toggle swing direction (Bit 6) and reset step to 0
+    lda g_enemy_phase, x
+    eor #$40
+    and #$c0
+    sta g_enemy_phase, x
+
+@eye_compute_pos:
+    ; 1. Compute X = X_c + cos(step) = X_c + sine_table[(step + 8) & 31]
+    lda g_enemy_phase, x
+    and #$1f
+    clc
+    adc #8
+    and #$1f
+    tay
+    lda g_enemy_sine_table, y   ; Signed offset (-25..+25)
+    bpl @eye_x_pos
+    ; Offset is negative
+    clc
+    adc g_enemy_pattern, x
+    sta g_enemy_x_lo, x
+    lda g_enemy_dir_x, x
+    sbc #0
+    sta g_enemy_x_hi, x
+    jmp @eye_compute_y
+
+@eye_x_pos:
+    ; Offset is positive
+    clc
+    adc g_enemy_pattern, x
+    sta g_enemy_x_lo, x
+    lda g_enemy_dir_x, x
+    adc #0
+    sta g_enemy_x_hi, x
+
+@eye_compute_y:
+    ; 2. Compute Y = Y_c ± sin(step)
+    lda g_enemy_phase, x
+    and #$1f
+    tay
+    lda g_enemy_sine_table, y   ; 0..25..0
+    sta s_spawn_y_temp
+    lda g_enemy_phase, x
+    and #$40                    ; Bit 6 = 1: swing left, 0: swing right
+    bne @eye_swing_left
+
+@eye_swing_right:
+    lda g_enemy_base_y, x
+    clc
+    adc s_spawn_y_temp
+    jmp @eye_clamp_y
+
+@eye_swing_left:
+    lda g_enemy_base_y, x
+    sec
+    sbc s_spawn_y_temp
+
+@eye_clamp_y:
+    cmp #52
+    bcs +
+    lda #52
++   cmp #221
+    bcc +
+    lda #220
++   sta g_enemy_y, x
+
+@eye_shoot:
+    jmp @check_shooting
+
+; ==============================================================================
+; Archetype 8: Death
+; "Death should move completely random only in any direction"
+; "don't make any enemy escape the screen, let them hang out until destroyed"
+; ==============================================================================
+@move_death:
+    dec g_enemy_roam_timer, x
+    bne @death_move
+
+@death_pick_dir:
+    jsr starfield_rand
+    and #$03
+    tay
+    lda death_vel_tab, y
+    sta g_enemy_dir_x, x        ; Vx (-2, -1, 1, 2)
+    jsr starfield_rand
+    and #$03
+    tay
+    lda death_vel_tab, y
+    sta g_enemy_pattern, x      ; Vy (-2, -1, 1, 2)
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #30
+    sta g_enemy_roam_timer, x
+
+@death_move:
+    ; 1. Move X by Vx
+    lda g_enemy_dir_x, x
+    beq @death_move_y
+    bpl @death_x_pos
+
+@death_x_neg:
+    ; Vx is negative: move down (towards bottom, decreasing X)
+    lda g_enemy_dir_x, x
+    eor #$ff
+    clc
+    adc #1
+    sta s_spawn_y_temp          ; |Vx|
+    lda g_enemy_x_lo, x
+    sec
+    sbc s_spawn_y_temp
+    sta g_enemy_x_lo, x
+    bcs +
+    dec g_enemy_x_hi, x
++   ; Check bottom screen limit: X <= 60
+    lda g_enemy_x_hi, x
+    bne @death_move_y
+    lda g_enemy_x_lo, x
+    cmp #60
+    bcs @death_move_y
+    ; Hit bottom: clamp and bounce (reverse Vx)
+    lda #60
+    sta g_enemy_x_lo, x
+    lda g_enemy_dir_x, x
+    eor #$ff
+    clc
+    adc #1
+    sta g_enemy_dir_x, x
+    jmp @death_move_y
+
+@death_x_pos:
+    ; Vx is positive: move up (towards top, increasing X)
+    lda g_enemy_x_lo, x
+    clc
+    adc g_enemy_dir_x, x
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   ; Check top screen limit: X >= 280 (X_hi >= 1 and X_lo >= 24)
+    lda g_enemy_x_hi, x
+    beq @death_move_y
+    lda g_enemy_x_lo, x
+    cmp #24
+    bcc @death_move_y
+    ; Hit top: clamp and bounce (reverse Vx)
+    lda #24
+    sta g_enemy_x_lo, x
+    lda g_enemy_dir_x, x
+    eor #$ff
+    clc
+    adc #1
+    sta g_enemy_dir_x, x
+
+@death_move_y:
+    ; 2. Move Y by Vy
+    lda g_enemy_pattern, x
+    beq @death_shoot
+    bpl @death_y_pos
+
+@death_y_neg:
+    ; Vy is negative: move left (decreasing Y)
+    lda g_enemy_pattern, x
+    eor #$ff
+    clc
+    adc #1
+    sta s_spawn_y_temp          ; |Vy|
+    lda g_enemy_y, x
+    sec
+    sbc s_spawn_y_temp
+    cmp #52
+    bcs @death_store_y
+    ; Hit left wall: clamp and bounce (reverse Vy)
+    lda #52
+    sta g_enemy_y, x
+    lda g_enemy_pattern, x
+    eor #$ff
+    clc
+    adc #1
+    sta g_enemy_pattern, x
+    jmp @death_shoot
+
+@death_y_pos:
+    ; Vy is positive: move right (increasing Y)
+    lda g_enemy_y, x
+    clc
+    adc g_enemy_pattern, x
+    cmp #220
+    bcc @death_store_y
+    ; Hit right wall: clamp and bounce (reverse Vy)
+    lda #220
+    sta g_enemy_y, x
+    lda g_enemy_pattern, x
+    eor #$ff
+    clc
+    adc #1
+    sta g_enemy_pattern, x
+    jmp @death_shoot
+
+@death_store_y:
+    sta g_enemy_y, x
+
+@death_shoot:
+    jmp @check_shooting
 
 @check_shooting:
     ; Check if within firing range: 60 <= X <= 300

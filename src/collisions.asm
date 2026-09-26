@@ -404,8 +404,8 @@ shot_h_thresh_table:
     !byte 98, 98, 98, 122, 122
 
 ; ------------------------------------------------------------------------------
-; Enemy Point Values Table (Archetypes 0..7)
+; Enemy Point Values Table (Archetypes 1..8, index 0 is dummy)
 ; Points added to 16-bit score (displayed with two bulk zeroes: * 100)
 ; ------------------------------------------------------------------------------
 enemy_score_table:
-    !byte 1, 2, 3, 4, 5, 7, 10, 15  ; Displayed as: 100, 200, 300, 400, 500, 700, 1000, 1500
+    !byte 0, 1, 2, 3, 4, 5, 7, 10, 15  ; Displayed as: 100, 200, 300, 400, 500, 700, 1000, 1500

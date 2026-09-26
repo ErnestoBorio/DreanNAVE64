@@ -27,7 +27,7 @@
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
-; Input State RAM Variables: Frame-cleared (0..7)
+; Input State RAM Variables: Frame-cleared (0..8)
 ; ------------------------------------------------------------------------------
 g_input_up:            !byte 0   ; 0:  1 = Move Up active, 0 = Inactive
 g_input_down:          !byte 0   ; 1:  1 = Move Down active, 0 = Inactive
@@ -37,11 +37,13 @@ g_input_fire:          !byte 0   ; 4:  1 = Fire button held down (level-triggere
 g_input_fire_pressed:  !byte 0   ; 5:  1 = Fire button newly pressed (edge-triggered)
 s_col2_active:         !byte 0   ; 6:  1 = Horizontal Column 2 active (R, D, F)
 s_col4_active:         !byte 0   ; 7:  1 = TATE Column 4 active (J, K)
+s_current_debug_key:   !byte 0   ; 8:  1 = Spawn Enemy 1..8, 9 = Clear
 
-; Frame-preserved State Variables (8..10)
-s_prev_fire:           !byte 0   ; 8:  Previous frame fire state (used for edge-detection)
-g_debug_border_timer:  !byte 0   ; 9:  Countdown frames for border flash feedback
-s_scan_portb:          !byte 0   ; 10: Saved Port B reading to prevent register clobbering
+; Frame-preserved State Variables (9..12)
+s_prev_fire:           !byte 0   ; 9:  Previous frame fire state (used for edge-detection)
+s_prev_debug_key:      !byte 0   ; 10: Previous frame debug key (edge detector)
+g_debug_border_timer:  !byte 0   ; 11: Countdown frames for border flash feedback
+s_scan_portb:          !byte 0   ; 12: Saved Port B reading to prevent register clobbering
 
 ; ==============================================================================
 ; Subroutine: input_init
@@ -52,7 +54,7 @@ input_init:
     sta CIA1_DIR_A      ; Port A = Input mode
     sta CIA1_DIR_B      ; Port B = Input mode
 
-    ldx #10
+    ldx #12
 -   sta g_input_up, x
     dex
     bpl -
@@ -75,7 +77,7 @@ input_update:
 +
     ; 1. Reset frame input flags to 0 (inactive)
     lda #$00
-    ldx #7
+    ldx #8
 -   sta g_input_up, x
     dex
     bpl -
@@ -89,7 +91,15 @@ input_update:
     lda #$00
     sta CIA1_DIR_B
 
-    ; --- Column 2 ($FB = %11111011): 'R' (PB1), 'D' (PB2), 'F' (PB5) ---
+    ; --- Column 7 ($7F = %01111111): Shortcuts '1' (PB0), '2' (PB3) ---
+    lda #$7f
+    sta CIA1_DATA_A     ; Pull Column 7 low
+    lda CIA1_DATA_B     ; Read Rows (Port B)
+    sta s_scan_portb
+    lda #1
+    jsr check_col_shortcuts
+
+    ; --- Column 2 ($FB = %11111011): 'R' (PB1), 'D' (PB2), 'F' (PB5), '5' (PB0), '6' (PB3), 'C' (PB4) ---
     lda #$fb
     sta CIA1_DATA_A     ; Pull Column 2 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
@@ -110,7 +120,13 @@ input_update:
     bne +
     inc g_input_down
     inc s_col2_active   ; Flag Column 2 active
-+
++   lda s_scan_portb
+    and #$10            ; Bit 4: 'C' (0 = pressed) -> Clear all enemies
+    bne +
+    lda #9
+    sta s_current_debug_key
++   lda #5
+    jsr check_col_shortcuts
 
     ; --- Column 4 ($EF = %11101111): TATE Keys 'J' (PB2), 'K' (PB5) ---
     lda #$ef
@@ -128,7 +144,7 @@ input_update:
     inc s_col4_active   ; Flag Column 4 active
 +
 
-    ; --- Column 3 ($F7 = %11110111): Shared 'G', 'H', 'U' ---
+    ; --- Column 3 ($F7 = %11110111): Shared 'G', 'H', 'U', '7' (PB0), '8' (PB3) ---
     ; De-ghosting:
     ; 1) 'G' (Horizontal Right) is suppressed if Column 4 (J, K) is active,
     ;    preventing H+J+K in TATE mode from ghosting G and freezing controls.
@@ -159,9 +175,10 @@ input_update:
     lda s_col2_active   ; If Horizontal keys (R/D/F) active, suppress 'U'
     bne +
     inc g_input_right
-+
++   lda #7
+    jsr check_col_shortcuts
 
-    ; --- Column 1 ($FD = %11111101): Fire 'Z' (PB4) ---
+    ; --- Column 1 ($FD = %11111101): Fire 'Z' (PB4), '3' (PB0), '4' (PB3) ---
     lda #$fd
     sta CIA1_DATA_A     ; Pull Column 1 low
     lda CIA1_DATA_B     ; Read Rows (Port B)
@@ -169,7 +186,8 @@ input_update:
     and #$10            ; Bit 4: Key 'Z' (0 = pressed)
     bne +
     inc g_input_fire
-+
++   lda #3
+    jsr check_col_shortcuts
 
     ; --- Column 5 ($DF = %11011111): Fire Key 'P' (Row PB1) [Right Side Fire] ---
     lda #$df
@@ -269,4 +287,58 @@ input_update:
 @done_edge:
     lda g_input_fire
     sta s_prev_fire
+
+    ; --------------------------------------------------------------------------
+    ; Step 5: Evaluate Edge-Triggered Spawn Shortcuts (Keys 1..8, C=Clear)
+    ; --------------------------------------------------------------------------
+    lda s_current_debug_key
+    beq @no_debug_key
+    cmp s_prev_debug_key
+    beq @debug_eval_done
+    sta s_prev_debug_key
+
+    ; Only trigger spawn/clear during active gameplay!
+    ldx g_game_state
+    cpx #STATE_PLAYING
+    bne @debug_eval_done
+
+    cmp #9                      ; Key 'C': Clear all enemies
+    bne +
+    jsr enemies_clear_all
+    jmp @debug_eval_done
+
++   ; Key 1..8 directly passes Archetype 1..8
+    jsr enemies_spawn_archetype
+    jmp @debug_eval_done
+
+@no_debug_key:
+    lda #0
+    sta s_prev_debug_key
+
+@debug_eval_done:
+    rts
+
+; ==============================================================================
+; Helper Subroutine: check_col_shortcuts
+; Input: A = base shortcut number (1, 3, 5, 7)
+; Uses: s_scan_portb (current Port B reading)
+; Checks PB0 (digit A) and PB3 (digit A+1)
+; ==============================================================================
+check_col_shortcuts:
+    pha
+    lda s_scan_portb
+    lsr                         ; Carry = Bit 0 (0 = pressed)
+    bcs +
+    pla
+    sta s_current_debug_key
+    rts
++   lda s_scan_portb
+    and #$08                    ; Bit 3 (0 = pressed)
+    bne +
+    pla
+    clc
+    adc #1
+    sta s_current_debug_key
+    rts
++   pla
     rts
