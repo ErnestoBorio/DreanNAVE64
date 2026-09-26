@@ -74,6 +74,7 @@ g_enemy_hp:         !fill MAX_ENEMIES, 0
 g_enemy_archetype:  !fill MAX_ENEMIES, 0
 g_enemy_dir_x:      !fill MAX_ENEMIES, 0 ; 0 = Moving Left, 1 = Moving Right
 g_enemy_entry_dir:  !fill MAX_ENEMIES, 0 ; 0 = Top, 1 = Left side, 2 = Right side
+g_enemy_curve_timer: !fill MAX_ENEMIES, 0 ; Side-entry curve countdown timer (24..0)
 g_enemy_exploding:  !fill MAX_ENEMIES, 0 ; Explosion timer (12..0)
 g_enemy_flash:      !fill MAX_ENEMIES, 0 ; Damage flash timer (3..0)
 g_enemy_reload_timer: !fill MAX_ENEMIES, 60
@@ -261,6 +262,7 @@ enemies_clear_all:
     ldx #MAX_ENEMIES - 1
 -   sta g_enemy_active, x
     sta g_enemy_entry_dir, x
+    sta g_enemy_curve_timer, x
     sta g_enemy_exploding, x
     sta g_enemy_flash, x
     dex
@@ -281,6 +283,7 @@ enemies_init:
 -   lda #0
     sta g_enemy_active, x
     sta g_enemy_entry_dir, x
+    sta g_enemy_curve_timer, x
     sta g_enemy_x_lo, x
     sta g_enemy_x_hi, x
     sta g_enemy_y, x
@@ -421,24 +424,16 @@ enemies_get_random_spawn_y:
 
 ; ==============================================================================
 ; Helper Subroutine: enemies_get_random_spawn_x
-; Returns: A = random X low byte, X = random X high byte (X coordinate = 85..260)
+; Returns: A = random X low byte, X = random X high byte (X coordinate = 140..267)
 ; ==============================================================================
 enemies_get_random_spawn_x:
     jsr starfield_rand
     and #$7f                    ; 0..127
-    sta s_spawn_y_temp
-    jsr starfield_rand
-    and #$3f                    ; 0..63
     clc
-    adc s_spawn_y_temp          ; 0..190
-    cmp #176
-    bcc +
-    lda #175
-+   clc
-    adc #85                     ; 85..260 (with carry if >= 256)
+    adc #140                    ; 140..267 (safely in upper screen altitude)
     sta s_spawn_y_temp
     lda #0
-    adc #0                      ; High byte (0 or 1)
+    adc #0                      ; High byte (0 or 1 if >= 256)
     tax                         ; X = high byte
     lda s_spawn_y_temp          ; A = low byte
     rts
@@ -520,62 +515,42 @@ enemies_spawn:
     ; Spawn on Left side (Y = 48, entering along soft curve into screen)
     lda #1
     sta g_enemy_entry_dir, y
+    lda #24
+    sta g_enemy_curve_timer, y  ; 24-frame soft curve countdown (24..0)
     lda #48
     sta g_enemy_y, y
-    lda #23
-    sta g_enemy_roam_timer, y   ; 24-frame soft curve countdown (23..0)
-    ; Random altitude/height along vertical screen: X = 85..260
+    lda #0
+    sta g_enemy_dir_x, y        ; Start flank Left (dir_x = 0)
+    ; Random altitude/height along vertical screen: X = 140..267
     jsr enemies_get_random_spawn_x
     sta g_enemy_x_lo, y
     txa
     sta g_enemy_x_hi, y
-    ; Altitude-based curve direction: if X >= 160 swoop down, else swoop up
-    lda g_enemy_x_hi, y
-    bne @swoop_down_l
-    lda g_enemy_x_lo, y
-    cmp #160
-    bcs @swoop_down_l
-    lda #1
-    sta g_enemy_dir_x, y        ; Swoop upwards
-    jmp @finish_spawn_pos
-@swoop_down_l:
-    lda #0
-    sta g_enemy_dir_x, y        ; Swoop downwards
     jmp @finish_spawn_pos
 
 @spawn_from_right:
     ; Spawn on Right side (Y = 224, entering along soft curve into screen)
     lda #2
     sta g_enemy_entry_dir, y
+    lda #24
+    sta g_enemy_curve_timer, y  ; 24-frame soft curve countdown (24..0)
     lda #224
     sta g_enemy_y, y
-    lda #23
-    sta g_enemy_roam_timer, y   ; 24-frame soft curve countdown (23..0)
-    ; Random altitude/height along vertical screen: X = 85..260
+    lda #1
+    sta g_enemy_dir_x, y        ; Start flank Right (dir_x = 1)
+    ; Random altitude/height along vertical screen: X = 140..267
     jsr enemies_get_random_spawn_x
     sta g_enemy_x_lo, y
     txa
     sta g_enemy_x_hi, y
-    ; Altitude-based curve direction: if X >= 160 swoop down, else swoop up
-    lda g_enemy_x_hi, y
-    bne @swoop_down_r
-    lda g_enemy_x_lo, y
-    cmp #160
-    bcs @swoop_down_r
-    lda #1
-    sta g_enemy_dir_x, y        ; Swoop upwards
-    jmp @finish_spawn_pos
-@swoop_down_r:
-    lda #0
-    sta g_enemy_dir_x, y        ; Swoop downwards
     jmp @finish_spawn_pos
 
 @spawn_from_top:
     ; Spawn from Top (X = 344, off-screen top in TATE)
     lda #0
     sta g_enemy_entry_dir, y
+    sta g_enemy_curve_timer, y  ; 0 = No curve entry
     sta g_enemy_dir_x, y        ; Move down
-    sta g_enemy_roam_timer, y   ; 0 = Normal straight descent
     lda #88
     sta g_enemy_x_lo, y
     lda #1
@@ -986,11 +961,18 @@ enemies_update:
 +   jmp @next_enemy_upd
 
 @move_side_entry:
-    ; 1. Look up curve velocity deltas from countdown timer (23..0)
-    lda g_enemy_roam_timer, x
+    ; 1. Look up curve velocity deltas from dedicated countdown timer (24..0)
+    lda g_enemy_curve_timer, x
+    beq @side_entry_done
+    sec
+    sbc #1
+    sta g_enemy_curve_timer, x
     lsr
-    lsr                         ; Timer / 4 -> Segment 5..0
-    tay
+    lsr                         ; (23..0) >> 2 -> Segment 5..0
+    cmp #6
+    bcc +
+    lda #5                      ; Safety clamp to table bounds (0..5)
++   tay
     lda curve_dy_tab, y
     sta s_curve_dy_temp
     lda curve_dx_tab, y
@@ -1017,34 +999,20 @@ enemies_update:
     sta g_enemy_y, x
 
 @side_curve_apply_x:
-    ; 3. Apply vertical movement (X)
-    lda g_enemy_dir_x, x
-    bne @side_curve_up
-
-@side_curve_down:
-    ; Move down (decreasing X)
+    ; 3. Apply vertical movement (swoop down towards player)
     lda g_enemy_x_lo, x
     sec
     sbc s_curve_dx_temp
     sta g_enemy_x_lo, x
-    bcs +
+    bcs @side_curve_advance
     dec g_enemy_x_hi, x
-+   jmp @side_curve_advance
 
-@side_curve_up:
-    ; Move up (increasing X)
-    lda g_enemy_x_lo, x
-    clc
-    adc s_curve_dx_temp
-    sta g_enemy_x_lo, x
-    bcc +
-    inc g_enemy_x_hi, x
-+
 @side_curve_advance:
-    ; 4. Advance countdown timer
-    dec g_enemy_roam_timer, x
+    ; 4. Check if curve completed this frame
+    lda g_enemy_curve_timer, x
     bne @side_curve_shoot
 
+@side_entry_done:
     ; Timer expired: soft curve is complete!
     ; Clear entry flag to transition into archetype flight:
     lda #0
@@ -1252,6 +1220,8 @@ enemies_update:
     bcs @e3_p0_done
     lda #70
     sta g_enemy_x_lo, x
+    lda #0
+    sta g_enemy_x_hi, x
     lda #1
     sta g_enemy_phase, x        ; Bottom reached: enter Phase 1 (horizontal sweep)
 @e3_p0_done:
@@ -1270,8 +1240,14 @@ enemies_update:
     ; Soft curve upwards when approaching right flank (Y >= 196)
     cmp #196
     bcc @e3_p1_done
-    inc g_enemy_x_lo, x         ; Curve up!
-    lda g_enemy_y, x
+    ; 16-bit X increment
+    lda g_enemy_x_lo, x
+    clc
+    adc #1
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   lda g_enemy_y, x
     cmp #216
     bcc @e3_p1_done
     lda #216
@@ -1288,8 +1264,14 @@ enemies_update:
     ; Soft curve upwards when approaching left flank (Y <= 76)
     cmp #77
     bcs @e3_p1_done
-    inc g_enemy_x_lo, x         ; Curve up!
-    lda g_enemy_y, x
+    ; 16-bit X increment
+    lda g_enemy_x_lo, x
+    clc
+    adc #1
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   lda g_enemy_y, x
     cmp #56
     bcs @e3_p1_done
     lda #56
@@ -1328,6 +1310,8 @@ enemies_update:
     bcc @e3_p2_done
     lda #24
     sta g_enemy_x_lo, x
+    lda #1
+    sta g_enemy_x_hi, x
     lda #3
     sta g_enemy_phase, x        ; Top reached: enter Phase 3 (sweep top)
 
@@ -1347,8 +1331,14 @@ enemies_update:
     ; Soft curve downwards when approaching starting flank (Y <= 76)
     cmp #77
     bcs @e3_p3_done
-    dec g_enemy_x_lo, x         ; Curve down!
-    lda g_enemy_y, x
+    ; 16-bit X decrement
+    lda g_enemy_x_lo, x
+    sec
+    sbc #1
+    sta g_enemy_x_lo, x
+    bcs +
+    dec g_enemy_x_hi, x
++   lda g_enemy_y, x
     cmp #56
     bcs @e3_p3_done
     lda #56
@@ -1365,8 +1355,14 @@ enemies_update:
     ; Soft curve downwards when approaching starting flank (Y >= 196)
     cmp #196
     bcc @e3_p3_done
-    dec g_enemy_x_lo, x         ; Curve down!
-    lda g_enemy_y, x
+    ; 16-bit X decrement
+    lda g_enemy_x_lo, x
+    sec
+    sbc #1
+    sta g_enemy_x_lo, x
+    bcs +
+    dec g_enemy_x_hi, x
++   lda g_enemy_y, x
     cmp #216
     bcc @e3_p3_done
     lda #216
@@ -2097,8 +2093,9 @@ enemies_update:
     bcs +
     dec g_bullet_x_hi, x
 +
-    ; Despawn check: X < 16
+    ; Despawn check: X < 16 or negative underflow
     lda g_bullet_x_hi, x
+    bmi @despawn_b
     bne @bullet_move_y
     lda g_bullet_x_lo, x
     cmp #16
