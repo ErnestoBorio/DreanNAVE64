@@ -63,9 +63,7 @@ s_enemy_color_idx:   !byte 0    ; Current index in enemy energy sequence (0..5)
 enemy_energy_colors:
     !byte COLOR_CYAN, COLOR_ORANGE, COLOR_LIGHT_BLUE, COLOR_LIGHT_GREEN
     !byte COLOR_GREEN, COLOR_PURPLE
-    !byte COLOR_CYAN, COLOR_ORANGE, COLOR_LIGHT_BLUE, COLOR_LIGHT_GREEN
-    !byte COLOR_GREEN, COLOR_PURPLE
-    !byte COLOR_CYAN, COLOR_ORANGE
+
 g_enemy_pattern:    !fill MAX_ENEMIES, 0
 g_enemy_phase:      !fill MAX_ENEMIES, 0
 g_enemy_roam_timer: !fill MAX_ENEMIES, 0 ; 0 = Entering screen, >0 = Countdown to roam decision
@@ -138,16 +136,6 @@ enemy_table_sprite:
 enemy_table_hp:
     !byte 0, 1, 1, 1, 2, 2, 3, 3, 3
 
-enemy_table_pattern_mode:
-    !byte 0
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 1
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 2
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 3
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 4
-    !byte PATTERN_MODE_SINE_MIX     ; Enemy 5
-    !byte PATTERN_MODE_HUNT_MIX     ; Enemy 6
-    !byte PATTERN_MODE_HUNT_ONLY    ; Enemy 7
-    !byte PATTERN_MODE_HUNT_ONLY    ; Enemy 8
 
 enemy_table_speed:
     !byte 0, 1, 2, 2, 3, 2, 2, 2, 1
@@ -178,9 +166,33 @@ enemy_table_unlock_sec_hi:
     !byte >0, >20, >45, >75, >110, >155, >215, >285
 
 ; ------------------------------------------------------------------------------
-; Note: tier_offsets and tier_spawn_table (264 bytes) are located in
-; intermediate memory ($3600+ in powerups.asm) to save low code space below $2800.
+; 16-Entry Weighted Tier Spawn Table (8 Tiers x 16 bytes = 128 bytes total)
+; Offset = tier * 16 (0, 16, 32, 48, 64, 80, 96, 112)
 ; ------------------------------------------------------------------------------
+tier_spawn_table:
+    ; Tier 0 (0..19s): 100% Enemy 1 (16 entries)
+    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+
+    ; Tier 1 (20..44s): 69% E1 (11), 31% E2 (5)
+    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2
+
+    ; Tier 2 (45..74s): 50% E1 (8), 31% E2 (5), 19% E3 (3)
+    !byte 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3
+
+    ; Tier 3 (75..109s): E1..E4 equal distribution (4 each = 25% each)
+    !byte 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4
+
+    ; Tier 4 (110..154s): E1: 3, E2: 3, E3: 3, E4: 3, E5: 4
+    !byte 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5
+
+    ; Tier 5 (155..214s): E1: 2, E2: 2, E3: 3, E4: 3, E5: 3, E6: 3
+    !byte 1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6
+
+    ; Tier 6 (215..284s): E1: 2, E2: 2, E3: 2, E4: 2, E5: 3, E6: 3, E7: 2
+    !byte 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7
+
+    ; Tier 7 (285s+ / 4:45+): E1: 1, E2: 1, E3: 1, E4: 2, E5: 2, E6: 2, E7: 3, E8: 4 (Death 25% of spawns)
+    !byte 1, 2, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 8
 
 
 ; ------------------------------------------------------------------------------
@@ -214,6 +226,17 @@ curve_dy_tab:
     !byte 0, 1, 2, 2, 3, 3      ; dy: 3 at entry -> 0 at exit (horizontal -> vertical)
 curve_dx_tab:
     !byte 3, 3, 3, 2, 1, 0      ; dx: 0 at entry -> 3 at exit (horizontal -> vertical)
+
+; ------------------------------------------------------------------------------
+; Slower & Broader Semicircle Tables for Scorpion (Archetype 4)
+; 24 steps x 2 frames = 48 frames (~1.0s) per semicircle
+; Amplitude = 44 px (span = 88 px), Descent = 36 px
+; ------------------------------------------------------------------------------
+scorp_curve_dy_tab:
+    !byte 0, 6, 11, 17, 22, 27, 31, 35, 38, 41, 42, 44, 44, 44, 42, 41, 38, 35, 31, 27, 22, 17, 11, 6, 0
+scorp_curve_dx_tab:
+    !byte 0, 0, 1, 1, 2, 4, 5, 7, 9, 11, 13, 16, 18, 20, 23, 25, 27, 29, 31, 32, 34, 35, 35, 36, 36
+
 
 
 
@@ -342,22 +365,10 @@ enemies_spawn_archetype:
     sta g_enemy_x_hi, y
 
     ; Spawn Y: random altitude (52..220)
-    jsr starfield_rand
-    and #$7f
-    clc
-    adc #52
-    sta s_spawn_y_temp
-    jsr starfield_rand
-    and #$1f
-    clc
-    adc s_spawn_y_temp
-    cmp #222
-    bcc +
-    lda #220
-+   sta g_enemy_y, y
     jsr enemies_get_random_spawn_y
     sta g_enemy_y, y
     sta g_enemy_base_y, y
+
 
     ; Reset enemy state flags
     lda #0
@@ -484,12 +495,24 @@ enemies_spawn:
     ; Spawn on Left side (Y = 48, entering along soft curve into screen)
     lda #1
     sta g_enemy_entry_dir, y
-    lda #24
-    sta g_enemy_curve_timer, y  ; 24-frame soft curve countdown (24..0)
     lda #48
     sta g_enemy_y, y
     lda #0
     sta g_enemy_dir_x, y        ; Start flank Left (dir_x = 0)
+    beq @spawn_side_common
+
+@spawn_from_right:
+    ; Spawn on Right side (Y = 224, entering along soft curve into screen)
+    lda #2
+    sta g_enemy_entry_dir, y
+    lda #224
+    sta g_enemy_y, y
+    lda #1
+    sta g_enemy_dir_x, y        ; Start flank Right (dir_x = 1)
+
+@spawn_side_common:
+    lda #24
+    sta g_enemy_curve_timer, y  ; 24-frame soft curve countdown (24..0)
     ; Random altitude/height along vertical screen: X = 140..267
     jsr enemies_get_random_spawn_x
     sta g_enemy_x_lo, y
@@ -497,22 +520,6 @@ enemies_spawn:
     sta g_enemy_x_hi, y
     jmp @finish_spawn_pos
 
-@spawn_from_right:
-    ; Spawn on Right side (Y = 224, entering along soft curve into screen)
-    lda #2
-    sta g_enemy_entry_dir, y
-    lda #24
-    sta g_enemy_curve_timer, y  ; 24-frame soft curve countdown (24..0)
-    lda #224
-    sta g_enemy_y, y
-    lda #1
-    sta g_enemy_dir_x, y        ; Start flank Right (dir_x = 1)
-    ; Random altitude/height along vertical screen: X = 140..267
-    jsr enemies_get_random_spawn_x
-    sta g_enemy_x_lo, y
-    txa
-    sta g_enemy_x_hi, y
-    jmp @finish_spawn_pos
 
 @spawn_from_top:
     ; Spawn from Top (X = 344, off-screen top in TATE)
@@ -555,14 +562,19 @@ enemies_spawn:
     bne -
 
 @tier_found:
-    lda tier_offsets, x
+    txa
+    asl
+    asl
+    asl
+    asl                         ; A = tier * 16 (0, 16, 32, 48, 64, 80, 96, 112)
     sta s_tier_offset_temp
     jsr starfield_rand
-    and #$1f
+    and #$0f                    ; 16 entries per tier (0..15)
     clc
     adc s_tier_offset_temp
     tax
     lda tier_spawn_table, x     ; A = selected archetype (1..8)
+
 
     ; Enemy 8 Presence Guard: ensure at most 1 Enemy 8 active on screen
     cmp #8
