@@ -78,6 +78,7 @@ s_str_len:          !byte 0     ; Length of string to draw
 ; Purpose: Initializes high score from Top 10 rank 1 score.
 ; ==============================================================================
 hiscore_init:
+    jsr hiscore_load
     lda top10_scores_lo + 0
     sta g_high_score + 0
     lda top10_scores_hi + 0
@@ -865,6 +866,184 @@ hiscore_insert_score:
     sta g_high_score + 0
     lda top10_scores_hi + 0
     sta g_high_score + 1
+
+    ; 5. Save updated Top 10 table to Drive 9
+    jsr hiscore_save
+    rts
+
+; ==============================================================================
+; Top 10 High Scores Disk Persistence Subsystem (Drive 9)
+; ==============================================================================
+HISCORE_DEVICE_NUM  = 9
+
+s_hiscore_fname_load:
+    !text "HIGHSCORES"
+s_hiscore_fname_load_end:
+HISCORE_FNAME_LOAD_LEN = s_hiscore_fname_load_end - s_hiscore_fname_load
+
+s_hiscore_fname_save:
+    !text "@0:HIGHSCORES"
+s_hiscore_fname_save_end:
+HISCORE_FNAME_SAVE_LEN = s_hiscore_fname_save_end - s_hiscore_fname_save
+
+s_saved_0001:       !byte 0
+s_saved_irq_lo:     !byte 0
+s_saved_irq_hi:     !byte 0
+s_saved_vic_irq:    !byte 0
+s_saved_dd02:       !byte 0
+s_saved_status:     !byte 0
+
+; ==============================================================================
+; Subroutine: hiscore_prepare_io
+; Purpose: Prepares C64 hardware for safe KERNAL IEC disk serial bus I/O:
+;          saves status flags (CLI/SEI state), disables interrupts, sets $0001
+;          to standard KERNAL configuration ($37), disables VIC raster IRQ,
+;          points IRQ vector to standard KERNAL handler ($EA31), sets CIA2 Port A
+;          DDR ($DD02 = $3F) and releases serial bus lines (bits 3..5).
+; ==============================================================================
+hiscore_prepare_io:
+    php
+    pla
+    sta s_saved_status          ; Save processor flags (including interrupt mask I)
+    sei                         ; Disable CPU maskable interrupts
+
+    lda $0001
+    sta s_saved_0001
+    lda #$37                    ; Ensure KERNAL ROM + BASIC ROM + I/O are mapped
+    sta $0001
+
+    lda VIC_IRQ_ENABLE
+    sta s_saved_vic_irq
+    lda #0
+    sta VIC_IRQ_ENABLE          ; Disable VIC raster IRQs ($D01A = 0)
+    lda #$ff
+    sta VIC_IRQ_FLAGS           ; Ack any pending VIC IRQ flags
+
+    lda IRQ_VECTOR + 0
+    sta s_saved_irq_lo
+    lda IRQ_VECTOR + 1
+    sta s_saved_irq_hi
+    lda #$31                    ; Standard KERNAL IRQ entry ($EA31)
+    sta IRQ_VECTOR + 0
+    lda #$ea
+    sta IRQ_VECTOR + 1
+
+    lda CIA2_DIR_A
+    sta s_saved_dd02
+    lda #$3f                    ; Bits 0..5 output, 6..7 input
+    sta CIA2_DIR_A
+    lda CIA2_DATA_A
+    ora #$38                    ; Release IEC lines (ATN=1, CLK=1, DATA=1)
+    sta CIA2_DATA_A
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_finish_io
+; Purpose: Restores C64 hardware state after KERNAL IEC disk serial bus I/O:
+;          calls KERNAL_CLRCHN, restores CIA2 DDR, restores game IRQ vector,
+;          restores VIC raster IRQ enable, restores $0001 memory banking,
+;          and restores CPU interrupt flag state.
+; ==============================================================================
+hiscore_finish_io:
+    jsr KERNAL_CLRCHN           ; Reset I/O channels to default keyboard/screen
+
+    sei                         ; Ensure interrupts disabled while restoring vectors
+    lda s_saved_dd02
+    sta CIA2_DIR_A
+
+    lda s_saved_irq_lo
+    sta IRQ_VECTOR + 0
+    lda s_saved_irq_hi
+    sta IRQ_VECTOR + 1
+
+    lda s_saved_vic_irq
+    sta VIC_IRQ_ENABLE
+    lda #$ff
+    sta VIC_IRQ_FLAGS
+
+    lda s_saved_0001
+    sta $0001
+
+    lda s_saved_status
+    pha
+    plp                         ; Restore original interrupt mask (CLI/SEI)
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_load
+; Purpose: Loads Top 10 high score table (50 bytes) from Drive 9 ("HIGHSCORES").
+;          If drive not present or file not found, leaves default table intact.
+; ==============================================================================
+hiscore_load:
+    jsr hiscore_prepare_io
+
+    ; Set file parameters: Logical file 1, Device 9, Secondary address 0
+    lda #1
+    ldx #HISCORE_DEVICE_NUM
+    ldy #0                      ; Secondary 0 = load to address specified in X/Y
+    jsr KERNAL_SETLFS
+
+    ; Set filename parameters: Length 10, "HIGHSCORES"
+    lda #HISCORE_FNAME_LOAD_LEN
+    ldx #<s_hiscore_fname_load
+    ldy #>s_hiscore_fname_load
+    jsr KERNAL_SETNAM
+
+    ; Call KERNAL LOAD (A=0: LOAD, X/Y = target address)
+    lda #0
+    ldx #<top10_scores_lo
+    ldy #>top10_scores_lo
+    jsr KERNAL_LOAD
+
+    ; Check error
+    bcs @load_done              ; If Carry set, error occurred; keep existing scores
+
+    ; On success, update g_high_score to rank 1 score
+    lda top10_scores_lo + 0
+    sta g_high_score + 0
+    lda top10_scores_hi + 0
+    sta g_high_score + 1
+
+@load_done:
+    jsr hiscore_finish_io
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_save
+; Purpose: Saves Top 10 high score table (50 bytes) to Drive 9 ("@0:HIGHSCORES").
+;          Overwrites existing file or creates new file if not present.
+; ==============================================================================
+hiscore_save:
+    jsr hiscore_prepare_io
+
+    ; Set file parameters: Logical file 1, Device 9, Secondary address 0
+    lda #1
+    ldx #HISCORE_DEVICE_NUM
+    ldy #0
+    jsr KERNAL_SETLFS
+
+    ; Set filename parameters: Length 13, "@0:HIGHSCORES"
+    lda #HISCORE_FNAME_SAVE_LEN
+    ldx #<s_hiscore_fname_save
+    ldy #>s_hiscore_fname_save
+    jsr KERNAL_SETNAM
+
+    ; Prepare Zero Page pointer to start of memory to save ($FB/$FC)
+    lda #<top10_scores_lo
+    sta $fb
+    lda #>top10_scores_lo
+    sta $fc
+
+    ; Call KERNAL SAVE
+    ; A = Zero page address containing start pointer ($FB)
+    ; X = Low byte of end address + 1
+    ; Y = High byte of end address + 1
+    lda #$fb
+    ldx #<(top10_initials + 30)
+    ldy #>(top10_initials + 30)
+    jsr KERNAL_SAVE
+
+    jsr hiscore_finish_io
     rts
 
 

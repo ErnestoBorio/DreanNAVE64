@@ -3,28 +3,38 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PRG_PATH="$SCRIPT_DIR/bin/drean_nave_64.prg"
+DISK_PATH="$SCRIPT_DIR/tools/nave-highscore.d64"
+if [[ ! -f "$DISK_PATH" && -f "./tools/nave-highscore.d64" ]]; then
+    DISK_PATH="./tools/nave-highscore.d64"
+fi
+
+DISK_ARGS=()
+if [[ -f "$DISK_PATH" ]]; then
+    DISK_ARGS=(-drive9type 1541 -9 "$DISK_PATH")
+fi
+
 
 echo "==> Compiling latest C64 binary..."
 "$SCRIPT_DIR/build.sh"
 
 # 1. Check if user specified a custom VICE path in environment
 if [[ -n "$VICE_BIN" && -x "$VICE_BIN" ]]; then
-    EXEC_CMD=("$VICE_BIN" "$PRG_PATH")
+    EXEC_CMD=("$VICE_BIN" "${DISK_ARGS[@]}" "$PRG_PATH")
 elif [[ -n "$VICE_APP" && -d "$VICE_APP" ]]; then
-    EXEC_CMD=(open -a "$VICE_APP" --args "$PRG_PATH")
+    EXEC_CMD=(open -a "$VICE_APP" --args "${DISK_ARGS[@]}" "$PRG_PATH")
 fi
 
 # 2. Check for CLI executables in PATH and standard locations
 if [[ -z "$EXEC_CMD" ]]; then
     for bin in x64sc x64; do
         if command -v "$bin" >/dev/null 2>&1; then
-            EXEC_CMD=("$bin" "$PRG_PATH")
+            EXEC_CMD=("$bin" "${DISK_ARGS[@]}" "$PRG_PATH")
             break
         elif [[ -x "/opt/homebrew/bin/$bin" ]]; then
-            EXEC_CMD=("/opt/homebrew/bin/$bin" "$PRG_PATH")
+            EXEC_CMD=("/opt/homebrew/bin/$bin" "${DISK_ARGS[@]}" "$PRG_PATH")
             break
         elif [[ -x "/usr/local/bin/$bin" ]]; then
-            EXEC_CMD=("/usr/local/bin/$bin" "$PRG_PATH")
+            EXEC_CMD=("/usr/local/bin/$bin" "${DISK_ARGS[@]}" "$PRG_PATH")
             break
         fi
     done
@@ -44,7 +54,7 @@ if [[ -z "$EXEC_CMD" ]]; then
         "$HOME/Applications/VICE/x64.app" \
         "$HOME/Applications/x64.app"; do
         if [[ -d "$app" ]]; then
-            EXEC_CMD=(open -a "$app" --args "$PRG_PATH")
+            EXEC_CMD=(open -a "$app" --args "${DISK_ARGS[@]}" "$PRG_PATH")
             break
         fi
     done
@@ -54,7 +64,7 @@ fi
 if [[ -z "$EXEC_CMD" ]]; then
     for app_name in "x64sc" "VICE" "x64"; do
         if open -Ra "$app_name" 2>/dev/null; then
-            EXEC_CMD=(open -a "$app_name" --args "$PRG_PATH")
+            EXEC_CMD=(open -a "$app_name" --args "${DISK_ARGS[@]}" "$PRG_PATH")
             break
         fi
     done
@@ -62,7 +72,11 @@ fi
 
 # 5. Run emulator or report missing binary
 if [[ -n "$EXEC_CMD" ]]; then
-    echo "==> Launching VICE with $PRG_PATH..."
+    if [[ ${#DISK_ARGS[@]} -gt 0 ]]; then
+        echo "==> Launching VICE with $PRG_PATH (attached Drive 9: $DISK_PATH)..."
+    else
+        echo "==> Launching VICE with $PRG_PATH..."
+    fi
     "${EXEC_CMD[@]}"
 else
     echo "==> Error: VICE emulator executable not found."
