@@ -178,43 +178,10 @@ enemy_table_unlock_sec_hi:
     !byte >0, >20, >45, >75, >110, >155, >215, >285
 
 ; ------------------------------------------------------------------------------
-; 32-Entry Weighted Tier Spawn Tables (8 Tiers x 32 bytes = 256 bytes total)
+; Note: tier_offsets and tier_spawn_table (264 bytes) are located in
+; intermediate memory ($3600+ in powerups.asm) to save low code space below $2800.
 ; ------------------------------------------------------------------------------
-tier_offsets:
-    !byte 0, 32, 64, 96, 128, 160, 192, 224
 
-tier_spawn_table:
-    ; Tier 0 (0..19s): 100% Enemy 1 (32 entries)
-    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-
-    ; Tier 1 (20..44s): 69% E1 (22), 31% E2 (10)
-    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-    !byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
-
-    ; Tier 2 (45..74s): 50% E1 (16), 31% E2 (10), 19% E3 (6)
-    !byte 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-    !byte 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3
-
-    ; Tier 3 (75..109s): E1..E4 equal distribution (8 each = 25% each)
-    !byte 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2
-    !byte 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4
-
-    ; Tier 4 (110..154s): E1: 6, E2: 6, E3: 6, E4: 7, E5: 7
-    !byte 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3
-    !byte 3, 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5
-
-    ; Tier 5 (155..214s): E1: 4, E2: 4, E3: 5, E4: 6, E5: 7, E6: 6
-    !byte 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4
-    !byte 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6
-
-    ; Tier 6 (215..284s): E1: 3, E2: 3, E3: 4, E4: 5, E5: 6, E6: 6, E7: 5
-    !byte 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5
-    !byte 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7
-
-    ; Tier 7 (285s+ / 4:45+): E1: 2, E2: 2, E3: 2, E4: 3, E5: 4, E6: 5, E7: 6, E8: 8 (Death 25% of spawns)
-    !byte 1, 1, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6
-    !byte 6, 6, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8
 
 ; ------------------------------------------------------------------------------
 ; 32-Entry Signed Sine Wave Lookup Table (Amplitude ±25 pixels, 1 full cycle)
@@ -247,6 +214,8 @@ curve_dy_tab:
     !byte 0, 1, 2, 2, 3, 3      ; dy: 3 at entry -> 0 at exit (horizontal -> vertical)
 curve_dx_tab:
     !byte 3, 3, 3, 2, 1, 0      ; dx: 0 at entry -> 3 at exit (horizontal -> vertical)
+
+
 
 ; ==============================================================================
 ; Subroutine: enemies_clear_all
@@ -737,10 +706,7 @@ enemy_setup_archetype_slot:
     sta g_enemy_pattern, y      ; Initial X_center = 170
     lda #136
     sta g_enemy_base_y, y       ; Initial Y_center = 136
-    jsr starfield_rand
-    and #$3f
-    clc
-    adc #50
+    lda #8
     sta g_enemy_roam_timer, y
     rts
 
@@ -750,26 +716,24 @@ enemy_setup_archetype_slot:
     ; Archetype 4 (Scorpion): Start at top of screen (X = 280), ready to make half circles down
     lda #24
     sta g_enemy_x_lo, y
+    sta g_enemy_pattern, y      ; X_start low = 24
     lda #1
     sta g_enemy_x_hi, y         ; Start at X = 280
-    lda #255
-    sta g_enemy_pattern, y      ; X_c low = 255
-    lda #0
-    sta g_enemy_dir_x, y        ; X_c high = 0
-    lda g_enemy_y, y
-    cmp #80
-    bcs +
-    lda #80
-+   cmp #191
-    bcc +
-    lda #190
-+   sta g_enemy_base_y, y       ; Y_c = 80..190
-    sta g_enemy_y, y
-@setup_eye_side:
+    sta g_enemy_dir_x, y        ; X_start high = 1
     jsr starfield_rand
-    and #$40                    ; Random swing direction (0=right, $40=left)
-    sta g_enemy_phase, y
+    and #$3f
+    clc
+    adc #104                    ; Y_c = 104..167 (nicely centered)
+    sta g_enemy_base_y, y
+    sta g_enemy_y, y
+    cmp #136
+    lda #0                      ; Swing right if Y <= 136
+    bcc +
+    lda #$40                    ; Swing left if Y > 136
++   sta g_enemy_phase, y        ; Descend mode (0), step = 0, tick = 0
+@setup_eye_side:
     rts
+
 
 @setup_death:
     lda g_enemy_entry_dir, y
@@ -1017,14 +981,22 @@ enemies_update:
     ; Clear entry flag to transition into archetype flight:
     lda #0
     sta g_enemy_entry_dir, x
-    ; For Archetype 4 (Scorpion), sync circle center X_c to current X
+    ; For Archetype 4 (Scorpion), initialize descent seamlessly from current position
     lda g_enemy_archetype, x
     cmp #4
     bne @side_curve_shoot
     lda g_enemy_x_lo, x
-    sta g_enemy_pattern, x
+    sta g_enemy_pattern, x      ; X_start low = current X
     lda g_enemy_x_hi, x
-    sta g_enemy_dir_x, x
+    sta g_enemy_dir_x, x        ; X_start high = current X
+    lda g_enemy_y, x
+    sta g_enemy_base_y, x       ; Y_c = current Y
+    cmp #136
+    lda #0                      ; Swing right if Y <= 136
+    bcc +
+    lda #$40                    ; Swing left if Y > 136
++   sta g_enemy_phase, x        ; Descend mode (0), step = 0, tick = 0
+
 
 @side_curve_shoot:
     ; Check if within screen boundaries (50 <= Y <= 222) to allow shooting
@@ -1628,68 +1600,128 @@ enemies_update:
 ; "the spider will roam in circles roughly around the center, randomly"
 ; "don't make any enemy escape the screen, let them hang out until destroyed"
 ; State:
-; g_enemy_phase: Bit 7 = 0: Entering screen (flying down towards center)
+; g_enemy_phase: Bit 7 = 0: Entering screen (smoothly steering to (195, 136))
 ;                Bit 7 = 1: Circling mode (Bits 0..4 = phase angle 0..31)
 ; g_enemy_dir_x: 0 = Clockwise (+phase), 1 = Counter-clockwise (-phase)
-; g_enemy_pattern: Current center X coordinate (145..195)
-; g_enemy_base_y:  Current center Y coordinate (118..149)
+; g_enemy_pattern: Current center X coordinate (155..185)
+; g_enemy_base_y:  Current center Y coordinate (120..152)
 ; ==============================================================================
 @move_spider:
     lda g_enemy_phase, x
     bmi @spider_circling
 
 @spider_entering:
-    ; Fly down towards center: X = X - speed
+    ; 1. Steer Y smoothly towards 136 (1 px/frame)
+    lda g_enemy_y, x
+    cmp #136
+    beq @spider_enter_x
+    bcc +
+    dec g_enemy_y, x
+    jmp @spider_enter_x
++   inc g_enemy_y, x
+
+@spider_enter_x:
+    ; 2. Steer X towards 195
+    lda g_enemy_x_hi, x
+    bne @spider_enter_x_hi_dec  ; X >= 256
+    lda g_enemy_x_lo, x
+    cmp #195
+    beq @spider_enter_check_done
+    bcc @spider_enter_x_inc
+    ; X > 195: decrease by 2 towards 195
+    sec
+    sbc #2
+    cmp #195
+    bcs +
+    lda #195
++   sta g_enemy_x_lo, x
+    jmp @spider_shoot
+
+@spider_enter_x_hi_dec:
     lda g_enemy_x_lo, x
     sec
-    sbc g_enemy_speed, x
+    sbc #2
     sta g_enemy_x_lo, x
     bcs +
     dec g_enemy_x_hi, x
-+   ; Check if reached center vicinity: X <= 180 (X_hi == 0 and X_lo <= 180)
-    lda g_enemy_x_hi, x
-    bne +
-    lda g_enemy_x_lo, x
-    cmp #180
-    bcs +
-    ; Reached center: activate circling mode!
++   jmp @spider_shoot
+
+@spider_enter_x_inc:
+    clc
+    adc #1
+    sta g_enemy_x_lo, x
+    jmp @spider_shoot
+
+@spider_enter_check_done:
+    ; X == 195. Has Y also reached 136?
+    lda g_enemy_y, x
+    cmp #136
+    beq @spider_enter_transition
+    jmp @spider_shoot           ; Not yet, hold X=195 while Y finishes arriving
+
+@spider_enter_transition:
+    ; Both arrived at (195, 136)! Activate circling mode with zero jump
     lda #$80
-    sta g_enemy_phase, x
+    sta g_enemy_phase, x        ; Bit 7 = 1 (circling), angle = 0
     lda #170
     sta g_enemy_pattern, x      ; X_center = 170
     lda #136
     sta g_enemy_base_y, x       ; Y_center = 136
-+   jmp @spider_shoot
+    lda #8
+    sta g_enemy_roam_timer, x
+    jmp @spider_shoot
+
 
 @spider_circling:
-    ; 1. Roam timer: randomly shift circle center and rotation direction
+    ; 1. Roam timer: every 8 frames, drift center by at most 1 pixel (gentle Brownian motion)
     dec g_enemy_roam_timer, x
     bne @spider_step_circle
-    ; Reset roam timer (40..71 frames)
+    lda #8
+    sta g_enemy_roam_timer, x
+
+    ; Random drift for X_center (g_enemy_pattern, 155..185):
+    jsr starfield_rand
+    and #$07
+    cmp #0
+    bne +
+    lda g_enemy_pattern, x
+    cmp #156
+    bcc @drift_y
+    dec g_enemy_pattern, x
+    jmp @drift_y
++   cmp #1
+    bne @drift_y
+    lda g_enemy_pattern, x
+    cmp #184
+    bcs @drift_y
+    inc g_enemy_pattern, x
+
+@drift_y:
+    ; Random drift for Y_center (g_enemy_base_y, 120..152):
+    jsr starfield_rand
+    and #$07
+    cmp #0
+    bne +
+    lda g_enemy_base_y, x
+    cmp #121
+    bcc @drift_dir
+    dec g_enemy_base_y, x
+    jmp @drift_dir
++   cmp #1
+    bne @drift_dir
+    lda g_enemy_base_y, x
+    cmp #151
+    bcs @drift_dir
+    inc g_enemy_base_y, x
+
+@drift_dir:
+    ; Rare chance (1 in 32 every 8 frames) to reverse rotation direction
     jsr starfield_rand
     and #$1f
-    clc
-    adc #40
-    sta g_enemy_roam_timer, x
-    ; 50% chance to reverse rotation direction
-    jsr starfield_rand
-    lsr
-    bcc +
+    bne @spider_step_circle
     lda g_enemy_dir_x, x
     eor #1
     sta g_enemy_dir_x, x
-+   ; Randomly drift X_center within 145..195
-    jsr starfield_rand
-    and #$1f
-    clc
-    adc #155
-    sta g_enemy_pattern, x
-    ; Randomly drift Y_center within 118..149
-    jsr starfield_rand
-    and #$1f
-    clc
-    adc #118
-    sta g_enemy_base_y, x
 
 @spider_step_circle:
     ; 2. Advance phase angle (Clockwise = +1, Counter-clockwise = -1)
@@ -1714,7 +1746,7 @@ enemies_update:
     tay
     lda g_enemy_sine_table, y   ; Signed offset (-25..+25)
     clc
-    adc g_enemy_base_y, x       ; + Y_center (118..149)
+    adc g_enemy_base_y, x       ; + Y_center (120..152)
     sta g_enemy_y, x
 
     ; 4. Calculate X = X_center + cos(phase) = X_center + sin(phase + 8)
@@ -1725,7 +1757,7 @@ enemies_update:
     tay
     lda g_enemy_sine_table, y   ; Signed offset (-25..+25)
     clc
-    adc g_enemy_pattern, x      ; + X_center (145..195)
+    adc g_enemy_pattern, x      ; + X_center (155..185)
     sta g_enemy_x_lo, x
     lda #0
     sta g_enemy_x_hi, x
@@ -1736,117 +1768,85 @@ enemies_update:
 ; ==============================================================================
 ; Archetype 4: The Scorpion
 ; "the scorpion will move making half circles towards the bottom"
+; "the circles of the scorpion should be broader and slower"
 ; "don't make any enemy escape the screen, let them hang out until destroyed"
+; State:
+; g_enemy_phase: Bit 7 = 0: Descending semicircles down the screen
+;                Bit 7 = 1: Ascending back to top of screen (X -> 280)
+;                Bit 6 = 0: Swing right (+dy), 1: Swing left (-dy)
+;                Bit 5 = 2-frame tick toggle (advance step every 2nd frame)
+;                Bits 0..4 = Step index k (0..24, 25 steps per semicircle)
+; g_enemy_pattern: X_start coordinate low byte
+; g_enemy_dir_x:   X_start coordinate high byte
+; g_enemy_base_y:  Center Y coordinate (Y_c)
 ; ==============================================================================
 @move_eye:
     lda g_enemy_phase, x
     bpl @eye_descend
-
-@eye_ascend:
-    ; Climb back to top of screen: X = X + 3
-    lda g_enemy_x_lo, x
-    clc
-    adc #3
-    sta g_enemy_x_lo, x
-    bcc +
-    inc g_enemy_x_hi, x
-+   lda g_enemy_x_hi, x
-    beq @eye_ascend_shoot       ; X < 256
-    lda g_enemy_x_lo, x
-    cmp #24                     ; 256 + 24 = 280
-    bcc @eye_ascend_shoot
-    ; Reached top: clamp and reset for descending half circles
-    lda #24
-    sta g_enemy_x_lo, x
-    lda #1
-    sta g_enemy_x_hi, x
-    lda #255
-    sta g_enemy_pattern, x      ; X_c low = 255
-    lda #0
-    sta g_enemy_dir_x, x        ; X_c high = 0
-    jsr starfield_rand
-    and #$3f
-    clc
-    adc #90                     ; Y_c = 90..153
-    sta g_enemy_base_y, x
-    sta g_enemy_y, x
-    jsr starfield_rand
-    and #$40                    ; Random initial swing direction
-    sta g_enemy_phase, x        ; Bit 7 = 0: enter descend mode, step = 0
-
-@eye_ascend_shoot:
-    jmp @check_shooting
+    jmp @eye_ascend
 
 @eye_descend:
-    ; Advance step (0..16)
-    lda g_enemy_phase, x
-    clc
-    adc #1
-    sta g_enemy_phase, x
-    and #$1f
-    cmp #17
-    bcc @eye_compute_pos
 
-    ; Semicircle completed!
-    ; Next semicircle: X_c = X_c - 50
+    ; 1. Frame rate divider: step every 2 frames (48 frames ~ 1.0s per semicircle)
+    lda g_enemy_phase, x
+    eor #$20                    ; Toggle tick bit
+    sta g_enemy_phase, x
+    and #$20
+    bne @eye_compute_pos        ; On odd frames, skip step advance
+
+    ; 2. Advance step index k (0..24)
+    lda g_enemy_phase, x
+    and #$1f
+    cmp #24
+    bcc @eye_inc_step
+
+    ; Step 24 reached: Semicircle completed!
+    ; Next semicircle begins at X_start = X_start - 36
     lda g_enemy_pattern, x
     sec
-    sbc #50
+    sbc #36
     sta g_enemy_pattern, x
     bcs +
     dec g_enemy_dir_x, x
-+   ; Check if X_c reached bottom of dive (X_c <= 95)
++   ; Check if X_start reached bottom turnaround (X_start <= 90)
     lda g_enemy_dir_x, x
-    bne @eye_next_semi
+    bne @eye_turn_next_semi     ; X_start >= 256
     lda g_enemy_pattern, x
-    cmp #95
-    bcs @eye_next_semi
+    cmp #90
+    bcs @eye_turn_next_semi
+
     ; Reached bottom: switch to ascend mode!
     lda #$80
     sta g_enemy_phase, x
-    jmp @check_shooting
+    jmp @eye_shoot
 
-@eye_next_semi:
-    ; Toggle swing direction (Bit 6) and reset step to 0
+@eye_turn_next_semi:
+    ; Toggle swing direction (Bit 6), reset step and tick to 0
     lda g_enemy_phase, x
     eor #$40
-    and #$c0
+    and #$40
     sta g_enemy_phase, x
+    jmp @eye_compute_pos
+
+@eye_inc_step:
+    inc g_enemy_phase, x
 
 @eye_compute_pos:
-    ; 1. Compute X = X_c + cos(step) = X_c + sine_table[(step + 8) & 31]
     lda g_enemy_phase, x
     and #$1f
-    clc
-    adc #8
-    and #$1f
-    tay
-    lda g_enemy_sine_table, y   ; Signed offset (-25..+25)
-    bpl @eye_x_pos
-    ; Offset is negative
-    clc
-    adc g_enemy_pattern, x
+    tay                         ; Y = k (0..24)
+
+    ; Calculate X = X_start - scorp_curve_dx_tab[k]
+    lda g_enemy_pattern, x
+    sec
+    sbc scorp_curve_dx_tab, y
     sta g_enemy_x_lo, x
     lda g_enemy_dir_x, x
     sbc #0
     sta g_enemy_x_hi, x
-    jmp @eye_compute_y
 
-@eye_x_pos:
-    ; Offset is positive
-    clc
-    adc g_enemy_pattern, x
-    sta g_enemy_x_lo, x
-    lda g_enemy_dir_x, x
-    adc #0
-    sta g_enemy_x_hi, x
-
-@eye_compute_y:
-    ; 2. Compute Y = Y_c ± sin(step)
-    lda g_enemy_phase, x
-    and #$1f
-    tay
-    lda g_enemy_sine_table, y   ; 0..25..0
+    ; Calculate Y = Y_c ± scorp_curve_dy_tab[k]
+    lda scorp_curve_dy_tab, y
     sta s_spawn_y_temp
     lda g_enemy_phase, x
     and #$40                    ; Bit 6 = 1: swing left, 0: swing right
@@ -1874,6 +1874,47 @@ enemies_update:
 
 @eye_shoot:
     jmp @check_shooting
+
+@eye_ascend:
+    ; Climb straight up back to top of screen (X = X + 2)
+    lda g_enemy_x_lo, x
+    clc
+    adc #2
+    sta g_enemy_x_lo, x
+    bcc +
+    inc g_enemy_x_hi, x
++   lda g_enemy_x_hi, x
+    beq @eye_shoot              ; X < 256
+    lda g_enemy_x_lo, x
+    cmp #24                     ; 256 + 24 = 280
+    bcc @eye_shoot
+
+    ; Reached top: clamp X = 280, X_start = 280
+    lda #24
+    sta g_enemy_x_lo, x
+    sta g_enemy_pattern, x
+    lda #1
+    sta g_enemy_x_hi, x
+    sta g_enemy_dir_x, x
+
+    ; Maintain current Y as Y_c (clamped 96..176 for next descent)
+    lda g_enemy_y, x
+    cmp #96
+    bcs +
+    lda #96
++   cmp #177
+    bcc +
+    lda #176
++   sta g_enemy_base_y, x
+    sta g_enemy_y, x
+
+    ; Choose swing direction towards screen center (136)
+    cmp #136
+    lda #0                      ; Swing right if Y <= 136
+    bcc +
+    lda #$40                    ; Swing left if Y > 136
++   sta g_enemy_phase, x        ; Descend mode (0), step = 0, tick = 0
+    jmp @eye_shoot
 
 ; ==============================================================================
 ; Archetype 8: Death
