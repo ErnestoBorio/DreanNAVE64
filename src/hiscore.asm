@@ -762,6 +762,31 @@ hiscore_entry_update:
     cpx #3
     bne -
 
+    ; Check if initials contain at least one non-space character (> 32 and != 95)
+    ldy #0                      ; Count of valid characters
+    ldx #0
+@check_loop:
+    lda s_initials_buf, x
+    cmp #$21                    ; >= 33 ('!')
+    bcc @next_char
+    cmp #95                     ; '_'
+    beq @next_char
+    iny
+@next_char:
+    inx
+    cpx #3
+    bne @check_loop
+
+    ; If Y == 0, name is empty or only spaces: do not record in Top 10!
+    cpy #0
+    bne @valid_name
+
+    ; Blank name or only spaces: abort and go to title without recording
+    lda #0
+    sta g_title_show_hiscore_first
+    jmp @skip_insert
+
+@valid_name:
     ; Insert score into Top 10 table
     jsr hiscore_insert_score
 
@@ -769,12 +794,13 @@ hiscore_entry_update:
     lda #SFX_BONUS
     jsr sound_play_sfx
 
-    ; Erase game over screen elements
-    jsr hud_clear_game_over
-
     ; Set flag to start attract mode directly on Top 10 Directory screen
     lda #1
     sta g_title_show_hiscore_first
+
+@skip_insert:
+    ; Erase game over screen elements
+    jsr hud_clear_game_over
 
     ; Transition to STATE_TITLE
     lda #STATE_TITLE

@@ -3,14 +3,21 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PRG_PATH="$SCRIPT_DIR/bin/drean_nave_64.prg"
-DISK_PATH="$SCRIPT_DIR/tools/nave-highscore.d64"
-if [[ ! -f "$DISK_PATH" && -f "./tools/nave-highscore.d64" ]]; then
-    DISK_PATH="./tools/nave-highscore.d64"
-fi
+DISK_PATH=""
+for candidate in \
+    "$SCRIPT_DIR/tools/highscores.d64" \
+    "$SCRIPT_DIR/tools/nave-highscore.d64" \
+    "./tools/highscores.d64" \
+    "./tools/nave-highscore.d64"; do
+    if [[ -f "$candidate" ]]; then
+        DISK_PATH="$candidate"
+        break
+    fi
+done
 
 DISK_ARGS=()
-if [[ -f "$DISK_PATH" ]]; then
-    DISK_ARGS=(-drive9type 1541 -9 "$DISK_PATH")
+if [[ -n "$DISK_PATH" ]]; then
+    DISK_ARGS=(-drive9type 1541 -drive9truedrive -attach9rw -9 "$DISK_PATH")
 fi
 
 
