@@ -282,7 +282,7 @@ state_game_over_enter:
     ; 1. Despawn enemies, disable sprites, draw GAME OVER & final SCORE
     jsr game_over_trigger
 
-    ; 2. Play heroic after-action game over anthem
+    ; 2. Play ceremonial after-action game over anthem
     lda #SFX_GAME_OVER
     jsr sound_play_sfx
 

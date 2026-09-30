@@ -24,7 +24,7 @@ SFX_LOW_ENERGY      = 6     ; Low energy flashing alarm (Voice 3: warning beep)
 SFX_EXPLOSION_ENEMY = 7     ; Enemy destroyed (Voice 2: noise burst)
 SFX_PLAYER_DEATH    = 8     ; Player destruction (Voice 2+3: crash & dive)
 SFX_KEY_CLICK       = 9     ; Initials typewriter click (Voice 3: short blip)
-SFX_GAME_OVER       = 10    ; Heroic after-action anthem (Voice 1+2+3)
+SFX_GAME_OVER       = 10    ; Ceremonial after-action anthem (Voice 1+2+3)
 
 ; ------------------------------------------------------------------------------
 ; Subroutine: sound_init
@@ -140,25 +140,25 @@ sound_play_sfx:
 
 ; ------------------------------------------------------------------------------
 ; 1. SFX_START: Triumphant Stage Start Fanfare ("READY!")
-; 3-Voice Polyphonic Heroic Fanfare:
-;   Voice 1: Lead Trumpet (Heroic melody, warm pulse wave)
-;   Voice 2: Harmony Tenor (Sawtooth brass, major thirds and fifths)
-;   Voice 3: Bass Root (Triangle foundation)
+; 3-Voice Polyphonic Heroic Fanfare ("Hero's Launch"):
+;   Voice 1: Lead Trumpet (50% square, soaring heroic melody & high G5 climax)
+;   Voice 2: Harmony Horn (Sawtooth brass, driving thirds and fifths)
+;   Voice 3: Bass Foundation (Triangle root pedal & harmonic motion)
 ; Total duration: 64 frames (1.28s), timed within the 75-frame READY banner.
 ; ------------------------------------------------------------------------------
 sfx_play_start:
-    ; Voice 1: Lead Trumpet - Note 1: C4 ($1168)
+    ; Voice 1: Lead Trumpet - Note 1: G4 ($1A13)
     lda #0
     sta SID_V1_CTRL
-    lda #$68
+    lda #$13
     sta SID_V1_FREQ_LO
-    lda #$11
+    lda #$1a
     sta SID_V1_FREQ_HI
     lda #$08                    ; Attack 2ms, decay 300ms
     sta SID_V1_AD
     lda #$d0                    ; Sustain level 13, release 6ms
     sta SID_V1_SR
-    lda #$06                    ; 37.5% pulse width (warm brass)
+    lda #$08                    ; 50% pulse width (bright heroic brass)
     sta SID_V1_PW_HI
     lda #$00
     sta SID_V1_PW_LO
@@ -170,12 +170,12 @@ sfx_play_start:
     lda #64
     sta sfx_v1_timer
 
-    ; Voice 2: Harmony Tenor - Note 1: G3 ($0D4D)
+    ; Voice 2: Harmony Horn - Note 1: E4 ($15ED)
     lda #0
     sta SID_V2_CTRL
-    lda #$4d
+    lda #$ed
     sta SID_V2_FREQ_LO
-    lda #$0d
+    lda #$15
     sta SID_V2_FREQ_HI
     lda #$08
     sta SID_V2_AD
@@ -191,7 +191,7 @@ sfx_play_start:
     lda #4                      ; Priority 4 (locked during fanfare)
     sta sfx_v2_priority
 
-    ; Voice 3: Bass Root - Note 1: C3 ($08B4)
+    ; Voice 3: Bass Foundation - Note 1: C3 ($08B4)
     lda #0
     sta SID_V3_CTRL
     lda #$b4
@@ -514,29 +514,29 @@ sfx_play_key_click:
     rts
 
 ; ==============================================================================
-; 10. SFX_GAME_OVER: Heroic After-Action Anthem
-; 3-Voice Polyphonic Solemn Hymn / Post-Battle Commemoration:
-;   Voice 1: Lead Trumpet (Heroic melody, warm pulse wave)
-;   Voice 2: Harmony Tenor (Sawtooth brass, rich thirds and fifths)
-;   Voice 3: Bass Foundation (Deep, solemn triangle root notes)
+; 10. SFX_GAME_OVER: Star Ceremony Anthem
+; 3-Voice Polyphonic Stately Ceremony ("The Throne Room & Star Ceremony"):
+;   Voice 1: Ceremonial Trumpet (50% pulse wave, noble melody reaching high G5)
+;   Voice 2: Regal Horns (Sawtooth brass, flowing ceremonial counterpoint)
+;   Voice 3: Stately Bass Foundation (Deep triangle march pedal & root movement)
 ; Total duration: 216 frames (~4.32s at 50 Hz PAL)
 ; ==============================================================================
 sfx_play_game_over:
     lda #$0f                    ; Ensure master volume is at maximum
     sta SID_MODE_VOL
 
-    ; Voice 1: Lead Trumpet - Initial Note: G3 ($0D0A)
+    ; Voice 1: Ceremonial Trumpet - Initial Note: G4 ($1A13)
     lda #0
     sta SID_V1_CTRL
-    lda #$0a
+    lda #$13
     sta SID_V1_FREQ_LO
-    lda #$0d
+    lda #$1a
     sta SID_V1_FREQ_HI
     lda #$18                    ; Attack 5ms, Decay 300ms
     sta SID_V1_AD
     lda #$d4                    ; Sustain level 13, Release 200ms
     sta SID_V1_SR
-    lda #$08                    ; 50% pulse width (classic clear brass)
+    lda #$08                    ; 50% pulse width (bright ceremonial brass)
     sta SID_V1_PW_HI
     lda #$00
     sta SID_V1_PW_LO
@@ -548,12 +548,12 @@ sfx_play_game_over:
     lda #216
     sta sfx_v1_timer
 
-    ; Voice 2: Harmony Tenor - Initial Note: E3 ($0AF6)
+    ; Voice 2: Regal Horns - Initial Note: E4 ($15ED)
     lda #0
     sta SID_V2_CTRL
-    lda #$f6
+    lda #$ed
     sta SID_V2_FREQ_LO
-    lda #$0a
+    lda #$15
     sta SID_V2_FREQ_HI
     lda #$18
     sta SID_V2_AD
@@ -569,7 +569,7 @@ sfx_play_game_over:
     lda #4                      ; Priority 4 (locked during tune)
     sta sfx_v2_priority
 
-    ; Voice 3: Bass Foundation - Initial Note: C3 ($08B4)
+    ; Voice 3: Stately Bass - Initial Note: C3 ($08B4)
     lda #0
     sta SID_V3_CTRL
     lda #$b4
@@ -670,12 +670,18 @@ sound_update_v1:
 @v1_modulate:
     lda sfx_v1_id
     cmp #SFX_LASER
-    beq @v1_mod_laser
-    cmp #SFX_START
-    beq @v1_mod_start
-    cmp #SFX_GAME_OVER
-    beq @v1_mod_game_over
-    rts
+    bne +
+    jmp @v1_mod_laser
+
++   cmp #SFX_START
+    bne +
+    jmp @v1_mod_start
+
++   cmp #SFX_GAME_OVER
+    bne +
+    jmp @v1_mod_game_over
+
++   rts
 
 @v1_mod_laser:
     ; Rapid pitch dive across frames 3, 2, 1
@@ -685,71 +691,85 @@ sound_update_v1:
     rts
 
 @v1_mod_game_over:
-    ; Voice 1 Lead Trumpet Melody:
-    ; 216: G3 ($0D0A) -> starts in sfx_play_game_over
-    ; 200: C4 ($1168) (proud call)
-    ; 176: E4 ($15EC)
-    ; 152: D4 ($1389)
-    ; 128: F4 ($173B)
-    ; 112: A4 ($1D44) (noble emotional peak!)
-    ; 96:  G4 ($1A13)
-    ; 80:  E4 ($15EC) (poignant, solemn)
-    ; 56:  D4 ($1389)
-    ; 36:  C4 ($1168) (resolving proudly to tonic!)
-    ; 1:   Release envelope
+    ; Voice 1 Ceremonial Trumpet Melody ("The Star Ceremony"):
+    ; 216: G4 ($1A13) -> starts in sfx_play_game_over (ceremonial call)
+    ; 204: C5 ($22CE) (held long and proud for 36 frames while Voice 2 fanfares!)
+    ; 168: D5 ($2711) (step up)
+    ; 156: E5 ($2BDA) (held high and noble for 36 frames while Voice 2 fanfares!)
+    ; 120: F5 ($2E76) (majestic peak)
+    ; 108: E5 ($2BDA)
+    ; 96:  D5 ($2711)
+    ; 84:  C5 ($22CE)
+    ; 72:  G5 ($3426) (soaring climax on high G5 for 24 frames!)
+    ; 48:  E5 ($2BDA)
+    ; 36:  D5 ($2711)
+    ; 24:  C5 ($22CE) (final grand resolution to tonic!)
+    ; 1:   Release envelope fade
     lda sfx_v1_timer
-    cmp #200
+    cmp #204
     bne +
-    lda #$11                    ; C4 ($1168)
-    ldx #$68
+    lda #$22                    ; C5 ($22CE)
+    ldx #$ce
     jmp sfx_retrigger_v1
 
-+   cmp #176
++   cmp #168
     bne +
-    lda #$15                    ; E4 ($15EC)
-    ldx #$ec
+    lda #$27                    ; D5 ($2711)
+    ldx #$11
     jmp sfx_retrigger_v1
 
-+   cmp #152
++   cmp #156
     bne +
-    lda #$13                    ; D4 ($1389)
-    ldx #$89
+    lda #$2b                    ; E5 ($2BDA)
+    ldx #$da
     jmp sfx_retrigger_v1
 
-+   cmp #128
++   cmp #120
     bne +
-    lda #$17                    ; F4 ($173B)
-    ldx #$3b
+    lda #$2e                    ; F5 ($2E76)
+    ldx #$76
     jmp sfx_retrigger_v1
 
-+   cmp #112
++   cmp #108
     bne +
-    lda #$1d                    ; A4 ($1D44)
-    ldx #$44
+    lda #$2b                    ; E5 ($2BDA)
+    ldx #$da
     jmp sfx_retrigger_v1
 
 +   cmp #96
     bne +
-    lda #$1a                    ; G4 ($1A13)
-    ldx #$13
+    lda #$27                    ; D5 ($2711)
+    ldx #$11
     jmp sfx_retrigger_v1
 
-+   cmp #80
++   cmp #84
     bne +
-    lda #$15                    ; E4 ($15EC)
-    ldx #$ec
+    lda #$22                    ; C5 ($22CE)
+    ldx #$ce
     jmp sfx_retrigger_v1
 
-+   cmp #56
++   cmp #72
     bne +
-    lda #$13                    ; D4 ($1389)
-    ldx #$89
+    lda #$34                    ; G5 ($3426) - high peak climax!
+    ldx #$26
+    jmp sfx_retrigger_v1
+
++   cmp #48
+    bne +
+    lda #$2b                    ; E5 ($2BDA)
+    ldx #$da
     jmp sfx_retrigger_v1
 
 +   cmp #36
     bne +
-    lda #$11                    ; C4 ($1168)
-    ldx #$68
+    lda #$27                    ; D5 ($2711)
+    ldx #$11
+    jmp sfx_retrigger_v1
+
++   cmp #24
+    bne +
+    lda #$22                    ; C5 ($22CE)
+    ldx #$ce
     jmp sfx_retrigger_v1
 
 +   cmp #1
@@ -759,48 +779,50 @@ sound_update_v1:
 +   rts
 
 @v1_mod_start:
-    ; Voice 1 Lead Fanfare Melody (Heroic Call)
+    ; Voice 1 Lead Fanfare Melody ("Hero's Launch"):
+    ; 64: G4 ($1A13) -> starts in sfx_play_start
+    ; 57: C5 ($22CE) (soaring octave leap to tonic)
+    ; 51: E5 ($2BDA) (triumphant high major third)
+    ; 43: D5 ($2711) (heroic forward drive)
+    ; 37: E5 ($2BDA) (heroic lift)
+    ; 31: F5 ($2E76) (dramatic suspension)
+    ; 23: G5 ($3426) (high G5 climax!)
+    ; 1:  Release envelope
     lda sfx_v1_timer
-    cmp #60
+    cmp #57
     bne +
-    lda #$15                    ; Note 2: E4 ($15EC)
-    ldx #$ec
+    lda #$22                    ; Note 2: C5 ($22CE)
+    ldx #$ce
     jmp sfx_retrigger_v1
 
-+   cmp #56
++   cmp #51
     bne +
-    lda #$1a                    ; Note 3: G4 ($1A9B)
-    ldx #$9b
+    lda #$2b                    ; Note 3: E5 ($2BDA)
+    ldx #$da
     jmp sfx_retrigger_v1
 
-+   cmp #52
++   cmp #43
     bne +
-    lda #$22                    ; Note 4: C5 ($22D0) - strong call
-    ldx #$d0
+    lda #$27                    ; Note 4: D5 ($2711)
+    ldx #$11
     jmp sfx_retrigger_v1
 
-+   cmp #38
++   cmp #37
     bne +
-    lda #$20                    ; Note 5: B4 ($20DD)
-    ldx #$dd
+    lda #$2b                    ; Note 5: E5 ($2BDA)
+    ldx #$da
     jmp sfx_retrigger_v1
 
-+   cmp #34
++   cmp #31
     bne +
-    lda #$22                    ; Note 6: C5 ($22D0)
-    ldx #$d0
+    lda #$2e                    ; Note 6: F5 ($2E76)
+    ldx #$76
     jmp sfx_retrigger_v1
 
-+   cmp #30
++   cmp #23
     bne +
-    lda #$27                    ; Note 7: D5 ($27D8)
-    ldx #$d8
-    jmp sfx_retrigger_v1
-
-+   cmp #26
-    bne +
-    lda #$2b                    ; Note 8: E5 ($2BD9) - triumphant resolution!
-    ldx #$d9
+    lda #$34                    ; Note 7: G5 ($3426) - soaring climax!
+    ldx #$26
     jmp sfx_retrigger_v1
 
 +   cmp #1
@@ -855,57 +877,120 @@ sound_update_v2:
 +   rts
 
 @v2_mod_game_over:
-    ; Voice 2 Harmony Tenor (Sawtooth Horn):
-    ; Timer 216: E3 ($0AF6) -> starts in sfx_play_game_over
-    ; Timer 176: G3 ($0D0A)
-    ; Timer 152: B3 ($106D)
-    ; Timer 128: C4 ($1168)
-    ; Timer 96:  D4 ($1389)
-    ; Timer 80:  C4 ($1168)
-    ; Timer 56:  B3 ($106D)
-    ; Timer 36:  G3 ($0D0A) (resolving to G3)
-    ; Timer 1:   Release envelope
+    ; Voice 2 Regal Horns (Answering fanfares & counterpoint):
+    ; 216: E4 ($15ED) -> starts in sfx_play_game_over
+    ; 204: G4 ($1A13)
+    ; 192: A4 ($1D45) (brass fanfare answer while V1 holds C5!)
+    ; 180: C5 ($22CE) (soaring flourish while V1 holds C5!)
+    ; 168: A4 ($1D45)
+    ; 156: G4 ($1A13)
+    ; 144: B4 ($20DA) (brass fanfare answer while V1 holds E5!)
+    ; 132: D5 ($2711) (soaring flourish while V1 holds E5!)
+    ; 120: C5 ($22CE)
+    ; 108: G4 ($1A13)
+    ; 96:  F4 ($173B)
+    ; 84:  E4 ($15ED)
+    ; 72:  B4 ($20DA) (brass harmony under V1's high G5!)
+    ; 60:  D5 ($2711)
+    ; 48:  C5 ($22CE)
+    ; 36:  B4 ($20DA)
+    ; 24:  G4 ($1A13) (pure fifth harmony to final tonic!)
+    ; 1:   Release envelope fade
     lda sfx_v2_timer
-    cmp #176
+    cmp #204
     bne +
-    lda #$0d                    ; G3 ($0D0A)
-    ldx #$0a
+    lda #$1a                    ; G4 ($1A13)
+    ldx #$13
     jmp sfx_retrigger_v2
 
-+   cmp #152
++   cmp #192
     bne +
-    lda #$10                    ; B3 ($106D)
-    ldx #$6d
+    lda #$1d                    ; A4 ($1D45) - fanfare answer!
+    ldx #$45
     jmp sfx_retrigger_v2
 
-+   cmp #128
++   cmp #180
     bne +
-    lda #$11                    ; C4 ($1168)
-    ldx #$68
+    lda #$22                    ; C5 ($22CE) - flourish!
+    ldx #$ce
+    jmp sfx_retrigger_v2
+
++   cmp #168
+    bne +
+    lda #$1d                    ; A4 ($1D45)
+    ldx #$45
+    jmp sfx_retrigger_v2
+
++   cmp #156
+    bne +
+    lda #$1a                    ; G4 ($1A13)
+    ldx #$13
+    jmp sfx_retrigger_v2
+
++   cmp #144
+    bne +
+    lda #$20                    ; B4 ($20DA) - fanfare answer!
+    ldx #$da
+    jmp sfx_retrigger_v2
+
++   cmp #132
+    bne +
+    lda #$27                    ; D5 ($2711) - flourish!
+    ldx #$11
+    jmp sfx_retrigger_v2
+
++   cmp #120
+    bne +
+    lda #$22                    ; C5 ($22CE)
+    ldx #$ce
+    jmp sfx_retrigger_v2
+
++   cmp #108
+    bne +
+    lda #$1a                    ; G4 ($1A13)
+    ldx #$13
     jmp sfx_retrigger_v2
 
 +   cmp #96
     bne +
-    lda #$13                    ; D4 ($1389)
-    ldx #$89
+    lda #$17                    ; F4 ($173B)
+    ldx #$3b
     jmp sfx_retrigger_v2
 
-+   cmp #80
++   cmp #84
     bne +
-    lda #$11                    ; C4 ($1168)
-    ldx #$68
+    lda #$15                    ; E4 ($15ED)
+    ldx #$ed
     jmp sfx_retrigger_v2
 
-+   cmp #56
++   cmp #72
     bne +
-    lda #$10                    ; B3 ($106D)
-    ldx #$6d
+    lda #$20                    ; B4 ($20DA)
+    ldx #$da
+    jmp sfx_retrigger_v2
+
++   cmp #60
+    bne +
+    lda #$27                    ; D5 ($2711)
+    ldx #$11
+    jmp sfx_retrigger_v2
+
++   cmp #48
+    bne +
+    lda #$22                    ; C5 ($22CE)
+    ldx #$ce
     jmp sfx_retrigger_v2
 
 +   cmp #36
     bne +
-    lda #$0d                    ; G3 ($0D0A)
-    ldx #$0a
+    lda #$20                    ; B4 ($20DA)
+    ldx #$da
+    jmp sfx_retrigger_v2
+
++   cmp #24
+    bne +
+    lda #$1a                    ; G4 ($1A13)
+    ldx #$13
     jmp sfx_retrigger_v2
 
 +   cmp #1
@@ -922,48 +1007,50 @@ sound_update_v2:
     rts
 
 @v2_mod_start:
-    ; Voice 2 Harmony Tenor (Warm Sawtooth Brass)
+    ; Voice 2 Harmony Horn (Sawtooth brass, driving fanfare chords):
+    ; 64: E4 ($15ED) -> starts in sfx_play_start
+    ; 57: G4 ($1A13)
+    ; 51: C5 ($22CE)
+    ; 43: B4 ($20DA)
+    ; 37: C5 ($22CE)
+    ; 31: D5 ($2711)
+    ; 23: E5 ($2BDA) (major third above C climax!)
+    ; 1:  Release envelope
     lda sfx_v2_timer
-    cmp #60
+    cmp #57
     bne +
-    lda #$11                    ; C4 ($1168)
-    ldx #$68
+    lda #$1a                    ; G4 ($1A13)
+    ldx #$13
     jmp sfx_retrigger_v2
 
-+   cmp #56
++   cmp #51
     bne +
-    lda #$15                    ; E4 ($15EC)
-    ldx #$ec
+    lda #$22                    ; C5 ($22CE)
+    ldx #$ce
     jmp sfx_retrigger_v2
 
-+   cmp #52
++   cmp #43
     bne +
-    lda #$1a                    ; G4 ($1A9B)
-    ldx #$9b
+    lda #$20                    ; B4 ($20DA)
+    ldx #$da
     jmp sfx_retrigger_v2
 
-+   cmp #38
++   cmp #37
     bne +
-    lda #$1a                    ; G4 ($1A9B)
-    ldx #$9b
+    lda #$22                    ; C5 ($22CE)
+    ldx #$ce
     jmp sfx_retrigger_v2
 
-+   cmp #34
++   cmp #31
     bne +
-    lda #$1a                    ; G4 ($1A9B)
-    ldx #$9b
+    lda #$27                    ; D5 ($2711)
+    ldx #$11
     jmp sfx_retrigger_v2
 
-+   cmp #30
++   cmp #23
     bne +
-    lda #$20                    ; B4 ($20DD)
-    ldx #$dd
-    jmp sfx_retrigger_v2
-
-+   cmp #26
-    bne +
-    lda #$22                    ; C5 ($22D0) - major triad harmony
-    ldx #$d0
+    lda #$2b                    ; E5 ($2BDA)
+    ldx #$da
     jmp sfx_retrigger_v2
 
 +   cmp #1
@@ -1039,51 +1126,120 @@ sound_update_v3:
 +   rts
 
 @v3_mod_game_over:
-    ; Voice 3 Bass Foundation (Triangle):
-    ; Timer 216: C3 ($08B4) -> starts in sfx_play_game_over
-    ; Timer 176: C3 ($08B4)
-    ; Timer 152: G3 ($0D0A)
-    ; Timer 128: F3 ($0B9D)
-    ; Timer 96:  G3 ($0D0A)
-    ; Timer 80:  A3 ($0EA2) (poignant Am root!)
-    ; Timer 56:  G3 ($0D0A)
-    ; Timer 36:  C3 ($08B4) (tonic resolution)
-    ; Timer 1:   Release envelope
+    ; Voice 3 Processional March Bass (Deep Triangle foundation):
+    ; 216: C3 ($08B4) -> starts in sfx_play_game_over
+    ; 204: G2 ($0685)
+    ; 192: C3 ($08B4)
+    ; 180: E3 ($0AF7)
+    ; 168: F3 ($0B9D)
+    ; 156: F2 ($05CF)
+    ; 144: G3 ($0D0A)
+    ; 132: G2 ($0685)
+    ; 120: A3 ($0EA2)
+    ; 108: E3 ($0AF7)
+    ; 96:  F3 ($0B9D)
+    ; 84:  D3 ($09C4)
+    ; 72:  G2 ($0685)
+    ; 60:  G3 ($0D0A)
+    ; 48:  C3 ($08B4)
+    ; 36:  G2 ($0685)
+    ; 24:  C2 ($045A) (lowest sub-bass tonic pedal!)
+    ; 1:   Release envelope fade
     lda sfx_v3_timer
-    cmp #152
+    cmp #204
     bne +
-    lda #$0d                    ; G3 ($0D0A)
-    ldx #$0a
+    lda #$06                    ; G2 ($0685)
+    ldx #$85
     jmp sfx_retrigger_v3
 
-+   cmp #128
++   cmp #192
+    bne +
+    lda #$08                    ; C3 ($08B4)
+    ldx #$b4
+    jmp sfx_retrigger_v3
+
++   cmp #180
+    bne +
+    lda #$0a                    ; E3 ($0AF7)
+    ldx #$f7
+    jmp sfx_retrigger_v3
+
++   cmp #168
     bne +
     lda #$0b                    ; F3 ($0B9D)
     ldx #$9d
     jmp sfx_retrigger_v3
 
-+   cmp #96
++   cmp #156
+    bne +
+    lda #$05                    ; F2 ($05CF)
+    ldx #$cf
+    jmp sfx_retrigger_v3
+
++   cmp #144
     bne +
     lda #$0d                    ; G3 ($0D0A)
     ldx #$0a
     jmp sfx_retrigger_v3
 
-+   cmp #80
++   cmp #132
+    bne +
+    lda #$06                    ; G2 ($0685)
+    ldx #$85
+    jmp sfx_retrigger_v3
+
++   cmp #120
     bne +
     lda #$0e                    ; A3 ($0EA2)
     ldx #$a2
     jmp sfx_retrigger_v3
 
-+   cmp #56
++   cmp #108
+    bne +
+    lda #$0a                    ; E3 ($0AF7)
+    ldx #$f7
+    jmp sfx_retrigger_v3
+
++   cmp #96
+    bne +
+    lda #$0b                    ; F3 ($0B9D)
+    ldx #$9d
+    jmp sfx_retrigger_v3
+
++   cmp #84
+    bne +
+    lda #$09                    ; D3 ($09C4)
+    ldx #$c4
+    jmp sfx_retrigger_v3
+
++   cmp #72
+    bne +
+    lda #$06                    ; G2 ($0685)
+    ldx #$85
+    jmp sfx_retrigger_v3
+
++   cmp #60
     bne +
     lda #$0d                    ; G3 ($0D0A)
     ldx #$0a
     jmp sfx_retrigger_v3
 
-+   cmp #36
++   cmp #48
     bne +
     lda #$08                    ; C3 ($08B4)
     ldx #$b4
+    jmp sfx_retrigger_v3
+
++   cmp #36
+    bne +
+    lda #$06                    ; G2 ($0685)
+    ldx #$85
+    jmp sfx_retrigger_v3
+
++   cmp #24
+    bne +
+    lda #$04                    ; C2 ($045A) - sub-bass pedal
+    ldx #$5a
     jmp sfx_retrigger_v3
 
 +   cmp #1
@@ -1110,36 +1266,50 @@ sound_update_v3:
     sta SID_V3_FREQ_LO
     lda #$45
     sta SID_V3_FREQ_HI
-+   rts
+    rts
 
 @v3_mod_start:
-    ; Voice 3 Bass Root (Deep Triangle Foundation)
+    ; Voice 3 Bass Foundation (Triangle, driving fanfare roots):
+    ; 64: C3 ($08B4) -> starts in sfx_play_start
+    ; 57: C3 ($08B4)
+    ; 51: C3 ($08B4)
+    ; 43: G3 ($0D0A) (dominant)
+    ; 37: A3 ($0EA2) (Am root)
+    ; 31: G3 ($0D0A) (dominant)
+    ; 23: C3 ($08B4) (tonic resolution)
+    ; 1:  Release envelope
     lda sfx_v3_timer
-    cmp #52
+    cmp #57
     bne +
     lda #$08                    ; C3 ($08B4)
     ldx #$b4
     jmp sfx_retrigger_v3
 
-+   cmp #38
-    bne +
-    lda #$0d                    ; G3 ($0D4D)
-    ldx #$4d
-    jmp sfx_retrigger_v3
-
-+   cmp #34
++   cmp #51
     bne +
     lda #$08                    ; C3 ($08B4)
     ldx #$b4
     jmp sfx_retrigger_v3
 
-+   cmp #30
++   cmp #43
     bne +
-    lda #$0d                    ; G3 ($0D4D)
-    ldx #$4d
+    lda #$0d                    ; G3 ($0D0A)
+    ldx #$0a
     jmp sfx_retrigger_v3
 
-+   cmp #26
++   cmp #37
+    bne +
+    lda #$0e                    ; A3 ($0EA2)
+    ldx #$a2
+    jmp sfx_retrigger_v3
+
++   cmp #31
+    bne +
+    lda #$0d                    ; G3 ($0D0A)
+    ldx #$0a
+    jmp sfx_retrigger_v3
+
++   cmp #23
     bne +
     lda #$08                    ; C3 ($08B4)
     ldx #$b4
