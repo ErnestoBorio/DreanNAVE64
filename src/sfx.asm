@@ -57,19 +57,101 @@ sound_init:
     sta sfx_v3_pitch_lo
     sta sfx_v3_pitch_hi
 
+    sta music_active
+
     ; Set Master Volume to Maximum (15) with no filter routing
     lda #$0f
     sta SID_MODE_VOL
 
     rts
 
-; ------------------------------------------------------------------------------
-; Music Compatibility Stubs
-; ------------------------------------------------------------------------------
+; ==============================================================================
+; Subroutine: sound_music_start
+; Purpose: Starts the attract mode demo techno track on Title / Hiscore screens.
+;          If the music is already active, this is a no-op to allow seamless
+;          continuous playback when alternating between Title and Top 10 screens.
+; ==============================================================================
 sound_music_start:
+    lda music_active
+    beq +
+    rts                         ; Already playing, do not restart!
+
++   lda #1
+    sta music_active
+
+    ; Reset sequence positions & state
+    lda #0
+    sta music_step
+    sta music_tick
+    sta music_v1_cur_type
+    sta music_v1_last_hi
+    sta music_drum_type
+    sta music_drum_tick
+    sta music_pwm_sub
+    sta music_pwm_dir
+
+    ; Reset SFX channel tracking
+    sta sfx_v1_id
+    sta sfx_v1_timer
+    sta sfx_v2_id
+    sta sfx_v2_timer
+    sta sfx_v2_priority
+    sta sfx_v3_id
+    sta sfx_v3_timer
+    sta sfx_v3_priority
+
+    lda #$08
+    sta music_pwm_hi
+
+    ; Master volume to maximum
+    lda #$0f
+    sta SID_MODE_VOL
+
+    ; Voice 1 (Pulse Lead / Arp) setup
+    lda #0
+    sta SID_V1_CTRL
+    lda #$08
+    sta SID_V1_PW_HI
+    lda #$00
+    sta SID_V1_PW_LO
+    lda #$08                    ; Attack 2ms, Decay 300ms
+    sta SID_V1_AD
+    lda #$d4                    ; Sustain 13, Release 200ms
+    sta SID_V1_SR
+
+    ; Voice 2 (Sawtooth Acid Bass) setup
+    lda #0
+    sta SID_V2_CTRL
+    lda #$06                    ; Attack 2ms, Decay 150ms
+    sta SID_V2_AD
+    lda #$00                    ; Sustain 0, Release 6ms
+    sta SID_V2_SR
+
+    ; Voice 3 (Drums) setup
+    lda #0
+    sta SID_V3_CTRL
+
+    ; Trigger initial step 0
+    jsr music_trigger_step
     rts
 
+; ==============================================================================
+; Subroutine: sound_music_stop
+; Purpose: Cleanly silences the attract mode music when starting the game.
+; ==============================================================================
 sound_music_stop:
+    lda music_active
+    bne +
+    rts
+
++   lda #0
+    sta music_active
+    sta SID_V1_CTRL
+    sta SID_V2_CTRL
+    sta SID_V3_CTRL
+    sta SID_V1_FREQ_HI
+    sta SID_V2_FREQ_HI
+    sta SID_V3_FREQ_HI
     rts
 
 ; ==============================================================================
@@ -603,10 +685,17 @@ sound_update:
     tya
     pha
 
+    lda music_active
+    beq @do_sfx
+    jsr music_update
+    jmp @sound_update_done
+
+@do_sfx:
     jsr sound_update_v1
     jsr sound_update_v2
     jsr sound_update_v3
 
+@sound_update_done:
     pla
     tay
     pla
@@ -1332,6 +1421,356 @@ sound_update_v3:
     sta SID_V3_FREQ_HI
 +   rts
 
+; ==============================================================================
+; Subroutine: music_update
+; Purpose: Frame update (50 Hz PAL) for attract mode 3-voice demo techno track.
+; ==============================================================================
+music_update:
+    jsr music_update_pwm        ; Voice 1 pulse-width modulation sweep
+    jsr music_update_v1         ; Voice 1 arp frequency cycle (if in arp mode)
+    jsr music_update_v2         ; Voice 2 bass staccato gate off on tick 4
+    jsr music_update_drums      ; Voice 3 drum pitch sweeps and envelope cuts
+
+    inc music_tick
+    lda music_tick
+    cmp #5                      ; 5 PAL frames (100ms) per 16th note step = 150 BPM
+    bcc @music_frame_done
+
+    lda #0
+    sta music_tick
+
+    inc music_step
+    lda music_step
+    cmp #64                     ; 64 steps = 4 bars
+    bcc +
+    lda #0
+    sta music_step
++   jsr music_trigger_step
+
+@music_frame_done:
+    rts
+
+; ==============================================================================
+; Subroutine: music_trigger_step
+; Purpose: Dispatches notes and sounds for the current 16th note step.
+; ==============================================================================
+music_trigger_step:
+    ldx music_step
+
+    ; --------------------------------------------------------------------------
+    ; 1. Voice 1: Lead or Arpeggio
+    ; --------------------------------------------------------------------------
+    lda music_v1_type, x
+    sta music_v1_cur_type
+    bne @trigger_arp
+
+    ; Mode 0: Sustained / Melodic Lead Note
+    lda music_v1_freq_hi, x
+    cmp music_v1_last_hi
+    beq @trigger_voice2         ; If same note continues, let it sustain smoothly!
+
+    sta music_v1_last_hi
+    lda #SID_PULSE             ; Gate off to retrigger envelope
+    sta SID_V1_CTRL
+    lda music_v1_freq_lo, x
+    sta SID_V1_FREQ_LO
+    lda music_v1_freq_hi, x
+    sta SID_V1_FREQ_HI
+    lda #(SID_PULSE | SID_GATE)
+    sta SID_V1_CTRL
+    jmp @trigger_voice2
+
+@trigger_arp:
+    ; Mode 1..4: 50 Hz Arpeggio chord
+    lda #0
+    sta music_v1_last_hi        ; Force last_hi to 0 so next lead note retriggers
+
+    ldy music_v1_cur_type       ; 1..4
+    lda arp_chord_offset - 1, y ; offset for tick 0
+    tay
+    lda arp_freq_lo, y
+    sta SID_V1_FREQ_LO
+    lda arp_freq_hi, y
+    sta SID_V1_FREQ_HI
+    lda #(SID_PULSE | SID_GATE)
+    sta SID_V1_CTRL
+
+    ; --------------------------------------------------------------------------
+    ; 2. Voice 2: 16th Note Acid Sawtooth Bassline
+    ; --------------------------------------------------------------------------
+@trigger_voice2:
+    ldx music_step
+    lda #SID_SAWTOOTH           ; Gate off
+    sta SID_V2_CTRL
+    lda music_v2_freq_lo, x
+    sta SID_V2_FREQ_LO
+    lda music_v2_freq_hi, x
+    sta SID_V2_FREQ_HI
+    lda #(SID_SAWTOOTH | SID_GATE)
+    sta SID_V2_CTRL
+
+    ; --------------------------------------------------------------------------
+    ; 3. Voice 3: Drum Trigger
+    ; --------------------------------------------------------------------------
+@trigger_voice3:
+    ldx music_step
+    lda music_v3_drums, x
+    beq @step_done              ; 0 = no new drum on this step
+
+    sta music_drum_type
+    lda #0
+    sta music_drum_tick
+    jsr music_drum_start
+
+@step_done:
+    rts
+
+; ==============================================================================
+; Subroutine: music_update_v1
+; Purpose: In Arp mode (types 1..4), cycles the 3 chord tones at 50 Hz (every frame).
+; ==============================================================================
+music_update_v1:
+    lda music_v1_cur_type
+    bne +
+    rts                         ; Lead mode: frequencies stay steady
+
++   tax                         ; 1..4
+    lda arp_chord_offset - 1, x
+    clc
+    adc music_tick              ; 0..4
+    tax
+    lda arp_freq_lo, x
+    sta SID_V1_FREQ_LO
+    lda arp_freq_hi, x
+    sta SID_V1_FREQ_HI
+    rts
+
+; ==============================================================================
+; Subroutine: music_update_pwm
+; Purpose: Sweeps Voice 1 Pulse Width back and forth between ~$0300 and ~$0D00
+;          to produce a lush, chorused acid techno lead timbre.
+; ==============================================================================
+music_update_pwm:
+    inc music_pwm_sub
+    lda music_pwm_sub
+    cmp #3                      ; Advance PWM every 3 frames (~60ms)
+    bcc @pwm_apply
+    lda #0
+    sta music_pwm_sub
+
+    lda music_pwm_dir
+    bne @pwm_down
+
+    ; Sweeping Up
+    inc music_pwm_hi
+    lda music_pwm_hi
+    cmp #$0d
+    bcc @pwm_apply
+    lda #1
+    sta music_pwm_dir
+    jmp @pwm_apply
+
+@pwm_down:
+    ; Sweeping Down
+    dec music_pwm_hi
+    lda music_pwm_hi
+    cmp #$03
+    bcs @pwm_apply
+    lda #0
+    sta music_pwm_dir
+
+@pwm_apply:
+    lda music_pwm_hi
+    sta SID_V1_PW_HI
+    rts
+
+; ==============================================================================
+; Subroutine: music_update_v2
+; Purpose: Gates off Voice 2 Sawtooth on tick 4 (end of 16th note) for a crisp
+;          staccato bounce before the next step hits.
+; ==============================================================================
+music_update_v2:
+    lda music_tick
+    cmp #4
+    bne +
+    lda #SID_SAWTOOTH           ; Gate off
+    sta SID_V2_CTRL
++   rts
+
+; ==============================================================================
+; Subroutine: music_drum_start
+; Purpose: Starts a drum hit on Voice 3 (Kick, Snare, Closed Hat, Open Hat).
+; Input:   music_drum_type (1=Kick, 2=Snare, 3=Closed Hat, 4=Open Hat)
+; ==============================================================================
+music_drum_start:
+    ; Pulse test bit to cleanly reset oscillator and noise shift register
+    lda #SID_TEST
+    sta SID_V3_CTRL
+    lda #0
+    sta SID_V3_CTRL
+
+    lda music_drum_type
+    cmp #1
+    bne +
+
+    ; 1 = Kick Drum (Triangle dive)
+    lda #$05                    ; Attack 2ms, Decay 100ms
+    sta SID_V3_AD
+    lda #$00                    ; Sustain 0, Release 6ms
+    sta SID_V3_SR
+    sta SID_V3_FREQ_LO
+    lda #$12                    ; Punch start (~300 Hz)
+    sta SID_V3_FREQ_HI
+    lda #(SID_TRIANGLE | SID_GATE)
+    sta SID_V3_CTRL
+    rts
+
++   cmp #2
+    bne +
+
+    ; 2 = Snare Drum (Noise crack)
+    lda #$06                    ; Attack 2ms, Decay 150ms
+    sta SID_V3_AD
+    lda #$00
+    sta SID_V3_SR
+    sta SID_V3_FREQ_LO
+    lda #$48                    ; Noise initial crack
+    sta SID_V3_FREQ_HI
+    lda #(SID_NOISE | SID_GATE)
+    sta SID_V3_CTRL
+    rts
+
++   cmp #3
+    bne +
+
+    ; 3 = Closed Hi-Hat (Crisp 20ms noise tick)
+    lda #$02                    ; Attack 2ms, Decay 24ms
+    sta SID_V3_AD
+    lda #$00
+    sta SID_V3_SR
+    sta SID_V3_FREQ_LO
+    lda #$80                    ; White noise high sizzle
+    sta SID_V3_FREQ_HI
+    lda #(SID_NOISE | SID_GATE)
+    sta SID_V3_CTRL
+    rts
+
++   cmp #4
+    bne @drum_start_done
+
+    ; 4 = Open Hi-Hat (Long sizzling noise splash)
+    lda #$09                    ; Attack 2ms, Decay 500ms
+    sta SID_V3_AD
+    lda #$00
+    sta SID_V3_SR
+    sta SID_V3_FREQ_LO
+    lda #$80
+    sta SID_V3_FREQ_HI
+    lda #(SID_NOISE | SID_GATE)
+    sta SID_V3_CTRL
+
+@drum_start_done:
+    rts
+
+; ==============================================================================
+; Subroutine: music_update_drums
+; Purpose: Frame-by-frame (50 Hz) pitch sweep and gate control for active drum.
+; ==============================================================================
+music_update_drums:
+    lda music_drum_type
+    bne +
+    rts                         ; No drum active
+
++   inc music_drum_tick
+    lda music_drum_type
+    cmp #1
+    bne @check_snare
+
+    ; --- 1: Kick Drum Pitch Dive ---
+    lda music_drum_tick
+    cmp #1
+    bne +
+    lda #$08                    ; Drop to 130 Hz
+    sta SID_V3_FREQ_HI
+    rts
++   cmp #2
+    bne +
+    lda #$04                    ; Drop to 65 Hz (sub-bass)
+    sta SID_V3_FREQ_HI
+    rts
++   cmp #3
+    bne +
+    lda #$02                    ; Drop to 32 Hz (deep sub)
+    sta SID_V3_FREQ_HI
+    rts
++   cmp #4
+    bne +
+    lda #SID_TRIANGLE           ; Gate off
+    sta SID_V3_CTRL
+    lda #0
+    sta music_drum_type
++   rts
+
+@check_snare:
+    cmp #2
+    bne @check_closed_hat
+
+    ; --- 2: Snare Drum Pitch Dive & Cut ---
+    lda music_drum_tick
+    cmp #1
+    bne +
+    lda #$28                    ; Mid sizzle
+    sta SID_V3_FREQ_HI
+    rts
++   cmp #2
+    bne +
+    lda #$14                    ; Snare body rumble
+    sta SID_V3_FREQ_HI
+    rts
++   cmp #3
+    bne +
+    lda #$0c
+    sta SID_V3_FREQ_HI
+    rts
++   cmp #4
+    bne +
+    lda #SID_NOISE              ; Gate off
+    sta SID_V3_CTRL
+    lda #0
+    sta music_drum_type
++   rts
+
+@check_closed_hat:
+    cmp #3
+    bne @check_open_hat
+
+    ; --- 3: Closed Hat Cut after 1 frame (20ms) ---
+    lda music_drum_tick
+    cmp #1
+    bcc +
+    lda #SID_NOISE              ; Gate off immediately
+    sta SID_V3_CTRL
+    lda #0
+    sta music_drum_type
++   rts
+
+@check_open_hat:
+    cmp #4
+    bne @drum_upd_done
+
+    ; --- 4: Open Hat Cut after 4 frames (80ms) ---
+    lda music_drum_tick
+    cmp #4
+    bcc +
+    lda #SID_NOISE              ; Gate off
+    sta SID_V3_CTRL
+    lda #0
+    sta music_drum_type
++   rts
+
+@drum_upd_done:
+    rts
+
 ; ------------------------------------------------------------------------------
 ; Frequency Modulation Data Tables
 ; ------------------------------------------------------------------------------
@@ -1376,3 +1815,85 @@ sfx_v3_timer:       !byte 0
 sfx_v3_priority:    !byte 0
 sfx_v3_pitch_lo:    !byte 0
 sfx_v3_pitch_hi:    !byte 0
+
+; ------------------------------------------------------------------------------
+; Attract Mode Music State Variables
+; ------------------------------------------------------------------------------
+music_active:       !byte 0     ; 1 = attract mode music active
+music_step:         !byte 0     ; Current 16th note step (0..63)
+music_tick:         !byte 0     ; Sub-step frame tick (0..4)
+music_v1_cur_type:  !byte 0     ; Voice 1 mode: 0 = Lead, 1..4 = Arp chord
+music_v1_last_hi:   !byte 0     ; Last lead note pitch high byte
+music_pwm_hi:       !byte $08   ; Voice 1 Pulse width high byte
+music_pwm_dir:      !byte 0     ; 0 = sweeping up, 1 = sweeping down
+music_pwm_sub:      !byte 0     ; Sub-frame counter for slow PWM sweep
+music_drum_type:    !byte 0     ; Voice 3 active drum (0=none, 1=Kick, 2=Snare, 3=CH, 4=OH)
+music_drum_tick:    !byte 0     ; Voice 3 drum age in frames
+
+; ------------------------------------------------------------------------------
+; Attract Mode Techno Music Tables
+; ------------------------------------------------------------------------------
+arp_chord_offset:
+    !byte 0, 5, 10, 15
+
+; Arpeggio Frequencies for 5 ticks per step
+; Type 1: Dm (D4, F4, A4, D4, F4)
+; Type 2: Dm9 (D4, F4, C5, D4, F4)
+; Type 3: C (C4, E4, G4, C4, E4)
+; Type 4: F (F4, A4, C5, F4, A4)
+arp_freq_lo:
+    ; Type 1 (Dm)
+    !byte $89, $3b, $45, $89, $3b
+    ; Type 2 (Dm9)
+    !byte $89, $3b, $ce, $89, $3b
+    ; Type 3 (C)
+    !byte $67, $ed, $13, $67, $ed
+    ; Type 4 (F)
+    !byte $3b, $45, $ce, $3b, $45
+
+arp_freq_hi:
+    ; Type 1 (Dm)
+    !byte $13, $17, $1d, $13, $17
+    ; Type 2 (Dm9)
+    !byte $13, $17, $22, $13, $17
+    ; Type 3 (C)
+    !byte $11, $15, $1a, $11, $15
+    ; Type 4 (F)
+    !byte $17, $1d, $22, $17, $1d
+
+music_v1_type:
+    !byte $01, $01, $01, $01, $01, $01, $01, $01, $02, $02, $02, $02, $02, $02, $02, $02
+    !byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+    !byte $03, $03, $03, $03, $03, $03, $03, $03, $04, $04, $04, $04, $04, $04, $04, $04
+    !byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+
+music_v1_freq_lo:
+    !byte $89, $89, $89, $89, $89, $89, $89, $89, $89, $89, $89, $89, $89, $89, $89, $89
+    !byte $11, $11, $11, $11, $76, $76, $11, $11, $11, $11, $ce, $ce, $02, $02, $02, $02
+    !byte $67, $67, $67, $67, $67, $67, $67, $67, $3b, $3b, $3b, $3b, $3b, $3b, $3b, $3b
+    !byte $da, $da, $da, $da, $26, $26, $26, $26, $76, $76, $da, $da, $11, $11, $e0, $e0
+
+music_v1_freq_hi:
+    !byte $13, $13, $13, $13, $13, $13, $13, $13, $13, $13, $13, $13, $13, $13, $13, $13
+    !byte $27, $27, $27, $27, $2e, $2e, $27, $27, $27, $27, $22, $22, $1f, $1f, $1f, $1f
+    !byte $11, $11, $11, $11, $11, $11, $11, $11, $17, $17, $17, $17, $17, $17, $17, $17
+    !byte $2b, $2b, $2b, $2b, $34, $34, $34, $34, $2e, $2e, $2b, $2b, $27, $27, $24, $24
+
+music_v2_freq_lo:
+    !byte $e2, $c4, $e2, $c4, $cf, $c4, $e2, $c4, $85, $c4, $cf, $c4, $b4, $c4, $51, $b4
+    !byte $c1, $81, $c1, $81, $c4, $81, $cf, $81, $85, $0a, $85, $0a, $c1, $0a, $cf, $85
+    !byte $5a, $b4, $5a, $b4, $7b, $b4, $85, $b4, $cf, $9d, $cf, $9d, $51, $9d, $85, $51
+    !byte $51, $a2, $51, $a2, $38, $a2, $7b, $a2, $85, $a2, $51, $a2, $38, $f7, $0a, $a2
+
+music_v2_freq_hi:
+    !byte $04, $09, $04, $09, $05, $09, $04, $09, $06, $09, $05, $09, $08, $09, $07, $08
+    !byte $07, $0f, $07, $0f, $09, $0f, $05, $0f, $06, $0d, $06, $0d, $07, $0d, $05, $06
+    !byte $04, $08, $04, $08, $05, $08, $06, $08, $05, $0b, $05, $0b, $07, $0b, $06, $07
+    !byte $07, $0e, $07, $0e, $09, $0e, $05, $0e, $06, $0e, $07, $0e, $09, $0a, $0d, $0e
+
+music_v3_drums:
+    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $00, $02, $00, $04, $03
+    !byte $01, $00, $03, $00, $02, $00, $03, $02, $01, $00, $03, $00, $02, $00, $04, $03
+    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $00, $02, $00, $04, $03
+    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $02, $02, $02, $02, $02, $02, $02
+
