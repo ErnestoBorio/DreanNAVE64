@@ -63,7 +63,10 @@ col23_bitmap_hi:
 ;          Title Bitmap screen.
 ; ==============================================================================
 title_enter:
-    ; 1. Reset debounce safety lockout & require fresh button release
+    ; 1. Start attract mode demo techno music (no-op if already running)
+    jsr sound_music_start
+
+    ; 2. Reset debounce safety lockout & require fresh button release
     lda #20
     sta s_title_lockout
     lda #0
@@ -406,6 +409,9 @@ title_set_prompt_color:
 ;          re-enables BASIC ROM, sets black border/bg, and reseeds starfield.
 ; ==============================================================================
 title_exit:
+    ; Cleanly silence attract mode music
+    jsr sound_music_stop
+
     ; 1. Restore standard VIC-II settings: Text Mode, Screen $0400, Charset $2800
     lda #$1b
     sta VIC_CTRL1
