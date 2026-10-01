@@ -64,6 +64,15 @@ sound_init:
     rts
 
 ; ==============================================================================
+; Attract mode music stubs (no-op)
+; ==============================================================================
+sound_music_start:
+    rts
+
+sound_music_stop:
+    rts
+
+; ==============================================================================
 ; Subroutine: sound_play_sfx
 ; Purpose: Triggers a sound effect across the 3 hardware voices.
 ; Input:   A = SFX ID (SFX_START..SFX_KEY_CLICK)
