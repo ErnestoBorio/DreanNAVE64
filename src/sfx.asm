@@ -87,6 +87,7 @@ sound_music_start:
     sta music_drum_tick
     sta music_pwm_sub
     sta music_pwm_dir
+    sta music_v1_vib_phase
 
     ; Reset SFX channel tracking
     sta sfx_v1_id
@@ -98,32 +99,32 @@ sound_music_start:
     sta sfx_v3_timer
     sta sfx_v3_priority
 
-    lda #$03                    ; Voice 1 narrow pulse width for distorted string rasp
+    ; Voice 1 Pulse Width: wide sweep start ($0600) for rich Rob Hubbard brass lead
+    lda #$06
     sta music_pwm_hi
     sta SID_V1_PW_HI
     lda #$00
     sta SID_V1_PW_LO
 
-    ; Configure Analog Filter for French Electro Crunch:
-    lda #$93                    ; Medium-High Resonance ($9), Filter Voices 1 & 2
+    ; Configure Analog Filter: Warm Low-Pass for Voice 2 Slap Bass
+    lda #$42                    ; Resonance 4, Filter Voice 2 (slap bass) only
     sta SID_FLT_CTRL
     lda #$1f                    ; Low-Pass mode ($1), Volume 15 ($F)
     sta SID_MODE_VOL
     lda #$00
     sta SID_FLT_CUT_LO
-    lda #$70
-    sta music_filter_hi
+    lda #$50                    ; Cutoff ~1.4 kHz (warm, rubbery slap bass)
     sta SID_FLT_CUT_HI
 
-    ; Voice 1 (Pulse Screech Strings) setup
+    ; Voice 1 (Pulse Funk Lead) setup
     lda #0
     sta SID_V1_CTRL
-    lda #$03                    ; Attack 2ms, Decay 50ms (ultra-crisp staccato)
+    lda #$08                    ; Attack 2ms, Decay 300ms
     sta SID_V1_AD
-    lda #$20                    ; Sustain 2, Release 6ms
+    lda #$c4                    ; Sustain 12, Release 200ms
     sta SID_V1_SR
 
-    ; Voice 2 (Sawtooth French Electro Bass) setup
+    ; Voice 2 (Sawtooth Rob Hubbard Slap Bass) setup
     lda #0
     sta SID_V2_CTRL
     lda #$05                    ; Attack 2ms, Decay 100ms
@@ -1430,16 +1431,13 @@ sound_update_v3:
 
 ; ==============================================================================
 ; Subroutine: music_update
-; ==============================================================================
-; Subroutine: music_update
-; Purpose: Frame update (50 Hz PAL) for attract mode Justice - "Stress" track.
+; Purpose: Frame update (50 Hz PAL) for attract mode Rob Hubbard funk track.
 ; ==============================================================================
 music_update:
-    jsr music_update_pwm        ; Voice 1 subtle pulse-width chorusing
-    jsr music_update_v1         ; Voice 1 staccato gate off on tick 4
-    jsr music_update_v2         ; Voice 2 bass staccato gate off on tick 5
+    jsr music_update_pwm        ; Voice 1 wide pulse-width chorusing
+    jsr music_update_v1         ; Voice 1 delayed vibrato & staccato gate off on tick 5
+    jsr music_update_v2         ; Voice 2 slap bass staccato gate off on tick 5
     jsr music_update_drums      ; Voice 3 drum pitch sweeps and envelope cuts
-    jsr music_update_filter     ; Dynamic French electro filter pumping
 
     inc music_tick
     lda music_tick
@@ -1468,7 +1466,7 @@ music_trigger_step:
     ldx music_step
 
     ; --------------------------------------------------------------------------
-    ; 1. Voice 1: Aggressive Staccato Strings
+    ; 1. Voice 1: Rob Hubbard Singing Pulse Brass Lead
     ; --------------------------------------------------------------------------
     lda #SID_PULSE             ; Gate off to guarantee clean envelope re-attack
     sta SID_V1_CTRL
@@ -1480,7 +1478,7 @@ music_trigger_step:
     sta SID_V1_CTRL
 
     ; --------------------------------------------------------------------------
-    ; 2. Voice 2: Pumping Electro Sawtooth Bassline
+    ; 2. Voice 2: Rob Hubbard Filtered Slap Bass
     ; --------------------------------------------------------------------------
     lda #SID_SAWTOOTH           ; Gate off
     sta SID_V2_CTRL
@@ -1492,7 +1490,7 @@ music_trigger_step:
     sta SID_V2_CTRL
 
     ; --------------------------------------------------------------------------
-    ; 3. Voice 3: Drum Trigger & Filter Pump
+    ; 3. Voice 3: Drum Trigger
     ; --------------------------------------------------------------------------
     lda music_v3_drums, x
     beq @step_done              ; 0 = no new drum
@@ -1502,37 +1500,49 @@ music_trigger_step:
     sta music_drum_tick
     jsr music_drum_start
 
-    ; If kick drum (1), trigger a French electro filter envelope snap!
-    lda music_drum_type
-    cmp #1
-    bne @step_done
-    lda #$88                    ; Filter cutoff snap to high
-    sta music_filter_hi
-    sta SID_FLT_CUT_HI
-
 @step_done:
     rts
 
 ; ==============================================================================
 ; Subroutine: music_update_v1
-; Purpose: Gates off Voice 1 on tick 4 (out of 6) for crisp staccato bite.
+; Purpose: Expressive Rob Hubbard delayed vibrato and tick 5 gate cut.
 ; ==============================================================================
 music_update_v1:
     lda music_tick
-    cmp #4
-    bne +
-    lda #SID_PULSE
+    cmp #5
+    bne @v1_vibrato
+    lda #SID_PULSE             ; Gate off on tick 5 for clean 16th staccato bounce
     sta SID_V1_CTRL
+    rts
+
+@v1_vibrato:
+    ; Delayed vibrato on ticks 2..4 for singing held notes
+    lda music_tick
+    cmp #2
+    bcc +
+    inc music_v1_vib_phase
+    lda music_v1_vib_phase
+    and #$03
+    tax
+    lda music_vib_offsets, x
+    clc
+    ldy music_step
+    adc music_v1_freq_lo, y
+    sta SID_V1_FREQ_LO
 +   rts
+
+music_vib_offsets:
+    !byte 0, 4, 0, -4
 
 ; ==============================================================================
 ; Subroutine: music_update_pwm
-; Purpose: Sweeps Voice 1 Pulse Width between ~$0280 and ~$0480 for raspy texture.
+; Purpose: Sweeps Voice 1 Pulse Width between ~$0300 and ~$0B00 for that rich,
+;          singing, chorused Rob Hubbard brass/lead sound.
 ; ==============================================================================
 music_update_pwm:
     inc music_pwm_sub
     lda music_pwm_sub
-    cmp #4
+    cmp #3
     bcc @pwm_apply
     lda #0
     sta music_pwm_sub
@@ -1542,7 +1552,7 @@ music_update_pwm:
 
     inc music_pwm_hi
     lda music_pwm_hi
-    cmp #$05
+    cmp #$0b                    ; Sweep up to ~$0B00
     bcc @pwm_apply
     lda #1
     sta music_pwm_dir
@@ -1551,7 +1561,7 @@ music_update_pwm:
 @pwm_down:
     dec music_pwm_hi
     lda music_pwm_hi
-    cmp #$02
+    cmp #$03                    ; Sweep down to ~$0300
     bcs @pwm_apply
     lda #0
     sta music_pwm_dir
@@ -1564,7 +1574,7 @@ music_update_pwm:
 ; ==============================================================================
 ; Subroutine: music_update_v2
 ; Purpose: Gates off Voice 2 Sawtooth on tick 5 (end of 16th note) for a crisp
-;          staccato bounce before the next step hits.
+;          slap-bass bounce before the next step hits.
 ; ==============================================================================
 music_update_v2:
     lda music_tick
@@ -1573,22 +1583,6 @@ music_update_v2:
     lda #SID_SAWTOOTH           ; Gate off
     sta SID_V2_CTRL
 +   rts
-
-; ==============================================================================
-; Subroutine: music_update_filter
-; Purpose: Emulates French electro sidechain filter pumping by decaying the
-;          cutoff down towards warm resonance after each kick snap.
-; ==============================================================================
-music_update_filter:
-    lda music_filter_hi
-    cmp #$50
-    bcc @filt_done
-    sec
-    sbc #$02
-    sta music_filter_hi
-    sta SID_FLT_CUT_HI
-@filt_done:
-    rts
 
 ; ==============================================================================
 ; Subroutine: music_drum_start
@@ -1803,14 +1797,13 @@ sfx_v3_priority:    !byte 0
 sfx_v3_pitch_lo:    !byte 0
 sfx_v3_pitch_hi:    !byte 0
 
-; ------------------------------------------------------------------------------
-; Attract Mode Music State Variables
-; ------------------------------------------------------------------------------
+; ; ------------------------------------------------------------------------------
 ; Attract Mode Music State Variables
 ; ------------------------------------------------------------------------------
 music_active:       !byte 0     ; 1 = attract mode music active
 music_step:         !byte 0     ; Current 16th note step (0..127)
 music_tick:         !byte 0     ; Sub-step frame tick (0..5)
+music_v1_vib_phase: !byte 0     ; Voice 1 delayed vibrato phase
 music_pwm_hi:       !byte $03   ; Voice 1 Pulse width high byte
 music_pwm_dir:      !byte 0     ; 0 = sweeping up, 1 = sweeping down
 music_pwm_sub:      !byte 0     ; Sub-frame counter for slow PWM sweep
@@ -1818,58 +1811,60 @@ music_filter_hi:    !byte $70   ; Analog Filter cutoff high byte
 music_drum_type:    !byte 0     ; Voice 3 active drum (0=none, 1=Kick, 2=Snare, 3=CH, 4=OH)
 music_drum_tick:    !byte 0     ; Voice 3 drum age in frames
 
-; ------------------------------------------------------------------------------
-; JUSTICE - "STRESS" (C64 SID DEMO ELECTRO MIX) TABLES
+; ==============================================================================
+; ROB HUBBARD - "COMMANDO" STYLE C64 DEMOSCENE FUNK
 ; 128 Steps (8 Bars) @ 6 PAL frames/step (125 BPM)
-; Key: C Minor / Mussorgsky "Night on Bald Mountain" Riff
-; ------------------------------------------------------------------------------
+; Key: C Minor
+; ==============================================================================
+
 music_v1_freq_lo:
-    !byte $39, $39, $ce, $ce, $39, $ce, $39, $ce, $39, $39, $ce, $ce, $39, $ce, $39, $ce
-    !byte $39, $39, $ce, $ce, $39, $ce, $39, $ce, $40, $26, $76, $64, $11, $ce, $da, $ce
-    !byte $ce, $ce, $64, $ce, $39, $26, $39, $26, $ce, $ce, $64, $ce, $39, $26, $39, $26
-    !byte $40, $26, $76, $64, $11, $64, $76, $11, $64, $11, $ce, $da, $ce, $11, $64, $76
-    !byte $9c, $9c, $39, $39, $9c, $39, $9c, $39, $9c, $9c, $39, $39, $9c, $39, $9c, $39
-    !byte $9c, $9c, $39, $39, $9c, $39, $9c, $39, $26, $40, $89, $04, $b4, $9c, $c0, $23
-    !byte $c8, $c8, $23, $23, $c0, $c0, $9c, $9c, $b4, $b4, $04, $04, $89, $89, $40, $40
-    !byte $26, $26, $39, $39, $76, $76, $da, $da, $64, $11, $e0, $ce, $da, $ce, $11, $64
+    !byte $67, $67, $89, $b2, $b2, $b2, $3b, $13, $13, $13, $13, $13, $02, $13, $3b, $b2
+    !byte $67, $67, $89, $b2, $b2, $b2, $3b, $13, $02, $02, $02, $02, $ce, $02, $13, $3b
+    !byte $ce, $ce, $02, $ce, $02, $02, $13, $3b, $3b, $3b, $3b, $3b, $13, $a0, $13, $3b
+    !byte $b2, $b2, $3b, $13, $3b, $b2, $89, $b2, $3b, $3b, $89, $6d, $67, $67, $67, $67
+    !byte $67, $b2, $13, $ce, $13, $ce, $64, $ce, $02, $13, $b2, $13, $3b, $b2, $89, $67
+    !byte $3b, $a0, $ce, $76, $ce, $76, $40, $76, $64, $ce, $a0, $ce, $02, $a0, $13, $3b
+    !byte $13, $da, $11, $26, $11, $26, $b4, $26, $76, $11, $da, $11, $64, $11, $ce, $da
+    !byte $ce, $02, $a0, $13, $3b, $b2, $89, $b2, $3b, $b2, $89, $6d, $67, $89, $b2, $3b
 
 music_v1_freq_hi:
-    !byte $31, $31, $22, $22, $31, $22, $31, $22, $31, $31, $22, $22, $31, $22, $31, $22
-    !byte $31, $31, $22, $22, $31, $22, $31, $22, $37, $34, $2e, $29, $27, $22, $20, $22
-    !byte $22, $22, $29, $22, $31, $34, $31, $34, $22, $22, $29, $22, $31, $34, $31, $34
-    !byte $37, $34, $2e, $29, $27, $29, $2e, $27, $29, $27, $22, $20, $22, $27, $29, $2e
-    !byte $45, $45, $31, $31, $45, $31, $45, $31, $45, $45, $31, $31, $45, $31, $45, $31
-    !byte $45, $45, $31, $31, $45, $31, $45, $31, $34, $37, $3a, $3e, $41, $45, $49, $4e
-    !byte $52, $52, $4e, $4e, $49, $49, $45, $45, $41, $41, $3e, $3e, $3a, $3a, $37, $37
-    !byte $34, $34, $31, $31, $2e, $2e, $2b, $2b, $29, $27, $24, $22, $20, $22, $27, $29
+    !byte $11, $11, $13, $14, $14, $14, $17, $1a, $1a, $1a, $1a, $1a, $1f, $1a, $17, $14
+    !byte $11, $11, $13, $14, $14, $14, $17, $1a, $1f, $1f, $1f, $1f, $22, $1f, $1a, $17
+    !byte $22, $22, $1f, $22, $1f, $1f, $1a, $17, $17, $17, $17, $17, $1a, $1b, $1a, $17
+    !byte $14, $14, $17, $1a, $17, $14, $13, $14, $17, $17, $13, $10, $11, $11, $11, $11
+    !byte $11, $14, $1a, $22, $1a, $22, $29, $22, $1f, $1a, $14, $1a, $17, $14, $13, $11
+    !byte $17, $1b, $22, $2e, $22, $2e, $37, $2e, $29, $22, $1b, $22, $1f, $1b, $1a, $17
+    !byte $1a, $20, $27, $34, $27, $34, $41, $34, $2e, $27, $20, $27, $29, $27, $22, $20
+    !byte $22, $1f, $1b, $1a, $17, $14, $13, $14, $17, $14, $13, $10, $11, $13, $14, $17
 
 music_v2_freq_lo:
-    !byte $5a, $b4, $5a, $b4, $5a, $b4, $2d, $b4, $5a, $b4, $5a, $b4, $27, $b4, $85, $b4
-    !byte $5a, $b4, $5a, $b4, $5a, $b4, $2d, $b4, $e8, $85, $cf, $2d, $e2, $5a, $1b, $42
-    !byte $5a, $b4, $5a, $b4, $2d, $b4, $85, $b4, $5a, $b4, $5a, $b4, $27, $b4, $85, $b4
-    !byte $e8, $e8, $85, $85, $cf, $cf, $2d, $2d, $e2, $e2, $5a, $5a, $1b, $1b, $42, $1b
-    !byte $5a, $5a, $b4, $b4, $5a, $5a, $2d, $2d, $5a, $5a, $b4, $b4, $27, $27, $85, $85
-    !byte $5a, $5a, $b4, $b4, $5a, $5a, $2d, $2d, $85, $e8, $51, $c1, $37, $b4, $38, $c4
-    !byte $5a, $5a, $5a, $5a, $5a, $5a, $5a, $5a, $1b, $1b, $1b, $1b, $e0, $e0, $e0, $e0
-    !byte $a9, $a9, $74, $74, $42, $42, $14, $14, $e7, $e7, $96, $96, $71, $71, $42, $1b
+    !byte $5a, $b4, $5a, $b4, $5a, $b4, $2d, $b4, $5a, $b4, $5a, $b4, $cf, $b4, $85, $1b
+    !byte $5a, $b4, $5a, $b4, $5a, $b4, $2d, $b4, $e0, $c1, $e0, $c1, $42, $c1, $e7, $42
+    !byte $74, $e8, $74, $e8, $e7, $cf, $74, $cf, $e7, $cf, $e7, $cf, $74, $cf, $42, $74
+    !byte $96, $2d, $96, $2d, $71, $e2, $96, $e2, $42, $85, $42, $85, $1b, $85, $e2, $42
+    !byte $5a, $b4, $2d, $b4, $42, $85, $5a, $b4, $e0, $c1, $42, $85, $e7, $cf, $96, $71
+    !byte $e7, $cf, $74, $cf, $5a, $b4, $e7, $cf, $96, $2d, $2d, $5a, $e0, $c1, $74, $42
+    !byte $42, $85, $1b, $85, $e2, $85, $42, $85, $e7, $cf, $71, $e2, $1b, $37, $42, $1b
+    !byte $42, $42, $74, $74, $a9, $a9, $e0, $e0, $1b, $1b, $1b, $1b, $42, $1b, $e2, $1b
 
 music_v2_freq_hi:
-    !byte $04, $08, $04, $08, $04, $08, $05, $08, $04, $08, $04, $08, $06, $08, $06, $08
-    !byte $04, $08, $04, $08, $04, $08, $05, $08, $06, $06, $05, $05, $04, $04, $04, $03
-    !byte $04, $08, $04, $08, $05, $08, $06, $08, $04, $08, $04, $08, $06, $08, $06, $08
-    !byte $06, $06, $06, $06, $05, $05, $05, $05, $04, $04, $04, $04, $04, $04, $03, $04
-    !byte $04, $04, $08, $08, $04, $04, $05, $05, $04, $04, $08, $08, $06, $06, $06, $06
-    !byte $04, $04, $08, $08, $04, $04, $05, $05, $06, $06, $07, $07, $08, $08, $09, $09
-    !byte $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $04, $03, $03, $03, $03
-    !byte $03, $03, $03, $03, $03, $03, $03, $03, $02, $02, $02, $02, $02, $02, $03, $04
+    !byte $04, $08, $04, $08, $04, $08, $05, $08, $04, $08, $04, $08, $05, $08, $06, $04
+    !byte $04, $08, $04, $08, $04, $08, $05, $08, $03, $07, $03, $07, $03, $07, $02, $03
+    !byte $03, $06, $03, $06, $02, $05, $03, $05, $02, $05, $02, $05, $03, $05, $03, $03
+    !byte $02, $05, $02, $05, $02, $04, $02, $04, $03, $06, $03, $06, $04, $06, $04, $03
+    !byte $04, $08, $05, $08, $03, $06, $04, $08, $03, $07, $03, $06, $02, $05, $02, $02
+    !byte $02, $05, $03, $05, $04, $08, $02, $05, $02, $05, $02, $04, $03, $07, $03, $03
+    !byte $03, $06, $04, $06, $04, $06, $03, $06, $02, $05, $02, $04, $04, $08, $03, $04
+    !byte $03, $03, $03, $03, $03, $03, $03, $03, $04, $04, $04, $04, $03, $04, $04, $04
 
 music_v3_drums:
     !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $00, $02, $00, $04, $03
     !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $01, $03, $00, $02, $00, $04, $03
-    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $00, $02, $00, $04, $03
+    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $04, $02, $00, $04, $03
     !byte $01, $00, $03, $00, $02, $00, $03, $02, $01, $01, $03, $00, $02, $02, $04, $03
     !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $00, $02, $00, $04, $03
     !byte $01, $00, $03, $04, $02, $00, $03, $00, $01, $01, $03, $04, $02, $00, $04, $03
     !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $00, $02, $00, $03, $00
     !byte $01, $00, $03, $00, $02, $00, $02, $00, $02, $02, $02, $02, $02, $02, $02, $02
+
 
