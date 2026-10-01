@@ -125,14 +125,12 @@ state_title_enter:
 
     ; Hide HUD from Row 0
     jsr hud_clear
-    jsr sound_music_start
     jmp title_enter
 
 state_title_update:
     jmp title_update
 
 state_title_exit:
-    jsr sound_music_stop
     jmp title_exit
 
 ; ==============================================================================
