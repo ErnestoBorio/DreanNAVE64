@@ -83,11 +83,14 @@ sound_music_start:
     lda #0
     sta music_step
     sta music_tick
+    sta music_arp_tick
     sta music_drum_type
     sta music_drum_tick
     sta music_pwm_sub
     sta music_pwm_dir
     sta music_v1_vib_phase
+    sta music_filter_sub
+    sta music_filter_dir
 
     ; Reset SFX channel tracking
     sta sfx_v1_id
@@ -99,42 +102,49 @@ sound_music_start:
     sta sfx_v3_timer
     sta sfx_v3_priority
 
-    ; Voice 1 Pulse Width: wide sweep start ($0600) for rich Rob Hubbard brass lead
+    ; Voice 1 Pulse Width: sweep start ($0600) for majestic Galway singing brass lead
     lda #$06
     sta music_pwm_hi
     sta SID_V1_PW_HI
     lda #$00
     sta SID_V1_PW_LO
 
-    ; Configure Analog Filter: Warm Low-Pass for Voice 2 Slap Bass
-    lda #$42                    ; Resonance 4, Filter Voice 2 (slap bass) only
+    ; Configure Analog Filter: Resonant Low-Pass for Voice 2 Galway Shimmering Arpeggios
+    lda #$52                    ; Resonance 5, Filter Voice 2 (chords) only
     sta SID_FLT_CTRL
     lda #$1f                    ; Low-Pass mode ($1), Volume 15 ($F)
     sta SID_MODE_VOL
     lda #$00
     sta SID_FLT_CUT_LO
-    lda #$50                    ; Cutoff ~1.4 kHz (warm, rubbery slap bass)
+    lda #$30                    ; Cutoff start ~$30
+    sta music_filter_hi
     sta SID_FLT_CUT_HI
 
-    ; Voice 1 (Pulse Funk Lead) setup
+    ; Voice 1 (Pulse Space Melody) setup
     lda #0
     sta SID_V1_CTRL
-    lda #$08                    ; Attack 2ms, Decay 300ms
+    lda #$09                    ; Attack 2ms, Decay 750ms
     sta SID_V1_AD
-    lda #$c4                    ; Sustain 12, Release 200ms
+    lda #$d4                    ; Sustain 13, Release 200ms
     sta SID_V1_SR
 
-    ; Voice 2 (Sawtooth Rob Hubbard Slap Bass) setup
+    ; Voice 2 (Galway 50Hz Sawtooth Arpeggio Chords) setup
     lda #0
     sta SID_V2_CTRL
-    lda #$05                    ; Attack 2ms, Decay 100ms
+    lda #$00                    ; Attack 2ms, Decay 6ms
     sta SID_V2_AD
-    lda #$00                    ; Sustain 0, Release 6ms
+    lda #$f0                    ; Sustain 15, Release 6ms
     sta SID_V2_SR
+    lda #(SID_SAWTOOTH | SID_GATE)
+    sta SID_V2_CTRL             ; Continuously gated for smooth liquid arpeggio
 
-    ; Voice 3 (Drums) setup
+    ; Voice 3 (Bass & Drums) setup
     lda #0
     sta SID_V3_CTRL
+    lda #$05                    ; Attack 2ms, Decay 100ms
+    sta SID_V3_AD
+    lda #$92                    ; Sustain 9, Release 18ms
+    sta SID_V3_SR
 
     ; Trigger initial step 0
     jsr music_trigger_step
@@ -1431,13 +1441,14 @@ sound_update_v3:
 
 ; ==============================================================================
 ; Subroutine: music_update
-; Purpose: Frame update (50 Hz PAL) for attract mode Rob Hubbard funk track.
+; Purpose: Frame update (50 Hz PAL) for attract mode Martin Galway Ocean Loader.
 ; ==============================================================================
 music_update:
     jsr music_update_pwm        ; Voice 1 wide pulse-width chorusing
+    jsr music_update_flt        ; Voice 2 analog filter cutoff sweep
     jsr music_update_v1         ; Voice 1 delayed vibrato & staccato gate off on tick 5
-    jsr music_update_v2         ; Voice 2 slap bass staccato gate off on tick 5
-    jsr music_update_drums      ; Voice 3 drum pitch sweeps and envelope cuts
+    jsr music_update_v2         ; Voice 2 Galway 50Hz chord arpeggio engine
+    jsr music_update_drums      ; Voice 3 bass envelope & drum pitch sweeps
 
     inc music_tick
     lda music_tick
@@ -1466,7 +1477,7 @@ music_trigger_step:
     ldx music_step
 
     ; --------------------------------------------------------------------------
-    ; 1. Voice 1: Rob Hubbard Singing Pulse Brass Lead
+    ; 1. Voice 1: Soaring Ocean Loader Lead Melody
     ; --------------------------------------------------------------------------
     lda #SID_PULSE             ; Gate off to guarantee clean envelope re-attack
     sta SID_V1_CTRL
@@ -1478,34 +1489,41 @@ music_trigger_step:
     sta SID_V1_CTRL
 
     ; --------------------------------------------------------------------------
-    ; 2. Voice 2: Rob Hubbard Filtered Slap Bass
+    ; 2. Voice 2: Shimmering 50Hz Arpeggios (Continuously updated by music_update_v2)
     ; --------------------------------------------------------------------------
-    lda #SID_SAWTOOTH           ; Gate off
-    sta SID_V2_CTRL
-    lda music_v2_freq_lo, x
-    sta SID_V2_FREQ_LO
-    lda music_v2_freq_hi, x
-    sta SID_V2_FREQ_HI
-    lda #(SID_SAWTOOTH | SID_GATE)
-    sta SID_V2_CTRL
 
     ; --------------------------------------------------------------------------
-    ; 3. Voice 3: Drum Trigger
+    ; 3. Voice 3: Bass Foundation or Drum Trigger
     ; --------------------------------------------------------------------------
     lda music_v3_drums, x
-    beq @step_done              ; 0 = no new drum
+    beq @trigger_bass           ; 0 = normal bass note
 
     sta music_drum_type
     lda #0
     sta music_drum_tick
     jsr music_drum_start
+    rts
 
-@step_done:
+@trigger_bass:
+    lda #0
+    sta music_drum_type
+    lda #$05                    ; Reset ADSR for bass
+    sta SID_V3_AD
+    lda #$92
+    sta SID_V3_SR
+    lda #SID_TRIANGLE           ; Gate off
+    sta SID_V3_CTRL
+    lda music_v3_bass_lo, x
+    sta SID_V3_FREQ_LO
+    lda music_v3_bass_hi, x
+    sta SID_V3_FREQ_HI
+    lda #(SID_TRIANGLE | SID_GATE)
+    sta SID_V3_CTRL
     rts
 
 ; ==============================================================================
 ; Subroutine: music_update_v1
-; Purpose: Expressive Rob Hubbard delayed vibrato and tick 5 gate cut.
+; Purpose: Expressive delayed vibrato and tick 5 gate cut for Voice 1 melody.
 ; ==============================================================================
 music_update_v1:
     lda music_tick
@@ -1537,7 +1555,7 @@ music_vib_offsets:
 ; ==============================================================================
 ; Subroutine: music_update_pwm
 ; Purpose: Sweeps Voice 1 Pulse Width between ~$0300 and ~$0B00 for that rich,
-;          singing, chorused Rob Hubbard brass/lead sound.
+;          singing, chorused space brass lead sound.
 ; ==============================================================================
 music_update_pwm:
     inc music_pwm_sub
@@ -1572,22 +1590,68 @@ music_update_pwm:
     rts
 
 ; ==============================================================================
+; Subroutine: music_update_flt
+; Purpose: Sweeps SID analog lowpass filter cutoff smoothly between ~$25 and ~$88
+;          for Martin Galway's iconic cosmic liquid filter sound.
+; ==============================================================================
+music_update_flt:
+    inc music_filter_sub
+    lda music_filter_sub
+    cmp #2                      ; Update cutoff every 2 PAL frames (25 Hz)
+    bcc @flt_apply
+    lda #0
+    sta music_filter_sub
+
+    lda music_filter_dir
+    bne @flt_down
+
+    inc music_filter_hi
+    lda music_filter_hi
+    cmp #$88                    ; Sweep up to ~$88 (~3.5 kHz)
+    bcc @flt_apply
+    lda #1
+    sta music_filter_dir
+    jmp @flt_apply
+
+@flt_down:
+    dec music_filter_hi
+    lda music_filter_hi
+    cmp #$25                    ; Sweep down to ~$25 (~600 Hz)
+    bcs @flt_apply
+    lda #0
+    sta music_filter_dir
+
+@flt_apply:
+    lda music_filter_hi
+    sta SID_FLT_CUT_HI
+    rts
+
+; ==============================================================================
 ; Subroutine: music_update_v2
-; Purpose: Gates off Voice 2 Sawtooth on tick 5 (end of 16th note) for a crisp
-;          slap-bass bounce before the next step hits.
+; Purpose: Martin Galway 50Hz Shimmering Chord Arpeggio Engine.
+;          Cycles Voice 2 frequency through the active chord's notes every frame.
 ; ==============================================================================
 music_update_v2:
-    lda music_tick
-    cmp #5
-    bne +
-    lda #SID_SAWTOOTH           ; Gate off
-    sta SID_V2_CTRL
-+   rts
+    ldx music_step
+    lda music_v2_chord_offset, x
+    clc
+    adc music_arp_tick
+    tax
+    lda chord_table_lo, x
+    sta SID_V2_FREQ_LO
+    lda chord_table_hi, x
+    sta SID_V2_FREQ_HI
+
+    inc music_arp_tick
+    lda music_arp_tick
+    and #$03
+    sta music_arp_tick
+    rts
 
 ; ==============================================================================
 ; Subroutine: music_drum_start
-; Purpose: Starts a drum hit on Voice 3 (Kick, Snare, Closed Hat, Open Hat).
-; Input:   music_drum_type (1=Kick, 2=Snare, 3=Closed Hat, 4=Open Hat)
+; Purpose: Starts a drum hit on Voice 3 (Kick dive, Snare whip).
+; Input:   music_drum_type (1=Kick, 2=Snare)
 ; ==============================================================================
 music_drum_start:
     lda #SID_TEST
@@ -1599,58 +1663,28 @@ music_drum_start:
     cmp #1
     bne +
 
-    ; 1 = Heavy Sub-Bass Kick (Triangle dive)
+    ; 1 = Punchy Sub Kick (Triangle dive)
     lda #$04                    ; Attack 2ms, Decay 75ms
     sta SID_V3_AD
     lda #$00                    ; Sustain 0, Release 6ms
     sta SID_V3_SR
     sta SID_V3_FREQ_LO
-    lda #$18                    ; Punch start (~360 Hz)
+    lda #$18                    ; Start punch (~360 Hz)
     sta SID_V3_FREQ_HI
     lda #(SID_TRIANGLE | SID_GATE)
     sta SID_V3_CTRL
     rts
 
 +   cmp #2
-    bne +
+    bne @drum_start_done
 
-    ; 2 = Snare Drum (Distorted electro noise whip)
+    ; 2 = Crisp Snare Drum (Noise crack)
     lda #$04                    ; Attack 2ms, Decay 75ms
     sta SID_V3_AD
     lda #$00
     sta SID_V3_SR
     sta SID_V3_FREQ_LO
-    lda #$60                    ; Noise initial crack
-    sta SID_V3_FREQ_HI
-    lda #(SID_NOISE | SID_GATE)
-    sta SID_V3_CTRL
-    rts
-
-+   cmp #3
-    bne +
-
-    ; 3 = Closed Hi-Hat (Crisp 20ms noise tick)
-    lda #$01                    ; Attack 2ms, Decay 8ms
-    sta SID_V3_AD
-    lda #$00
-    sta SID_V3_SR
-    sta SID_V3_FREQ_LO
-    lda #$90                    ; High sizzle
-    sta SID_V3_FREQ_HI
-    lda #(SID_NOISE | SID_GATE)
-    sta SID_V3_CTRL
-    rts
-
-+   cmp #4
-    bne @drum_start_done
-
-    ; 4 = Open Hi-Hat (Sizzling noise splash)
-    lda #$08                    ; Attack 2ms, Decay 300ms
-    sta SID_V3_AD
-    lda #$00
-    sta SID_V3_SR
-    sta SID_V3_FREQ_LO
-    lda #$90
+    lda #$50                    ; Noise crack
     sta SID_V3_FREQ_HI
     lda #(SID_NOISE | SID_GATE)
     sta SID_V3_CTRL
@@ -1660,14 +1694,22 @@ music_drum_start:
 
 ; ==============================================================================
 ; Subroutine: music_update_drums
-; Purpose: Frame-by-frame (50 Hz) pitch sweep and gate control for active drum.
+; Purpose: Frame-by-frame pitch sweep for Kick/Snare, or tick 5 bass gate cut.
 ; ==============================================================================
 music_update_drums:
     lda music_drum_type
-    bne +
-    rts                         ; No drum active
+    bne @upd_active_drum
 
-+   inc music_drum_tick
+    ; When normal bass is playing on Voice 3: gate off on tick 5 for clean bounce
+    lda music_tick
+    cmp #5
+    bne +
+    lda #SID_TRIANGLE
+    sta SID_V3_CTRL
++   rts
+
+@upd_active_drum:
+    inc music_drum_tick
     lda music_drum_type
     cmp #1
     bne @check_snare
@@ -1681,12 +1723,12 @@ music_update_drums:
     rts
 +   cmp #2
     bne +
-    lda #$04                    ; Drop to 60 Hz (sub-bass)
+    lda #$04                    ; Drop to 60 Hz
     sta SID_V3_FREQ_HI
     rts
 +   cmp #3
     bne +
-    lda #$02                    ; Drop to 30 Hz (deep sub)
+    lda #$02                    ; Drop to 30 Hz
     sta SID_V3_FREQ_HI
     rts
 +   cmp #4
@@ -1699,50 +1741,22 @@ music_update_drums:
 
 @check_snare:
     cmp #2
-    bne @check_closed_hat
+    bne @drum_upd_done
 
     ; --- 2: Snare Drum Pitch Dive & Cut ---
     lda music_drum_tick
     cmp #1
     bne +
-    lda #$30                    ; Mid body
+    lda #$28
     sta SID_V3_FREQ_HI
     rts
 +   cmp #2
     bne +
-    lda #$18                    ; Low rumble
+    lda #$14
     sta SID_V3_FREQ_HI
     rts
 +   cmp #3
     bne +
-    lda #SID_NOISE              ; Gate off
-    sta SID_V3_CTRL
-    lda #0
-    sta music_drum_type
-+   rts
-
-@check_closed_hat:
-    cmp #3
-    bne @check_open_hat
-
-    ; --- 3: Closed Hat Cut after 1 frame (20ms) ---
-    lda music_drum_tick
-    cmp #1
-    bcc +
-    lda #SID_NOISE              ; Gate off
-    sta SID_V3_CTRL
-    lda #0
-    sta music_drum_type
-+   rts
-
-@check_open_hat:
-    cmp #4
-    bne @drum_upd_done
-
-    ; --- 4: Open Hat Cut after 4 frames (80ms) ---
-    lda music_drum_tick
-    cmp #4
-    bcc +
     lda #SID_NOISE              ; Gate off
     sta SID_V3_CTRL
     lda #0
@@ -1797,74 +1811,104 @@ sfx_v3_priority:    !byte 0
 sfx_v3_pitch_lo:    !byte 0
 sfx_v3_pitch_hi:    !byte 0
 
-; ; ------------------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 ; Attract Mode Music State Variables
 ; ------------------------------------------------------------------------------
 music_active:       !byte 0     ; 1 = attract mode music active
 music_step:         !byte 0     ; Current 16th note step (0..127)
 music_tick:         !byte 0     ; Sub-step frame tick (0..5)
+music_arp_tick:     !byte 0     ; Voice 2 Galway chord arpeggio tick (0..3)
 music_v1_vib_phase: !byte 0     ; Voice 1 delayed vibrato phase
 music_pwm_hi:       !byte $03   ; Voice 1 Pulse width high byte
 music_pwm_dir:      !byte 0     ; 0 = sweeping up, 1 = sweeping down
 music_pwm_sub:      !byte 0     ; Sub-frame counter for slow PWM sweep
-music_filter_hi:    !byte $70   ; Analog Filter cutoff high byte
-music_drum_type:    !byte 0     ; Voice 3 active drum (0=none, 1=Kick, 2=Snare, 3=CH, 4=OH)
+music_filter_hi:    !byte $30   ; Analog Filter cutoff high byte
+music_filter_dir:   !byte 0     ; Filter sweep direction (0=up, 1=down)
+music_filter_sub:   !byte 0     ; Filter sweep sub-frame counter
+music_drum_type:    !byte 0     ; Voice 3 active drum (0=none, 1=Kick, 2=Snare)
 music_drum_tick:    !byte 0     ; Voice 3 drum age in frames
 
 ; ==============================================================================
-; ROB HUBBARD - "COMMANDO" STYLE C64 DEMOSCENE FUNK
+; MARTIN GALWAY - 'OCEAN LOADER' COSMIC SPACE THEME
 ; 128 Steps (8 Bars) @ 6 PAL frames/step (125 BPM)
-; Key: C Minor
+; Key: D Minor | 50Hz Shimmering Chords & Resonant Filter Sweep
 ; ==============================================================================
 
 music_v1_freq_lo:
-    !byte $67, $67, $89, $b2, $b2, $b2, $3b, $13, $13, $13, $13, $13, $02, $13, $3b, $b2
-    !byte $67, $67, $89, $b2, $b2, $b2, $3b, $13, $02, $02, $02, $02, $ce, $02, $13, $3b
-    !byte $ce, $ce, $02, $ce, $02, $02, $13, $3b, $3b, $3b, $3b, $3b, $13, $a0, $13, $3b
-    !byte $b2, $b2, $3b, $13, $3b, $b2, $89, $b2, $3b, $3b, $89, $6d, $67, $67, $67, $67
-    !byte $67, $b2, $13, $ce, $13, $ce, $64, $ce, $02, $13, $b2, $13, $3b, $b2, $89, $67
-    !byte $3b, $a0, $ce, $76, $ce, $76, $40, $76, $64, $ce, $a0, $ce, $02, $a0, $13, $3b
-    !byte $13, $da, $11, $26, $11, $26, $b4, $26, $76, $11, $da, $11, $64, $11, $ce, $da
-    !byte $ce, $02, $a0, $13, $3b, $b2, $89, $b2, $3b, $b2, $89, $6d, $67, $89, $b2, $3b
+    !byte $45, $45, $45, $45, $45, $45, $3b, $3b, $89, $89, $89, $89, $ed, $ed, $3b, $3b
+    !byte $11, $11, $11, $11, $11, $11, $ce, $ce, $02, $02, $02, $02, $45, $45, $13, $13
+    !byte $da, $da, $da, $da, $da, $da, $11, $11, $ce, $ce, $ce, $ce, $11, $11, $da, $da
+    !byte $76, $76, $76, $76, $76, $76, $da, $da, $11, $11, $11, $11, $ce, $ce, $45, $45
+    !byte $02, $02, $02, $02, $02, $02, $45, $45, $13, $13, $13, $13, $45, $45, $02, $02
+    !byte $ce, $ce, $ce, $ce, $ce, $ce, $11, $11, $76, $76, $76, $76, $da, $da, $11, $11
+    !byte $e0, $e0, $e0, $e0, $e0, $e0, $11, $11, $da, $da, $da, $da, $76, $76, $26, $26
+    !byte $89, $89, $89, $89, $89, $89, $76, $76, $da, $da, $11, $11, $e0, $e0, $da, $da
 
 music_v1_freq_hi:
-    !byte $11, $11, $13, $14, $14, $14, $17, $1a, $1a, $1a, $1a, $1a, $1f, $1a, $17, $14
-    !byte $11, $11, $13, $14, $14, $14, $17, $1a, $1f, $1f, $1f, $1f, $22, $1f, $1a, $17
-    !byte $22, $22, $1f, $22, $1f, $1f, $1a, $17, $17, $17, $17, $17, $1a, $1b, $1a, $17
-    !byte $14, $14, $17, $1a, $17, $14, $13, $14, $17, $17, $13, $10, $11, $11, $11, $11
-    !byte $11, $14, $1a, $22, $1a, $22, $29, $22, $1f, $1a, $14, $1a, $17, $14, $13, $11
-    !byte $17, $1b, $22, $2e, $22, $2e, $37, $2e, $29, $22, $1b, $22, $1f, $1b, $1a, $17
-    !byte $1a, $20, $27, $34, $27, $34, $41, $34, $2e, $27, $20, $27, $29, $27, $22, $20
-    !byte $22, $1f, $1b, $1a, $17, $14, $13, $14, $17, $14, $13, $10, $11, $13, $14, $17
+    !byte $1d, $1d, $1d, $1d, $1d, $1d, $17, $17, $13, $13, $13, $13, $15, $15, $17, $17
+    !byte $27, $27, $27, $27, $27, $27, $22, $22, $1f, $1f, $1f, $1f, $1d, $1d, $1a, $1a
+    !byte $2b, $2b, $2b, $2b, $2b, $2b, $27, $27, $22, $22, $22, $22, $27, $27, $2b, $2b
+    !byte $2e, $2e, $2e, $2e, $2e, $2e, $2b, $2b, $27, $27, $27, $27, $22, $22, $1d, $1d
+    !byte $1f, $1f, $1f, $1f, $1f, $1f, $1d, $1d, $1a, $1a, $1a, $1a, $1d, $1d, $1f, $1f
+    !byte $22, $22, $22, $22, $22, $22, $27, $27, $2e, $2e, $2e, $2e, $2b, $2b, $27, $27
+    !byte $24, $24, $24, $24, $24, $24, $27, $27, $2b, $2b, $2b, $2b, $2e, $2e, $34, $34
+    !byte $3a, $3a, $3a, $3a, $3a, $3a, $2e, $2e, $2b, $2b, $27, $27, $24, $24, $2b, $2b
 
-music_v2_freq_lo:
-    !byte $5a, $b4, $5a, $b4, $5a, $b4, $2d, $b4, $5a, $b4, $5a, $b4, $cf, $b4, $85, $1b
-    !byte $5a, $b4, $5a, $b4, $5a, $b4, $2d, $b4, $e0, $c1, $e0, $c1, $42, $c1, $e7, $42
-    !byte $74, $e8, $74, $e8, $e7, $cf, $74, $cf, $e7, $cf, $e7, $cf, $74, $cf, $42, $74
-    !byte $96, $2d, $96, $2d, $71, $e2, $96, $e2, $42, $85, $42, $85, $1b, $85, $e2, $42
-    !byte $5a, $b4, $2d, $b4, $42, $85, $5a, $b4, $e0, $c1, $42, $85, $e7, $cf, $96, $71
-    !byte $e7, $cf, $74, $cf, $5a, $b4, $e7, $cf, $96, $2d, $2d, $5a, $e0, $c1, $74, $42
-    !byte $42, $85, $1b, $85, $e2, $85, $42, $85, $e7, $cf, $71, $e2, $1b, $37, $42, $1b
-    !byte $42, $42, $74, $74, $a9, $a9, $e0, $e0, $1b, $1b, $1b, $1b, $42, $1b, $e2, $1b
+music_v2_chord_offset:
+    !byte $00, $00, $00, $00, $00, $00, $00, $00, $04, $04, $04, $04, $04, $04, $04, $04
+    !byte $08, $08, $08, $08, $08, $08, $08, $08, $0c, $0c, $0c, $0c, $0c, $0c, $0c, $0c
+    !byte $10, $10, $10, $10, $10, $10, $10, $10, $14, $14, $14, $14, $14, $14, $14, $14
+    !byte $00, $00, $00, $00, $00, $00, $00, $00, $04, $04, $04, $04, $04, $04, $04, $04
+    !byte $18, $18, $18, $18, $18, $18, $18, $18, $1c, $1c, $1c, $1c, $1c, $1c, $1c, $1c
+    !byte $20, $20, $20, $20, $20, $20, $20, $20, $24, $24, $24, $24, $24, $24, $24, $24
+    !byte $28, $28, $28, $28, $28, $28, $28, $28, $2c, $2c, $2c, $2c, $2c, $2c, $2c, $2c
+    !byte $00, $00, $00, $00, $00, $00, $00, $00, $04, $04, $04, $04, $04, $04, $04, $04
 
-music_v2_freq_hi:
-    !byte $04, $08, $04, $08, $04, $08, $05, $08, $04, $08, $04, $08, $05, $08, $06, $04
-    !byte $04, $08, $04, $08, $04, $08, $05, $08, $03, $07, $03, $07, $03, $07, $02, $03
-    !byte $03, $06, $03, $06, $02, $05, $03, $05, $02, $05, $02, $05, $03, $05, $03, $03
-    !byte $02, $05, $02, $05, $02, $04, $02, $04, $03, $06, $03, $06, $04, $06, $04, $03
-    !byte $04, $08, $05, $08, $03, $06, $04, $08, $03, $07, $03, $06, $02, $05, $02, $02
-    !byte $02, $05, $03, $05, $04, $08, $02, $05, $02, $05, $02, $04, $03, $07, $03, $03
-    !byte $03, $06, $04, $06, $04, $06, $03, $06, $02, $05, $02, $04, $04, $08, $03, $04
-    !byte $03, $03, $03, $03, $03, $03, $03, $03, $04, $04, $04, $04, $03, $04, $04, $04
+; Chord note frequency tables (12 chords * 4 notes = 48 bytes)
+chord_table_lo:
+    !byte $c4, $9d, $a2, $89, $9d, $a2, $89, $3b
+    !byte $c1, $c4, $9d, $81, $c4, $9d, $81, $89
+    !byte $b4, $f7, $0a, $67, $f7, $0a, $67, $ed
+    !byte $85, $c1, $c4, $0a, $c1, $c4, $0a, $81
+    !byte $cf, $51, $b4, $9d, $51, $b4, $9d, $a2
+    !byte $51, $38, $f7, $a2, $38, $f7, $0a, $a2
+
+chord_table_hi:
+    !byte $09, $0b, $0e, $13, $0b, $0e, $13, $17
+    !byte $07, $09, $0b, $0f, $09, $0b, $0f, $13
+    !byte $08, $0a, $0d, $11, $0a, $0d, $11, $15
+    !byte $06, $07, $09, $0d, $07, $09, $0d, $0f
+    !byte $05, $07, $08, $0b, $07, $08, $0b, $0e
+    !byte $07, $09, $0a, $0e, $09, $0a, $0d, $0e
+
+music_v3_bass_lo:
+    !byte $e2, $e2, $c4, $e2, $e2, $e2, $c4, $e2, $e2, $e2, $c4, $e2, $cf, $e2, $7b, $cf
+    !byte $e0, $e0, $c1, $e0, $e0, $e0, $c1, $e0, $e0, $e0, $c1, $e0, $e2, $e0, $5a, $e2
+    !byte $5a, $5a, $b4, $5a, $5a, $5a, $b4, $5a, $5a, $5a, $b4, $5a, $7b, $5a, $e2, $7b
+    !byte $e2, $e2, $c4, $e2, $e2, $e2, $c4, $e2, $e2, $e2, $c4, $e2, $5a, $e2, $7b, $cf
+    !byte $42, $42, $85, $42, $42, $42, $85, $42, $42, $42, $85, $42, $e0, $42, $a9, $e0
+    !byte $e7, $e7, $cf, $e7, $e7, $e7, $cf, $e7, $e7, $e7, $cf, $e7, $a9, $e7, $42, $a9
+    !byte $a9, $a9, $51, $a9, $a9, $a9, $51, $a9, $a9, $a9, $51, $a9, $9c, $a9, $1b, $9c
+    !byte $e2, $e2, $c4, $e2, $e2, $e2, $c4, $e2, $e2, $e2, $cf, $cf, $7b, $7b, $9c, $9c
+
+music_v3_bass_hi:
+    !byte $04, $04, $09, $04, $04, $04, $09, $04, $04, $04, $09, $04, $05, $04, $05, $05
+    !byte $03, $03, $07, $03, $03, $03, $07, $03, $03, $03, $07, $03, $04, $03, $04, $04
+    !byte $04, $04, $08, $04, $04, $04, $08, $04, $04, $04, $08, $04, $05, $04, $04, $05
+    !byte $04, $04, $09, $04, $04, $04, $09, $04, $04, $04, $09, $04, $04, $04, $05, $05
+    !byte $03, $03, $06, $03, $03, $03, $06, $03, $03, $03, $06, $03, $03, $03, $03, $03
+    !byte $02, $02, $05, $02, $02, $02, $05, $02, $02, $02, $05, $02, $03, $02, $03, $03
+    !byte $03, $03, $07, $03, $03, $03, $07, $03, $03, $03, $07, $03, $04, $03, $04, $04
+    !byte $04, $04, $09, $04, $04, $04, $09, $04, $04, $04, $05, $05, $05, $05, $04, $04
 
 music_v3_drums:
-    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $00, $02, $00, $04, $03
-    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $01, $03, $00, $02, $00, $04, $03
-    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $04, $02, $00, $04, $03
-    !byte $01, $00, $03, $00, $02, $00, $03, $02, $01, $01, $03, $00, $02, $02, $04, $03
-    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $00, $02, $00, $04, $03
-    !byte $01, $00, $03, $04, $02, $00, $03, $00, $01, $01, $03, $04, $02, $00, $04, $03
-    !byte $01, $00, $03, $00, $02, $00, $03, $00, $01, $00, $03, $00, $02, $00, $03, $00
-    !byte $01, $00, $03, $00, $02, $00, $02, $00, $02, $02, $02, $02, $02, $02, $02, $02
+    !byte $01, $00, $00, $00, $02, $00, $00, $00, $01, $00, $00, $00, $02, $00, $00, $00
+    !byte $01, $00, $00, $00, $02, $00, $00, $00, $01, $00, $00, $00, $02, $00, $00, $00
+    !byte $01, $00, $00, $00, $02, $00, $00, $00, $01, $00, $00, $00, $02, $00, $00, $00
+    !byte $01, $00, $00, $00, $02, $00, $00, $00, $01, $00, $00, $00, $02, $00, $02, $00
+    !byte $01, $00, $00, $00, $02, $00, $00, $00, $01, $00, $00, $00, $02, $00, $00, $00
+    !byte $01, $00, $00, $00, $02, $00, $00, $00, $01, $00, $00, $00, $02, $00, $00, $00
+    !byte $01, $00, $00, $00, $02, $00, $00, $00, $01, $00, $00, $00, $02, $00, $02, $02
+    !byte $01, $00, $00, $00, $02, $00, $00, $00, $02, $02, $02, $02, $02, $02, $02, $02
 
 
