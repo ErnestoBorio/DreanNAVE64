@@ -37,6 +37,13 @@ collisions_check:
     beq +
     rts
 +
+    ; Check if missile hits active bonus item (cycles B -> E -> P -> B)
+    jsr powerups_check_shot
+    lda g_missile_active
+    cmp #1
+    beq +
+    rts                         ; Missile consumed by bonus item
++
     ldx #0
 @check_enemy_loop:
     ; 1. Check if enemy slot is active and not already exploding

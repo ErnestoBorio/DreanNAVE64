@@ -1,10 +1,11 @@
 ; ==============================================================================
-; SPRITES_DATA.ASM - Complete 20 Hardware Sprite Definitions
+; SPRITES_DATA.ASM - Complete 23 Hardware Sprite Definitions
 ; ==============================================================================
-; Total: 20 Sprites x 64 bytes = 1,280 bytes ($0500)
+; Total: 23 Sprites x 64 bytes = 1,472 bytes ($05C0: $3000 - $35BF)
 ; Each sprite consists of 63 data bytes (21 rows x 3 bytes) + 1 padding byte.
 ; Sprites 1..17 are imported from the master sprite sheet.
-; Sprites 18..20 provide the 3-frame monochrome explosion sequence.
+; Sprites 18..20 provide the new Bonus items (B, E, P).
+; Sprites 21..23 provide the 3-frame monochrome explosion sequence.
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
@@ -27,9 +28,12 @@ SPRITE_PTR_PLAYER_SHOT_3   = 205  ; Sprite 14: Player Shot Level 3 (Monochrome H
 SPRITE_PTR_ENEMY_SHOT_1    = 206  ; Sprite 15: Enemy Shot 1 (Monochrome Hi-Res Single)
 SPRITE_PTR_ENEMY_SHOT_2    = 207  ; Sprite 16: Enemy Shot 2 (Monochrome Hi-Res Spread)
 SPRITE_PTR_HIT_SPARK       = 208  ; Sprite 17: Hit Spark (Monochrome Hi-Res)
-SPRITE_PTR_EXPLOSION_1     = 209  ; Sprite 18: Explosion Frame 1 (Monochrome Hi-Res)
-SPRITE_PTR_EXPLOSION_2     = 210  ; Sprite 19: Explosion Frame 2 (Monochrome Hi-Res)
-SPRITE_PTR_EXPLOSION_3     = 211  ; Sprite 20: Explosion Frame 3 (Monochrome Hi-Res)
+SPRITE_PTR_BONUS_B         = 209  ; Sprite 18: Bonus B - Smart Bomb (Multicolor)
+SPRITE_PTR_BONUS_E         = 210  ; Sprite 19: Bonus E - Energy Recovery (Multicolor)
+SPRITE_PTR_BONUS_P         = 211  ; Sprite 20: Bonus P - Evolution Level-Up (Multicolor)
+SPRITE_PTR_EXPLOSION_1     = 212  ; Sprite 21: Explosion Frame 1 (Monochrome Hi-Res)
+SPRITE_PTR_EXPLOSION_2     = 213  ; Sprite 22: Explosion Frame 2 (Monochrome Hi-Res)
+SPRITE_PTR_EXPLOSION_3     = 214  ; Sprite 23: Explosion Frame 3 (Monochrome Hi-Res)
 
 ; Default alias for primary player ship
 SPRITE_PTR_PLAYER_SHIP     = 192
@@ -170,7 +174,6 @@ g_sprite_enemy_2:
     !byte $00                  ; 64th padding byte
 
 ; ------------------------------------------------------------------------------
-; Sprite 6: Enemy Ship 3 - Scorpion (Multicolor)
 ; Sprite 6: Enemy Ship 3 - Interceptor (Multicolor)
 ; ------------------------------------------------------------------------------
 g_sprite_enemy_3:
@@ -184,7 +187,7 @@ g_sprite_enemy_3:
     !byte $00, $0d, $70
     !byte $00, $f6, $50
     !byte $0f, $5a, $9c
-    !byte $f5, $7a, $94
+    !byte $f5, $7a, $97
     !byte $0f, $5a, $9c
     !byte $00, $f6, $50
     !byte $00, $0d, $70
@@ -198,29 +201,28 @@ g_sprite_enemy_3:
     !byte $00                  ; 64th padding byte
 
 ; ------------------------------------------------------------------------------
-; Sprite 7: Enemy Ship 4 - Interceptor (Multicolor)
 ; Sprite 7: Enemy Ship 4 - Scorpion (Multicolor)
 ; ------------------------------------------------------------------------------
 g_sprite_enemy_4:
     !byte $00, $03, $70
     !byte $00, $0d, $5c
-    !byte $00, $0d, $57
-    !byte $d7, $01, $5c
+    !byte $14, $0d, $57
+    !byte $57, $01, $5c
     !byte $05, $00, $40
-    !byte $d7, $40, $40
-    !byte $00, $73, $70
-    !byte $00, $11, $c0
+    !byte $07, $40, $40
+    !byte $dc, $f3, $70
+    !byte $00, $1d, $c0
     !byte $00, $15, $00
     !byte $0d, $d9, $c0
     !byte $36, $6a, $5f
     !byte $0d, $d9, $c0
     !byte $00, $15, $00
-    !byte $00, $11, $c0
-    !byte $00, $73, $70
-    !byte $d7, $40, $40
+    !byte $00, $1d, $c0
+    !byte $dc, $f3, $70
+    !byte $07, $40, $40
     !byte $05, $00, $40
-    !byte $d7, $01, $5c
-    !byte $00, $0d, $57
+    !byte $57, $01, $5c
+    !byte $14, $0d, $57
     !byte $00, $0d, $5c
     !byte $00, $03, $70
     !byte $00                  ; 64th padding byte
@@ -496,7 +498,88 @@ g_sprite_hit_spark:
     !byte $00                  ; 64th padding byte
 
 ; ------------------------------------------------------------------------------
-; Sprite 18: Explosion Frame 1 (Monochrome Hi-Res)
+; Sprite 18: Bonus B - Smart Bomb (Multicolor)
+; ------------------------------------------------------------------------------
+g_sprite_bonus_b:
+    !byte $00, $a8, $00
+    !byte $02, $aa, $00
+    !byte $0a, $aa, $80
+    !byte $0a, $aa, $80
+    !byte $2f, $ff, $e0
+    !byte $2c, $00, $e0
+    !byte $2c, $00, $e0
+    !byte $ac, $00, $e8
+    !byte $ac, $cc, $e8
+    !byte $ac, $cc, $e8
+    !byte $ac, $cc, $e8
+    !byte $ac, $cc, $e8
+    !byte $ac, $cc, $e8
+    !byte $ac, $00, $e8
+    !byte $2c, $01, $e0
+    !byte $2c, $05, $60
+    !byte $2b, $35, $60
+    !byte $0a, $e5, $40
+    !byte $0a, $a9, $80
+    !byte $02, $aa, $00
+    !byte $00, $a8, $00
+    !byte $00                  ; 64th padding byte
+
+; ------------------------------------------------------------------------------
+; Sprite 19: Bonus E - Energy Heal (Multicolor)
+; ------------------------------------------------------------------------------
+g_sprite_bonus_e:
+    !byte $00, $a8, $00
+    !byte $02, $aa, $00
+    !byte $0a, $aa, $80
+    !byte $0a, $aa, $80
+    !byte $2a, $aa, $a0
+    !byte $2b, $ff, $a0
+    !byte $23, $ff, $a0
+    !byte $a3, $ff, $a8
+    !byte $a3, $33, $a8
+    !byte $a3, $33, $a8
+    !byte $a3, $33, $a8
+    !byte $a3, $33, $98
+    !byte $a3, $33, $98
+    !byte $a3, $03, $98
+    !byte $23, $a3, $60
+    !byte $20, $a0, $60
+    !byte $2a, $a9, $60
+    !byte $0a, $a5, $80
+    !byte $0a, $96, $80
+    !byte $02, $aa, $00
+    !byte $00, $a8, $00
+    !byte $00                  ; 64th padding byte
+
+; ------------------------------------------------------------------------------
+; Sprite 20: Bonus P - Evolution Level-Up (Multicolor)
+; ------------------------------------------------------------------------------
+g_sprite_bonus_p:
+    !byte $00, $aa, $00
+    !byte $02, $aa, $80
+    !byte $0a, $aa, $a0
+    !byte $0a, $aa, $a0
+    !byte $2a, $aa, $a8
+    !byte $20, $00, $28
+    !byte $23, $ff, $28
+    !byte $a3, $ff, $2a
+    !byte $a3, $ff, $2a
+    !byte $a0, $33, $2a
+    !byte $aa, $33, $2a
+    !byte $aa, $33, $2a
+    !byte $aa, $33, $2a
+    !byte $aa, $3f, $5a
+    !byte $2a, $3d, $58
+    !byte $2a, $0d, $58
+    !byte $2a, $81, $58
+    !byte $0a, $a9, $60
+    !byte $0a, $aa, $a0
+    !byte $02, $aa, $80
+    !byte $00, $aa, $00
+    !byte $00                  ; 64th padding byte
+
+; ------------------------------------------------------------------------------
+; Sprite 21: Explosion Frame 1 (Monochrome Hi-Res)
 ; ------------------------------------------------------------------------------
 g_sprite_explosion_1:
     !byte $00, $00, $00
@@ -523,7 +606,7 @@ g_sprite_explosion_1:
     !byte $00                  ; 64th padding byte
 
 ; ------------------------------------------------------------------------------
-; Sprite 19: Explosion Frame 2 (Monochrome Hi-Res)
+; Sprite 22: Explosion Frame 2 (Monochrome Hi-Res)
 ; ------------------------------------------------------------------------------
 g_sprite_explosion_2:
     !byte $00, $18, $00
@@ -550,7 +633,7 @@ g_sprite_explosion_2:
     !byte $00                  ; 64th padding byte
 
 ; ------------------------------------------------------------------------------
-; Sprite 20: Explosion Frame 3 (Monochrome Hi-Res)
+; Sprite 23: Explosion Frame 3 (Monochrome Hi-Res)
 ; ------------------------------------------------------------------------------
 g_sprite_explosion_3:
     !byte $48, $18, $12
@@ -577,7 +660,7 @@ g_sprite_explosion_3:
     !byte $00                  ; 64th padding byte
 
 ; ------------------------------------------------------------------------------
-; Table of pointers to all 20 sprite blocks (low/high bytes)
+; Table of pointers to all 23 sprite blocks (low/high bytes)
 ; ------------------------------------------------------------------------------
 g_all_sprites_lo:
     !byte <g_sprite_player_ship_1
@@ -597,6 +680,9 @@ g_all_sprites_lo:
     !byte <g_sprite_enemy_shot_1
     !byte <g_sprite_enemy_shot_2
     !byte <g_sprite_hit_spark
+    !byte <g_sprite_bonus_b
+    !byte <g_sprite_bonus_e
+    !byte <g_sprite_bonus_p
     !byte <g_sprite_explosion_1
     !byte <g_sprite_explosion_2
     !byte <g_sprite_explosion_3
@@ -619,6 +705,9 @@ g_all_sprites_hi:
     !byte >g_sprite_enemy_shot_1
     !byte >g_sprite_enemy_shot_2
     !byte >g_sprite_hit_spark
+    !byte >g_sprite_bonus_b
+    !byte >g_sprite_bonus_e
+    !byte >g_sprite_bonus_p
     !byte >g_sprite_explosion_1
     !byte >g_sprite_explosion_2
     !byte >g_sprite_explosion_3

@@ -147,7 +147,7 @@ KEY_CODE_RSHIFT     = $34       ; 52: Right Shift (Fire)
 ; ------------------------------------------------------------------------------
 MAX_ENEMIES         = 12        ; 12 free-roaming enemy ships (0..11)
 MAX_ENEMY_BULLETS   = 4         ; 4 free-flying aimed bullets (0..3)
-MAX_VIRTUAL_SPRITES = 16        ; 12 enemies + 4 bullets
+MAX_VIRTUAL_SPRITES = 17        ; 12 enemies + 4 bullets + 1 bonus (Virtual Slot 16)
 
 ; ------------------------------------------------------------------------------
 ; SID Sound Chip Registers ($D400 - $D41C)

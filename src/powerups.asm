@@ -1,18 +1,18 @@
 ; ==============================================================================
-; POWERUPS.ASM - Letter 'P' Powerup Entity & Playfield Grid Collision (Phase 9)
+; POWERUPS.ASM - Hardware Sprite Bonus Items (B, E, P) & Collision
 ; ==============================================================================
 ; Target: Commodore 64 (50 Hz PAL)
 ; Assembler: ACME 6502 Assembler
 ;
 ; Manages:
-; - Letter 'P' powerup composed of custom charset tiles:
-;   * Top-Left:     Tile $00 (0)
-;   * Top-Right:    Tile $01 (1)
-;   * Bottom-Left:  Tile $10 (16)
-;   * Bottom-Right: Tile $11 (17)
-; - Screen RAM & Color RAM placement at playfield right edge (cols 38..39)
-; - Uniform leftward scrolling synchronized with 25 FPS starfield shifts
-; - Accurate bounding-box collection by player ship
+; - Hardware multicolor sprite bonus items (B, E, P) moving independently
+;   from background starfield at smooth 50 FPS arcade speed:
+;   * 'B': Smart Bomb pickup (Sprite Block 209)
+;   * 'E': Energy Recovery +1 HP pickup (Sprite Block 210)
+;   * 'P': Evolution Phase Level-Up pickup (Sprite Block 211)
+; - Rendered via the dynamic Y-sorting virtual sprite multiplexer (Slot 16)
+; - Smooth leftward pixel travel (1 px/frame)
+; - Accurate sprite-to-sprite AABB collision box testing with player ship
 ; - Evolution leveling up through 5 ship phases (and full HP heal at max phase)
 ; ==============================================================================
 
@@ -23,43 +23,69 @@ NUM_POWERUP_TYPES   = 3
 
 POWERUP_INITIAL_DELAY   = 150   ; 150 frames = 3.0 seconds at 50 Hz PAL
 POWERUP_SPAWN_INTERVAL  = 350   ; 350 frames = 7.0 seconds at 50 Hz PAL
+POWERUP_STAGE_DURATION  = 250   ; 250 frames = 5.0 seconds at 50 Hz PAL
 
-; 2x2 Custom Charset Tiles for P, B, and E
-powerup_tile_tl:
-    !byte 0, 2, 4               ; P=0, B=2, E=4
-powerup_tile_tr:
-    !byte 1, 3, 5               ; P=1, B=3, E=5
-powerup_tile_bl:
-    !byte 16, 18, 20            ; P=16, B=18, E=20
-powerup_tile_br:
-    !byte 17, 19, 21            ; P=17, B=19, E=21
+BONUS_BOUND_MIN_X       = 175   ; Lower boundary of upper half of screen (midpoint=172)
+BONUS_BOUND_MAX_X_LO    = 49    ; Upper boundary of upper half: 256 + 49 = 305
+BONUS_BOUND_MAX_X_HI    = 1
+BONUS_BOUND_MIN_Y       = 56    ; Left screen boundary
+BONUS_BOUND_MAX_Y       = 232   ; Right screen boundary
+
+; Sprite block pointers for P, B, E (from sprites_data.asm)
+powerup_sprite_table:
+    !byte SPRITE_PTR_BONUS_P    ; 0: P (Phase Level-Up)
+    !byte SPRITE_PTR_BONUS_B    ; 1: B (Smart Bomb)
+    !byte SPRITE_PTR_BONUS_E    ; 2: E (Energy Recovery)
 
 ; ------------------------------------------------------------------------------
 ; Powerup RAM State Variables
 ; ------------------------------------------------------------------------------
-g_powerup_active:   !byte 0     ; 1 = Active on screen, 0 = Inactive
-g_powerup_type:     !byte POWERUP_TYPE_P ; Current powerup type (0=P, 1=B, 2=E)
-g_powerup_col:      !byte 0     ; Left column of powerup (0..38, $FF = offscreen left)
-g_powerup_row:      !byte 0     ; Top row of powerup (2..22)
-g_powerup_timer_lo: !byte 0     ; Countdown timer low byte for natural spawn
-g_powerup_timer_hi: !byte 0     ; Countdown timer high byte for natural spawn
-s_powerup_diff_lo:  !byte 0     ; Math scratch for collision testing
-s_powerup_diff_hi:  !byte 0     ; Math scratch for collision testing
-s_powerup_color_timer:   !byte 20 ; 20 frames = 0.4s at 50 Hz PAL
-s_powerup_color_idx:     !byte 0  ; Index in cycle (0..3 for P, 0..2 for B/E)
-s_powerup_current_color: !byte COLOR_PURPLE
+g_powerup_active:       !byte 0     ; 1 = Active on screen, 0 = Inactive
+g_powerup_visible:      !byte 0     ; 1 = Rendered in multiplexer, 0 = Hidden
+g_powerup_type:         !byte POWERUP_TYPE_P ; Current powerup type (0=P, 1=B, 2=E)
+g_powerup_x_lo:         !byte 0     ; Sprite X low byte
+g_powerup_x_hi:         !byte 0     ; Sprite X high byte (MSB)
+g_powerup_y:            !byte 0     ; Sprite Y (scanline 50..235)
+g_powerup_timer_lo:     !byte 0     ; Countdown timer low byte for natural spawn
+g_powerup_timer_hi:     !byte 0     ; Countdown timer high byte for natural spawn
+s_powerup_diff_lo:      !byte 0     ; Math scratch for collision testing
+s_powerup_diff_hi:      !byte 0     ; Math scratch for collision testing
+s_powerup_color_timer:  !byte 20    ; 20 frames = 0.4s at 50 Hz PAL
+s_powerup_color_idx:    !byte 0     ; Index in cycle (0..3 for P, 0..2 for B/E)
+s_powerup_current_color:!byte COLOR_PURPLE
 
-; Color cycle table for P: Purple -> Blue -> Light Blue -> Cyan
-powerup_p_color_cycle:
-    !byte COLOR_PURPLE, COLOR_BLUE, COLOR_LIGHT_BLUE, COLOR_CYAN
+; Chaotic motion & lifecycle state
+s_powerup_vx:           !byte 0     ; Signed velocity in X (-2..+2)
+s_powerup_vy:           !byte 0     ; Signed velocity in Y (-2..+2)
+s_powerup_impulse_timer:!byte 0     ; Frames until next chaotic vector shift
+s_powerup_avx:          !byte 0     ; Actual eased X velocity (signed, 1/16 px/frame)
+s_powerup_avy:          !byte 0     ; Actual eased Y velocity (signed, 1/16 px/frame)
+s_powerup_fx:           !byte 0     ; X sub-pixel fraction (1/256 px)
+s_powerup_fy:           !byte 0     ; Y sub-pixel fraction (1/256 px)
+s_powerup_dlo:          !byte 0     ; Velocity delta low (fraction)
+s_powerup_dhi:          !byte 0     ; Velocity delta high (whole pixels, signed)
+s_powerup_dext:         !byte 0     ; Sign extension ($00/$FF)
+s_powerup_life_stage:   !byte 0     ; 0 = Solid (5.0s), 1 = Flashing (5.0s)
+s_powerup_life_timer:   !byte 0     ; Countdown timer for current stage (250 frames)
 
-; Color cycle table for B: PURPLE -> Red -> Light Red
+; Color cycle table for B: Red -> Light Red -> Purple
 powerup_b_color_cycle:
-    !byte COLOR_PURPLE, COLOR_RED, COLOR_LIGHT_RED
+    !byte COLOR_RED, COLOR_LIGHT_RED, COLOR_PURPLE
 
 ; Color cycle table for E: Green -> Light Green -> Cyan
 powerup_e_color_cycle:
     !byte COLOR_GREEN, COLOR_LIGHT_GREEN, COLOR_CYAN
+
+; Color cycle table for P: Blue -> Light Blue -> Cyan
+powerup_p_color_cycle:
+    !byte COLOR_BLUE, COLOR_LIGHT_BLUE, COLOR_CYAN
+
+; Next item transform sequence when shot: B -> E -> P -> B
+; Index: 0=P -> B (1), 1=B -> E (2), 2=E -> P (0)
+powerup_next_type_table:
+    !byte POWERUP_TYPE_B        ; 0 (P) -> 1 (B)
+    !byte POWERUP_TYPE_E        ; 1 (B) -> 2 (E)
+    !byte POWERUP_TYPE_P        ; 2 (E) -> 0 (P)
 
 ; 8-Entry spawn table (50% E, 37.5% P, 12.5% B)
 powerup_type_table:
@@ -72,17 +98,43 @@ powerup_type_table:
     !byte POWERUP_TYPE_E        ; 6: E (Energy)
     !byte POWERUP_TYPE_P        ; 7: P (Phase Level-Up)
 
+; ------------------------------------------------------------------------------
+; Chaotic Velocity Tables (32 diverse 2D vector pairs)
+; Contains pure X/Y moves, 2:1 and 1:2 non-diagonal angles, and diagonals
+; ------------------------------------------------------------------------------
+chaotic_vx_table:
+    !byte   1,   0,  -1,   0,   2,  -2,   0,   0   ; Pure X and pure Y moves
+    !byte   2,   1,   2,  -1,  -2,   1,  -2,  -1   ; 2:1 steep angles
+    !byte   1,   2,   1,  -2,  -1,   2,  -1,  -2   ; 1:2 shallow angles
+    !byte   1,   1,  -1,   1,   1,  -1,  -1,  -1   ; 1:1 diagonals
+
+chaotic_vy_table:
+    !byte   0,   1,   0,  -1,   0,   0,   2,  -2   ; Pure X and pure Y moves
+    !byte   1,   2,  -1,  -2,   1,   2,  -1,  -2   ; 2:1 steep angles
+    !byte   2,   1,  -2,  -1,   2,   1,  -2,  -1   ; 1:2 shallow angles
+    !byte   1,   1,   1,  -1,  -1,   1,  -1,  -1   ; 1:1 diagonals
+
+bounce_perturb_table:
+    !byte  -2,  -1,   1,   2
+
 ; ==============================================================================
 ; Subroutine: powerups_init
-; Purpose: Resets powerup state and arms initial natural spawn timer (12 seconds).
+; Purpose: Resets powerup state and arms initial natural spawn timer.
 ; ==============================================================================
 powerups_init:
     lda #0
     sta g_powerup_active
+    sta g_powerup_visible
     sta g_powerup_type
-    sta g_powerup_col
-    sta g_powerup_row
+    sta g_powerup_x_lo
+    sta g_powerup_x_hi
+    sta g_powerup_y
     sta s_powerup_color_idx
+    sta s_powerup_life_stage
+    sta s_powerup_life_timer
+    sta s_powerup_vx
+    sta s_powerup_vy
+    sta s_powerup_impulse_timer
     lda #20
     sta s_powerup_color_timer
     lda #COLOR_PURPLE
@@ -94,8 +146,100 @@ powerups_init:
     rts
 
 ; ==============================================================================
+; Subroutine: powerup_do_spawn
+; Purpose: Initializes position in upper half of playfield (X = 230..293, Y = 70..197),
+;          assigns initial chaotic velocity, and arms 10.0-second lifecycle timer.
+; ==============================================================================
+; ==============================================================================
+; Subroutine: powerup_calc_delta
+; Input:  A = signed velocity (1/16 px/frame)
+; Output: s_powerup_dlo = fraction byte (v*16 low), s_powerup_dhi = whole pixels
+;         (arithmetic v>>4), s_powerup_dext = sign extension ($00/$FF)
+; ==============================================================================
+powerup_calc_delta:
+    pha
+    asl
+    asl
+    asl
+    asl
+    sta s_powerup_dlo
+    pla
+    cmp #$80
+    ror
+    cmp #$80
+    ror
+    cmp #$80
+    ror
+    cmp #$80
+    ror
+    sta s_powerup_dhi
+    ldy #0
+    cmp #$80
+    bcc +
+    ldy #$ff
++   sty s_powerup_dext
+    rts
+
+powerup_do_spawn:
+    ; Start at rest; steering eases up to cruising speed
+    lda #0
+    sta s_powerup_avx
+    sta s_powerup_avy
+    sta s_powerup_fx
+    sta s_powerup_fy
+    ; Pick X in upper half: 230..293
+    jsr starfield_rand
+    and #$3f                    ; 0..63
+    clc
+    adc #230                    ; 230..293
+    sta g_powerup_x_lo
+    lda #0
+    adc #0                      ; High byte (0 or 1)
+    sta g_powerup_x_hi
+
+    ; Pick random horizontal Y position within playable field (70..197)
+    jsr starfield_rand
+    and #$7f                    ; 0..127
+    clc
+    adc #70                     ; 70..197
+    sta g_powerup_y
+
+    ; Initial chaotic velocity vector
+    jsr starfield_rand
+    and #$1f                    ; 0..31
+    tax
+    lda chaotic_vx_table, x
+    sta s_powerup_vx
+    lda chaotic_vy_table, x
+    sta s_powerup_vy
+
+    ; Initial impulse timer (15..46 frames)
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc #15
+    sta s_powerup_impulse_timer
+
+    ; Initialize 10.0-second lifecycle (Stage 0: 5.0s solid)
+    lda #0
+    sta s_powerup_life_stage
+    lda #POWERUP_STAGE_DURATION ; 250 frames = 5.0s at 50 Hz
+    sta s_powerup_life_timer
+    lda #1
+    sta g_powerup_visible
+    sta g_powerup_active
+
+    ; Reset color cycle and apply initial color immediately
+    lda #0
+    sta s_powerup_color_idx
+    lda #20
+    sta s_powerup_color_timer
+    jsr powerups_apply_color_now
+    rts
+
+; ==============================================================================
 ; Subroutine: powerups_spawn
-; Purpose: Attempts natural spawn at playfield right edge. Picks random type.
+; Purpose: Attempts natural spawn in upper half. Picks random type.
 ;          (50% chance E, 37.5% chance P, 12.5% chance B; 75% E if player HP <= 2).
 ; ==============================================================================
 powerups_spawn:
@@ -113,7 +257,7 @@ powerups_spawn:
     beq @normal_type_pick       ; 25% chance of normal table pick
     lda #POWERUP_TYPE_E         ; 75% chance of E emergency heal
     sta g_powerup_type
-    jmp @spawn_stamp
+    jmp powerup_do_spawn
 
 @normal_type_pick:
     ; Pick from 8-entry table (50% E, 37.5% P, 12.5% B)
@@ -122,30 +266,20 @@ powerups_spawn:
     tax
     lda powerup_type_table, x
     sta g_powerup_type
-
-@spawn_stamp:
-    jsr powerups_stamp_new
-    rts
+    jmp powerup_do_spawn
 
 ; ==============================================================================
 ; Subroutine: powerups_spawn_forced
-; Purpose: Immediately spawns powerup (erasing old one if active) for debug hotkey.
-;          Cycles powerup type: P -> B -> E -> P.
+; Purpose: Immediately spawns powerup for debug hotkey, cycling P -> B -> E -> P.
 ; ==============================================================================
 powerups_spawn_forced:
-    lda g_powerup_active
-    beq +
-    jsr powerups_erase
-+
-    ; Cycle powerup type (0 -> 1 -> 2 -> 0)
     inc g_powerup_type
     lda g_powerup_type
     cmp #NUM_POWERUP_TYPES
     bcc +
     lda #0
     sta g_powerup_type
-+
-    jsr powerups_stamp_new
++   jsr powerup_do_spawn
     ; Visual border flash feedback
     lda #COLOR_WHITE
     sta VIC_BORDER_COLOR
@@ -155,18 +289,11 @@ powerups_spawn_forced:
 
 ; ==============================================================================
 ; Subroutine: powerups_spawn_forced_type
-; Purpose: Immediately spawns specified powerup type passed in A.
-; Arguments: A = powerup type (POWERUP_TYPE_P, POWERUP_TYPE_B, POWERUP_TYPE_E)
+; Purpose: Immediately spawns specified powerup type passed in Accumulator.
 ; ==============================================================================
 powerups_spawn_forced_type:
-    pha
-    lda g_powerup_active
-    beq +
-    jsr powerups_erase
-+
-    pla
     sta g_powerup_type
-    jsr powerups_stamp_new
+    jsr powerup_do_spawn
     ; Visual border flash feedback
     lda #COLOR_WHITE
     sta VIC_BORDER_COLOR
@@ -174,281 +301,322 @@ powerups_spawn_forced_type:
     sta g_debug_border_timer
     rts
 
-; ==============================================================================
-; Internal Subroutine: powerups_stamp_new
-; Purpose: Picks random playfield row, stamps 4 quadrants of current powerup type.
-; ==============================================================================
-powerups_stamp_new:
-    ; Pick random row between 3 and 18
-    jsr starfield_rand
-    and #$0f                    ; 0..15
-    clc
-    adc #3                      ; 3..18
-    sta g_powerup_row
-
-    lda #38
-    sta g_powerup_col
-    lda #1
-    sta g_powerup_active
-
-    ; Reset color cycle (0.4s per color)
-    lda #0
-    sta s_powerup_color_idx
-    lda #20
-    sta s_powerup_color_timer
-
-    ; Load current powerup type index
-    ldx g_powerup_type
-
-    ; 1. Stamp Top Row (Row R): Char TL at Col 38, Char TR at Col 39
-    ldy g_powerup_row
-    lda screen_row_table_lo, y
-    sta $fb
-    lda screen_row_table_hi, y
-    sta $fc
-
-    ldy #38
-    lda powerup_tile_tl, x
-    sta ($fb), y
-    iny                         ; 39
-    lda powerup_tile_tr, x
-    sta ($fb), y
-
-    ; 2. Stamp Bottom Row (Row R + 1): Char BL at Col 38, Char BR at Col 39
-    ldy g_powerup_row
-    iny                         ; Row R + 1
-    lda screen_row_table_lo, y
-    sta $fb
-    lda screen_row_table_hi, y
-    sta $fc
-
-    ldy #38
-    lda powerup_tile_bl, x
-    sta ($fb), y
-    iny                         ; 39
-    lda powerup_tile_br, x
-    sta ($fb), y
-
-    ; 3. Apply initial color across both rows
-    jmp powerups_recolor
+powerups_spawn_forced_pos:
+    jmp powerup_do_spawn
 
 ; ==============================================================================
 ; Subroutine: powerups_erase
-; Purpose: Erases current powerup cells from Screen RAM by writing blank space ($20).
-;          Scans a 5-column window (col - 2 .. col + 2) on both rows to ensure
-;          every quadrant tile (0, 1, 16, 17) is completely erased without artifacts.
+; Purpose: Deactivates current powerup sprite.
 ; ==============================================================================
 powerups_erase:
-    lda g_powerup_active
-    bne +
-    rts
-+
-    ; 1. Clean Row R
-    ldy g_powerup_row
-    cpy #25
-    bcs @start_row2
-    lda screen_row_table_lo, y
-    sta $fb
-    lda screen_row_table_hi, y
-    sta $fc
-
-    ; Determine start column: max(0, g_powerup_col - 2)
-    lda g_powerup_col
-    cmp #2
-    bcs +
-    lda #2
-+   sec
-    sbc #2
-    tay                         ; Y = start_col
-
-@erase_row1_loop:
-    cpy #40
-    bcs @start_row2
-    lda ($fb), y
-    cmp #6                      ; Top quadrants: 0, 1 (P), 2, 3 (B), 4, 5 (E)
-    bcs @next_r1
-    lda #$20
-    sta ($fb), y
-@next_r1:
-    iny
-    tya
-    sec
-    sbc g_powerup_col
-    cmp #3                      ; Check up to col + 2
-    bmi @erase_row1_loop
-
-@start_row2:
-    ; 2. Clean Row R + 1
-    ldy g_powerup_row
-    iny
-    cpy #25
-    bcs @erase_done
-    lda screen_row_table_lo, y
-    sta $fb
-    lda screen_row_table_hi, y
-    sta $fc
-
-    ; Determine start column: max(0, g_powerup_col - 2)
-    lda g_powerup_col
-    cmp #2
-    bcs +
-    lda #2
-+   sec
-    sbc #2
-    tay                         ; Y = start_col
-
-@erase_row2_loop:
-    cpy #40
-    bcs @erase_done
-    lda ($fb), y
-    cmp #16                     ; Bottom quadrants: 16, 17 (P), 18, 19 (B), 20, 21 (E)
-    bcc @next_r2
-    cmp #22
-    bcs @next_r2
-    lda #$20
-    sta ($fb), y
-@next_r2:
-    iny
-    tya
-    sec
-    sbc g_powerup_col
-    cmp #3                      ; Check up to col + 2
-    bmi @erase_row2_loop
-
-@erase_done:
-    rts
-
-; ==============================================================================
-; Subroutine: powerups_recolor
-; Purpose: Re-paints current cycling color into Color RAM for active powerup tiles.
-;          Cycles through Purple, Blue, Light Blue, Cyan (0.5s each).
-; ==============================================================================
-powerups_recolor:
-    lda g_powerup_active
-    bne +
-    rts
-+
-    ldx s_powerup_color_idx
-    lda g_powerup_type
-    cmp #POWERUP_TYPE_B
-    beq @color_b
-    cmp #POWERUP_TYPE_E
-    beq @color_e
-
-    ; Default: Powerup P (Purple -> Blue -> Light Blue -> Cyan)
-    lda powerup_p_color_cycle, x
-    jmp @store_color
-
-@color_b:
-    ; Powerup B: PURPLE -> Red -> Light Red
-    lda powerup_b_color_cycle, x
-    jmp @store_color
-
-@color_e:
-    ; Powerup E: Green -> Light Green -> Cyan
-    lda powerup_e_color_cycle, x
-
-@store_color:
-    sta s_powerup_current_color
-
-    ldx #0                      ; Row offset: 0 = Row R, 1 = Row R + 1
-@row_loop:
-    txa
-    clc
-    adc g_powerup_row
-    tay
-    cpy #25
-    bcs @next_row
-
-    lda color_row_table_lo, y
-    sta $fd
-    lda color_row_table_hi, y
-    sta $fe
-
-    lda g_powerup_col
-    cmp #$ff
-    beq @col_edge
-
-    tay
-    lda s_powerup_current_color
-    sta ($fd), y
-    iny
-    sta ($fd), y
-    jmp @next_row
-
-@col_edge:
-    ldy #0
-    lda s_powerup_current_color
-    sta ($fd), y
-
-@next_row:
-    inx
-    cpx #2
-    bne @row_loop
+    lda #0
+    sta g_powerup_active
+    sta g_powerup_visible
     rts
 
 ; ==============================================================================
 ; Subroutine: powerups_update
-; Purpose: Advances scroll position on starfield shift frames first, updates
-;          color cycling animation, then counts down natural spawn timer.
+; Purpose: Manages chaotic wandering strictly on upper half of screen, 5s solid
+;          + 5s flashing lifecycle countdown, color cycling, and spawn timers.
 ; ==============================================================================
 powerups_update:
-    ; 1. Synchronize column scroll with starfield shift (every 4 frames)
-    lda g_starfield_frame
-    and #$03
-    bne @check_anim
-
+    ; 1. Check if powerup is active
     lda g_powerup_active
-    beq @check_anim
+    bne +
+    jmp @check_spawn
++
 
-    ; If col was 0, decrement to $FF (left half leaves screen, right half at col 0)
-    ; If col was $FF, both halves have left screen -> deactivate!
-    lda g_powerup_col
-    cmp #$ff
-    beq @deactivate
+    ; --------------------------------------------------------------------------
+    ; 2. Lifecycle Countdown (5.0s Solid + 5.0s Flashing -> Gone)
+    ; --------------------------------------------------------------------------
+    dec s_powerup_life_timer
+    bne @life_running
 
-    sec
-    sbc #1
-    sta g_powerup_col
-    cmp #$ff
-    bne @check_anim
+    ; Stage timer reached 0: transition or expire
+    lda s_powerup_life_stage
+    bne @powerup_expired       ; If already Stage 1, total 10 seconds elapsed -> expire!
 
-@deactivate:
+    ; Transition Stage 0 (Solid) -> Stage 1 (Flashing)
+    lda #1
+    sta s_powerup_life_stage
+    lda #POWERUP_STAGE_DURATION ; 250 frames = 5.0 seconds
+    sta s_powerup_life_timer
+    jmp @life_running
+
+@powerup_expired:
     lda #0
     sta g_powerup_active
+    sta g_powerup_visible
+    ; Re-arm natural spawn timer so next powerup appears in 7s
+    lda #<POWERUP_SPAWN_INTERVAL
+    sta g_powerup_timer_lo
+    lda #>POWERUP_SPAWN_INTERVAL
+    sta g_powerup_timer_hi
+    jmp @check_spawn
 
-@check_anim:
-    lda g_powerup_active
-    beq @check_spawn
+@life_running:
+    ; --------------------------------------------------------------------------
+    ; 3. Visibility Determination
+    ; --------------------------------------------------------------------------
+    lda s_powerup_life_stage
+    beq @visible_solid
 
-    ; Decrement color animation timer (20 frames = 0.4s at 50 Hz PAL)
+    ; In Stage 1: Flashing (alternating visible / hidden in succession)
+    ; Bit 2 of life timer toggles every 4 frames (80ms ON, 80ms OFF)
+    lda s_powerup_life_timer
+    and #$04
+    beq @visible_hide
+
+@visible_solid:
+    lda #1
+    sta g_powerup_visible
+    jmp @visibility_done
+
+@visible_hide:
+    lda #0
+    sta g_powerup_visible
+
+@visibility_done:
+    ; --------------------------------------------------------------------------
+    ; 4. Chaotic Movement Vector Selection (Impulse & Jitter)
+    ; --------------------------------------------------------------------------
+    dec s_powerup_impulse_timer
+    bne @check_jitter
+
+    ; Impulse timer expired: pick new random vector from chaotic table
+    jsr starfield_rand
+    and #$3f                    ; 0..63
+    clc
+    adc #40                     ; 40..103 frames (~0.8s to ~2.1s)
+    sta s_powerup_impulse_timer
+
+    jsr starfield_rand
+    and #$1f                    ; 0..31
+    tax
+    lda chaotic_vx_table, x
+    sta s_powerup_vx
+    lda chaotic_vy_table, x
+    sta s_powerup_vy
+    jmp @apply_motion
+
+@check_jitter:
+    ; Every 8 frames, small chance of brownian drift nudge to curve trajectories
+    lda s_powerup_impulse_timer
+    and #$07
+    bne @apply_motion
+    jsr starfield_rand
+    and #$03
+    bne @apply_motion           ; 25% chance
+    jsr starfield_rand
+    and #$03
+    tax
+    lda bounce_perturb_table, x ; -2, -1, 1, 2
+    clc
+    adc s_powerup_vy
+    ; Clamp vy to -2..2
+    cmp #$fd                    ; < -2 ? ($FE = -2, $FD = -3)
+    bcs +
+    lda #$fe                    ; clamp to -2
++   cmp #3
+    bcc +
+    lda #2                      ; clamp to 2
++   sta s_powerup_vy
+
+@apply_motion:
+    ; --------------------------------------------------------------------------
+    ; 5. Eased steering + sub-pixel motion.
+    ; s_powerup_vx/vy (-2..2) are TARGET directions. Actual velocity
+    ; (1/16 px/frame units) eases toward target*6 by 1 unit every 4 frames,
+    ; so turns are wide, gentle arcs. Max speed = 12/16 = 0.75 px/frame.
+    ; --------------------------------------------------------------------------
+    lda s_powerup_life_timer
+    and #$03
+    bne @do_move
+
+    ; --- steer X ---
+    lda s_powerup_vx
+    asl
+    sta s_powerup_diff_lo
+    asl
+    clc
+    adc s_powerup_diff_lo       ; target = vx * 6
+    sec
+    sbc s_powerup_avx
+    beq @steer_y
+    bmi @dec_avx
+    inc s_powerup_avx
+    jmp @steer_y
+@dec_avx:
+    dec s_powerup_avx
+
+@steer_y:
+    lda s_powerup_vy
+    asl
+    sta s_powerup_diff_lo
+    asl
+    clc
+    adc s_powerup_diff_lo       ; target = vy * 6
+    sec
+    sbc s_powerup_avy
+    beq @do_move
+    bmi @dec_avy
+    inc s_powerup_avy
+    jmp @do_move
+@dec_avy:
+    dec s_powerup_avy
+
+@do_move:
+    ; --- move X (16-bit position + 8-bit fraction) ---
+    lda s_powerup_avx
+    jsr powerup_calc_delta
+    lda s_powerup_fx
+    clc
+    adc s_powerup_dlo
+    sta s_powerup_fx
+    lda g_powerup_x_lo
+    adc s_powerup_dhi
+    sta g_powerup_x_lo
+    lda g_powerup_x_hi
+    adc s_powerup_dext
+    sta g_powerup_x_hi
+
+    ; --- move Y (8-bit position + 8-bit fraction) ---
+    lda s_powerup_avy
+    jsr powerup_calc_delta
+    lda s_powerup_fy
+    clc
+    adc s_powerup_dlo
+    sta s_powerup_fy
+    lda g_powerup_y
+    adc s_powerup_dhi
+    sta g_powerup_y
+
+    ; --------------------------------------------------------------------------
+    ; 6. Strict Upper-Half Playfield Clamping & Chaotic Reflection
+    ; Bounds: X in [175..305], Y in [56..232]
+    ; --------------------------------------------------------------------------
+    ; --- Check X Lower Bound: 175 (Bottom of Upper Half) ---
+    lda g_powerup_x_hi
+    bne @check_x_max            ; If hi > 0, X >= 256 > 175 (safe)
+    lda g_powerup_x_lo
+    cmp #BONUS_BOUND_MIN_X      ; 175
+    bcs @x_bounds_ok
+
+    ; Hit 175 boundary: clamp and reflect forward (vx = +1 or +2)
+    lda #BONUS_BOUND_MIN_X
+    sta g_powerup_x_lo
+    jsr starfield_rand
+    and #$01
+    clc
+    adc #1                      ; +1 or +2
+    sta s_powerup_vx
+    ; Chaotic Y perturbation
+    jsr starfield_rand
+    and #$03
+    tax
+    lda bounce_perturb_table, x
+    sta s_powerup_vy
+    jmp @x_bounds_ok
+
+@check_x_max:
+    ; --- Check X Upper Bound: 305 (Top of Screen: hi = 1, lo = 49) ---
+    lda g_powerup_x_hi
+    cmp #1
+    bcc @x_bounds_ok            ; hi == 0, safe
+    lda g_powerup_x_lo
+    cmp #BONUS_BOUND_MAX_X_LO   ; 49
+    bcc @x_bounds_ok
+
+    ; Hit 305 boundary: clamp and reflect backward (vx = -1 or -2)
+    lda #BONUS_BOUND_MAX_X_LO
+    sta g_powerup_x_lo
+    lda #1
+    sta g_powerup_x_hi
+    jsr starfield_rand
+    and #$01
+    clc
+    adc #1
+    eor #$ff
+    clc
+    adc #1                      ; -1 or -2 ($FF or $FE)
+    sta s_powerup_vx
+    ; Chaotic Y perturbation
+    jsr starfield_rand
+    and #$03
+    tax
+    lda bounce_perturb_table, x
+    sta s_powerup_vy
+
+@x_bounds_ok:
+    ; --- Check Y Left Bound: 56 ---
+    lda g_powerup_y
+    cmp #BONUS_BOUND_MIN_Y      ; 56
+    bcs @check_y_max
+
+    ; Hit Y min: clamp and reflect right (vy = +1 or +2)
+    lda #BONUS_BOUND_MIN_Y
+    sta g_powerup_y
+    jsr starfield_rand
+    and #$01
+    clc
+    adc #1                      ; +1 or +2
+    sta s_powerup_vy
+    ; Chaotic X perturbation
+    jsr starfield_rand
+    and #$03
+    tax
+    lda bounce_perturb_table, x
+    sta s_powerup_vx
+    jmp @y_bounds_ok
+
+@check_y_max:
+    ; --- Check Y Right Bound: 232 ---
+    cmp #BONUS_BOUND_MAX_Y      ; 232
+    bcc @y_bounds_ok
+
+    ; Hit Y max: clamp and reflect left (vy = -1 or -2)
+    lda #BONUS_BOUND_MAX_Y
+    sta g_powerup_y
+    jsr starfield_rand
+    and #$01
+    clc
+    adc #1
+    eor #$ff
+    clc
+    adc #1                      ; -1 or -2
+    sta s_powerup_vy
+    ; Chaotic X perturbation
+    jsr starfield_rand
+    and #$03
+    tax
+    lda bounce_perturb_table, x
+    sta s_powerup_vx
+
+@y_bounds_ok:
+    ; --------------------------------------------------------------------------
+    ; 7. Color Cycle Animation (every 20 frames)
+    ; --------------------------------------------------------------------------
     dec s_powerup_color_timer
-    bne @apply_recolor
+    bne @apply_color
     lda #20
     sta s_powerup_color_timer
     inc s_powerup_color_idx
-
-    lda g_powerup_type
-    beq @wrap_p                 ; P has 4 colors
-
-    ; B and E have 3 colors (0..2)
     lda s_powerup_color_idx
     cmp #3
-    bcc @apply_recolor
+    bcc @apply_color
     lda #0
     sta s_powerup_color_idx
-    jmp @apply_recolor
 
-@wrap_p:
-    lda s_powerup_color_idx
-    and #$03
-    sta s_powerup_color_idx
-
-@apply_recolor:
-    jsr powerups_recolor
+@apply_color:
+    jsr powerups_apply_color_now
 
 @check_spawn:
-    ; 2. Decrement natural spawn timer
+    ; --------------------------------------------------------------------------
+    ; 8. Natural Spawn Countdown (only counts when no powerup active)
+    ; --------------------------------------------------------------------------
+    lda g_powerup_active
+    bne @update_done            ; Don't count down spawn timer while one is active
+
     lda g_powerup_timer_lo
     sec
     sbc #1
@@ -460,7 +628,7 @@ powerups_update:
     lda g_powerup_timer_lo
     bne @update_done
 
-    ; Timer reached 0: try to spawn powerup naturally and re-arm
+    ; Timer reached 0: spawn powerup naturally and re-arm
     jsr powerups_spawn
     lda #<POWERUP_SPAWN_INTERVAL
     sta g_powerup_timer_lo
@@ -471,73 +639,192 @@ powerups_update:
     rts
 
 ; ==============================================================================
+; Subroutine: powerups_apply_color_now
+; Purpose: Sets s_powerup_current_color based on g_powerup_type and s_powerup_color_idx.
+; ==============================================================================
+powerups_apply_color_now:
+    ldx s_powerup_color_idx
+    lda g_powerup_type
+    cmp #POWERUP_TYPE_B
+    beq @color_b
+    cmp #POWERUP_TYPE_E
+    beq @color_e
+
+    ; POWERUP_TYPE_P: Blue -> Light Blue -> Cyan
+    lda powerup_p_color_cycle, x
+    sta s_powerup_current_color
+    rts
+
+@color_b:
+    ; POWERUP_TYPE_B: Red -> Light Red -> Purple
+    lda powerup_b_color_cycle, x
+    sta s_powerup_current_color
+    rts
+
+@color_e:
+    ; POWERUP_TYPE_E: Green -> Light Green -> Cyan
+    lda powerup_e_color_cycle, x
+    sta s_powerup_current_color
+    rts
+
+; ==============================================================================
+; Subroutine: powerups_check_shot
+; Purpose: Tests active player missile against active bonus item.
+;          If hit: missile is absorbed (sparks), and the bonus cycles to the
+;          next type in the sequence: B -> E -> P -> B.
+; ==============================================================================
+powerups_check_shot:
+    ; Exit if powerup is not active
+    lda g_powerup_active
+    bne +
+    rts
++
+    ; Exit if missile is not currently in flight (1 = in flight)
+    lda g_missile_active
+    cmp #1
+    beq +
+    rts
++
+
+    ; 1. Vertical Range Check:
+    ; diff_y = (g_powerup_y + 21) - g_missile_y
+    ; Overlap if 0 < diff_y < shot_v_threshold[phase]
+    ldy g_player_phase
+    dey                         ; 1..5 -> 0..4
+    lda g_powerup_y
+    clc
+    adc #21
+    sec
+    sbc g_missile_y
+    bcc @no_hit                 ; powerup is entirely above missile
+    beq @no_hit
+    cmp shot_v_threshold_table, y
+    bcs @no_hit                 ; powerup is entirely below missile
+
+    ; 2. Horizontal Swept Check (missile moves rightward):
+    ; T = missile_x + shot_sweep_table[phase]
+    ; diff_x = T - powerup_x
+    ; Overlap if 0 < diff_x < shot_h_thresh_table[phase]
+    lda g_missile_x + 0
+    clc
+    adc shot_sweep_table, y
+    sta s_powerup_diff_lo
+    lda g_missile_x + 1
+    adc #0
+    sta s_powerup_diff_hi
+
+    lda s_powerup_diff_lo
+    sec
+    sbc g_powerup_x_lo
+    sta s_powerup_diff_lo
+    lda s_powerup_diff_hi
+    sbc g_powerup_x_hi
+    bne @no_hit                 ; diff_x < 0 or diff_x >= 256
+
+    lda s_powerup_diff_lo
+    beq @no_hit
+    cmp shot_h_thresh_table, y
+    bcs @no_hit
+
+    ; --------------------------------------------------------------------------
+    ; Direct Hit Confirmed: Cycle B -> E -> P -> B
+    ; --------------------------------------------------------------------------
+    ldx g_powerup_type          ; 0=P, 1=B, 2=E
+    lda powerup_next_type_table, x
+    sta g_powerup_type
+
+    ; Reset color cycle index and set new color immediately
+    lda #0
+    sta s_powerup_color_idx
+    lda #20
+    sta s_powerup_color_timer
+    jsr powerups_apply_color_now
+
+    ; Absorb missile: trigger 4-frame hit spark on Sprite 1
+    lda #4
+    sta g_missile_active
+
+    ; Position spark at the bonus coordinates
+    lda g_powerup_x_lo
+    sec
+    sbc #4
+    sta g_missile_x + 0
+    lda g_powerup_x_hi
+    sbc #0
+    sta g_missile_x + 1
+
+    lda g_powerup_y
+    sta g_missile_y
+
+    ; Energy color for spark
+    lda #COLOR_WHITE
+    sta g_spark_color
+
+    ; Audio feedback: play typewriter click / chime sound
+    lda #SFX_KEY_CLICK
+    jsr sound_play_sfx
+
+@no_hit:
+    rts
+
+; ==============================================================================
 ; Subroutine: powerups_check_collision
-; Purpose: Checks player ship bounding box against Letter 'P' grid position.
+; Purpose: Checks player ship bounding box against Bonus sprite position.
 ;          Levels up player phase on touch and restores HP to 5 if at Phase 5.
 ; ==============================================================================
 powerups_check_collision:
-    ; Exit if powerup is inactive or partially offscreen ($FF)
+    ; Exit if powerup is inactive
     lda g_powerup_active
-    beq @exit_no_coll
-    lda g_powerup_col
-    cmp #$ff
     beq @exit_no_coll
 
     ; Exit if player is dead
     lda g_player_alive
     beq @exit_no_coll
-    bne @do_check
 
-@exit_no_coll:
-    rts
-
-@do_check:
     ; --------------------------------------------------------------------------
     ; 1. Vertical Range Check:
-    ; diff_y = (powerup_y[row] + 16) - player_y
-    ; Overlap if: 0 < diff_y < (player_h + 16)
-    ; Unscaled player: player_h = 21 -> threshold = 37 (16 + 21)
-    ; Scaled player:   player_h = 42 -> threshold = 58 (16 + 42)
+    ; diff_y = (g_powerup_y + 21) - g_player_y
+    ; Overlap if 0 < diff_y < (player_h + 21)
+    ; Unscaled player: player_h = 21 -> threshold = 42
+    ; Scaled player:   player_h = 42 -> threshold = 63
     ; --------------------------------------------------------------------------
-    ldy g_powerup_row
-    lda powerup_y_coords, y
+    lda g_powerup_y
     clc
-    adc #16
+    adc #21
     sec
     sbc g_player_y             ; diff_y in Accumulator
-    bcc @exit_no_coll          ; diff_y < 0 (powerup entirely above player)
+    bcc @exit_no_coll          ; diff_y < 0
     beq @exit_no_coll
-    sta s_powerup_diff_lo      ; Preserve diff_y for threshold tests
+    sta s_powerup_diff_lo
 
     ldx g_player_phase
     dex                         ; 1..5 -> 0..4
     lda player_phase_scaled, x
     bne @scaled_v_test
 
-    lda s_powerup_diff_lo      ; Reload diff_y
-    cmp #37                     ; 21 + 16 = 37
+    lda s_powerup_diff_lo
+    cmp #42
     bcs @exit_no_coll
     bcc @check_horizontal
 
 @scaled_v_test:
-    lda s_powerup_diff_lo      ; Reload diff_y
-    cmp #58                     ; 42 + 16 = 58
+    lda s_powerup_diff_lo
+    cmp #63
     bcs @exit_no_coll
 
 @check_horizontal:
     ; --------------------------------------------------------------------------
-    ; 2. Horizontal Range Check:
-    ; diff_x = (powerup_x[col] + 16) - player_x
-    ; Overlap if: 0 < diff_x < (player_w + 16)
-    ; Unscaled player: player_w = 24 -> threshold = 40 (16 + 24)
-    ; Scaled player:   player_w = 48 -> threshold = 64 (16 + 48)
+    ; 2. Horizontal Range Check (16-bit math):
+    ; diff_x = (g_powerup_x + 24) - g_player_x
+    ; Overlap if 0 < diff_x < (player_w + 24)
+    ; Unscaled player: player_w = 24 -> threshold = 48
+    ; Scaled player:   player_w = 48 -> threshold = 72
     ; --------------------------------------------------------------------------
-    ldy g_powerup_col
-    lda powerup_x_coords_lo, y
+    lda g_powerup_x_lo
     clc
-    adc #16
+    adc #24
     sta s_powerup_diff_lo
-    lda powerup_x_coords_hi, y
+    lda g_powerup_x_hi
     adc #0
     sta s_powerup_diff_hi
 
@@ -558,14 +845,18 @@ powerups_check_collision:
     bne @scaled_h_test
 
     lda s_powerup_diff_lo
-    cmp #40                     ; 24 + 16 = 40
+    cmp #48
     bcs @exit_no_coll
     bcc @powerup_collected
 
 @scaled_h_test:
     lda s_powerup_diff_lo
-    cmp #64                     ; 48 + 16 = 64
+    cmp #72
     bcs @exit_no_coll
+    bcc @powerup_collected
+
+@exit_no_coll:
+    rts
 
 @powerup_collected:
     ; Erase powerup from screen buffer and deactivate
@@ -716,27 +1007,3 @@ color_row_table_hi:
     !byte $d9, $d9, $d9, $d9, $d9, $da, $da, $da
     !byte $da, $da, $da, $da, $db, $db, $db, $db, $db
 
-; ------------------------------------------------------------------------------
-; Column 0..39 to Raster X Coordinates (24 + Col * 8)
-; ------------------------------------------------------------------------------
-powerup_x_coords_lo:
-    !byte  24,  32,  40,  48,  56,  64,  72,  80
-    !byte  88,  96, 104, 112, 120, 128, 136, 144
-    !byte 152, 160, 168, 176, 184, 192, 200, 208
-    !byte 216, 224, 232, 240, 248,   0,   8,  16
-    !byte  24,  32,  40,  48,  56,  64,  72,  80
-
-powerup_x_coords_hi:
-    !byte 0, 0, 0, 0, 0, 0, 0, 0
-    !byte 0, 0, 0, 0, 0, 0, 0, 0
-    !byte 0, 0, 0, 0, 0, 0, 0, 0
-    !byte 0, 0, 0, 0, 0, 1, 1, 1
-    !byte 1, 1, 1, 1, 1, 1, 1, 1
-
-; ------------------------------------------------------------------------------
-; Row 0..24 to Raster Y Coordinates (50 + Row * 8)
-; ------------------------------------------------------------------------------
-powerup_y_coords:
-    !byte  50,  58,  66,  74,  82,  90,  98, 106
-    !byte 114, 122, 130, 138, 146, 154, 162, 170
-    !byte 178, 186, 194, 202, 210, 218, 226, 234, 242

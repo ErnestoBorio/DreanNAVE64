@@ -34,7 +34,7 @@ v_spr_mc:           !fill MAX_VIRTUAL_SPRITES, 0 ; 1 = Multicolor (enemies), 0 =
 ; ------------------------------------------------------------------------------
 ; Dynamic Multiplexer State & Hardware Lookup Tables
 ; ------------------------------------------------------------------------------
-g_sort_order:       !byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+g_sort_order:       !byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 g_sort_count:       !byte 0
 g_multiplexer_active: !byte 0
 g_irq_curr_virt:    !byte 0
@@ -2339,7 +2339,32 @@ multiplexer_export:
     inx
     cpx #MAX_ENEMY_BULLETS
     bne @export_bullets
+
+    ; 3. Export Active Bonus / Powerup (Virtual Slot 16)
+    lda g_powerup_active
+    beq @no_bonus
+    lda g_powerup_visible
+    sta v_spr_active + 16
+    beq +
+
+    lda g_powerup_x_lo
+    sta v_spr_x_lo + 16
+    lda g_powerup_x_hi
+    sta v_spr_x_hi + 16
+    lda g_powerup_y
+    sta v_spr_y + 16
+    ldx g_powerup_type          ; 0=P, 1=B, 2=E
+    lda powerup_sprite_table, x
+    sta v_spr_ptr + 16
+    lda s_powerup_current_color
+    sta v_spr_color + 16
+    lda #1                      ; Multicolor
+    sta v_spr_mc + 16
     rts
+
+@no_bonus:
+    sta v_spr_active + 16
++   rts
 
 ; ==============================================================================
 ; Subroutine: multiplexer_sort
