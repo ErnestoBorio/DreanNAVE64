@@ -25,11 +25,16 @@ POWERUP_INITIAL_DELAY   = 150   ; 150 frames = 3.0 seconds at 50 Hz PAL
 POWERUP_SPAWN_INTERVAL  = 350   ; 350 frames = 7.0 seconds at 50 Hz PAL
 POWERUP_STAGE_DURATION  = 250   ; 250 frames = 5.0 seconds at 50 Hz PAL
 
-BONUS_BOUND_MIN_X       = 175   ; Lower boundary of upper half of screen (midpoint=172)
-BONUS_BOUND_MAX_X_LO    = 49    ; Upper boundary of upper half: 256 + 49 = 305
+BONUS_BOUND_MIN_X       = 124   ; Lower boundary of top 2/3 of screen (24..324 range)
+BONUS_BOUND_MAX_X_LO    = 49    ; Upper boundary of top 2/3: 256 + 49 = 305
 BONUS_BOUND_MAX_X_HI    = 1
 BONUS_BOUND_MIN_Y       = 56    ; Left screen boundary
 BONUS_BOUND_MAX_Y       = 232   ; Right screen boundary
+
+BONUS_SPAWN_TOP_X_LO    = 88    ; Off-screen top X = 344 (256 + 88)
+BONUS_SPAWN_TOP_X_HI    = 1
+BONUS_SPAWN_LEFT_Y      = 29    ; Off-screen left Y = 29 (29 + 20 = 49 < 50 border)
+BONUS_SPAWN_RIGHT_Y     = 250   ; Off-screen right Y = 250 (at 250 right border)
 
 ; Sprite block pointers for P, B, E (from sprites_data.asm)
 powerup_sprite_table:
@@ -181,43 +186,88 @@ powerup_calc_delta:
     rts
 
 powerup_do_spawn:
-    ; Start at rest; steering eases up to cruising speed
     lda #0
-    sta s_powerup_avx
-    sta s_powerup_avy
     sta s_powerup_fx
     sta s_powerup_fy
-    ; Pick X in upper half: 230..293
-    jsr starfield_rand
-    and #$3f                    ; 0..63
-    clc
-    adc #230                    ; 230..293
-    sta g_powerup_x_lo
-    lda #0
-    adc #0                      ; High byte (0 or 1)
-    sta g_powerup_x_hi
 
-    ; Pick random horizontal Y position within playable field (70..197)
+    ; Pick spawn edge: 0 = Left side (25%), 1 = Right side (25%), 2..3 = Top (50%)
+    jsr starfield_rand
+    and #$03
+    cmp #2
+    bcs @spawn_bonus_top
+    cmp #1
+    beq @spawn_bonus_right
+
+@spawn_bonus_left:
+    ; Off-screen Left (Y = 29), moving rightward into screen
+    lda #BONUS_SPAWN_LEFT_Y
+    sta g_powerup_y
+    lda #2
+    sta s_powerup_vy
+    lda #12
+    sta s_powerup_avy
+    jmp @spawn_bonus_side_x
+
+@spawn_bonus_right:
+    ; Off-screen Right (Y = 250), moving leftward into screen
+    lda #BONUS_SPAWN_RIGHT_Y
+    sta g_powerup_y
+    lda #$fe                    ; -2
+    sta s_powerup_vy
+    lda #$f4                    ; -12
+    sta s_powerup_avy
+
+@spawn_bonus_side_x:
+    ; Pick X well inside top 2/3 roaming zone: 148..275
     jsr starfield_rand
     and #$7f                    ; 0..127
     clc
-    adc #70                     ; 70..197
-    sta g_powerup_y
-
-    ; Initial chaotic velocity vector
+    adc #148                    ; 148..275
+    sta g_powerup_x_lo
+    lda #0
+    adc #0
+    sta g_powerup_x_hi
+    ; Gentle vertical drift (-1 or +1)
+    lda #0
+    sta s_powerup_avx
     jsr starfield_rand
-    and #$1f                    ; 0..31
-    tax
-    lda chaotic_vx_table, x
-    sta s_powerup_vx
-    lda chaotic_vy_table, x
-    sta s_powerup_vy
+    and #$01
+    bne +
+    lda #$ff                    ; -1
++   sta s_powerup_vx
+    jmp @spawn_bonus_timers
 
-    ; Initial impulse timer (15..46 frames)
+@spawn_bonus_top:
+    ; Off-screen Top (X = 344), moving downward into top 2/3 of screen
+    lda #BONUS_SPAWN_TOP_X_LO
+    sta g_powerup_x_lo
+    lda #BONUS_SPAWN_TOP_X_HI
+    sta g_powerup_x_hi
+    lda #$fe                    ; -2
+    sta s_powerup_vx
+    lda #$f4                    ; -12
+    sta s_powerup_avx
+    ; Pick Y well inside horizontal playfield: 80..207
+    jsr starfield_rand
+    and #$7f                    ; 0..127
+    clc
+    adc #80                     ; 80..207
+    sta g_powerup_y
+    ; Gentle horizontal drift (-1 or +1)
+    lda #0
+    sta s_powerup_avy
+    jsr starfield_rand
+    and #$01
+    bne +
+    lda #$ff                    ; -1
++   sta s_powerup_vy
+
+@spawn_bonus_timers:
+    ; Initial impulse timer (64..95 frames) so it glides fully into playfield first
     jsr starfield_rand
     and #$1f
     clc
-    adc #15
+    adc #64
     sta s_powerup_impulse_timer
 
     ; Initialize 10.0-second lifecycle (Stage 0: 5.0s solid)
@@ -316,7 +366,7 @@ powerups_erase:
 
 ; ==============================================================================
 ; Subroutine: powerups_update
-; Purpose: Manages chaotic wandering strictly on upper half of screen, 5s solid
+; Purpose: Manages chaotic wandering strictly on top 2/3 of screen, 5s solid
 ;          + 5s flashing lifecycle countdown, color cycling, and spawn timers.
 ; ==============================================================================
 powerups_update:
@@ -400,8 +450,11 @@ powerups_update:
     jmp @apply_motion
 
 @check_jitter:
-    ; Every 8 frames, small chance of brownian drift nudge to curve trajectories
+    ; Skip jitter while still gliding in from off-screen
     lda s_powerup_impulse_timer
+    cmp #45
+    bcs @apply_motion
+    ; Every 8 frames, small chance of brownian drift nudge to curve trajectories
     and #$07
     bne @apply_motion
     jsr starfield_rand
@@ -492,19 +545,22 @@ powerups_update:
     sta g_powerup_y
 
     ; --------------------------------------------------------------------------
-    ; 6. Strict Upper-Half Playfield Clamping & Chaotic Reflection
-    ; Bounds: X in [175..305], Y in [56..232]
+    ; 6. Top 2/3 Playfield Clamping & Chaotic Reflection
+    ; Bounds: X in [124..305], Y in [56..232]
+    ; Allows smooth entry when spawning off-screen at Top (X=344) or Sides (Y=29/250)
     ; --------------------------------------------------------------------------
-    ; --- Check X Lower Bound: 175 (Bottom of Upper Half) ---
+    ; --- Check X Lower Bound: 124 (Bottom of Top 2/3) ---
     lda g_powerup_x_hi
-    bne @check_x_max            ; If hi > 0, X >= 256 > 175 (safe)
+    bne @check_x_max            ; If hi > 0, X >= 256 > 124 (safe)
     lda g_powerup_x_lo
-    cmp #BONUS_BOUND_MIN_X      ; 175
+    cmp #BONUS_BOUND_MIN_X      ; 124
     bcs @x_bounds_ok
 
-    ; Hit 175 boundary: clamp and reflect forward (vx = +1 or +2)
+    ; Hit 124 boundary: clamp and reflect forward (vx = +1 or +2)
     lda #BONUS_BOUND_MIN_X
     sta g_powerup_x_lo
+    lda #1
+    sta s_powerup_avx
     jsr starfield_rand
     and #$01
     clc
@@ -527,11 +583,17 @@ powerups_update:
     cmp #BONUS_BOUND_MAX_X_LO   ; 49
     bcc @x_bounds_ok
 
-    ; Hit 305 boundary: clamp and reflect backward (vx = -1 or -2)
+    ; If already moving downward into screen (avx < 0, e.g. top spawn), allow entry
+    lda s_powerup_avx
+    bmi @x_bounds_ok
+
+    ; Hit 305 boundary from inside: clamp and reflect backward (vx = -1 or -2)
     lda #BONUS_BOUND_MAX_X_LO
     sta g_powerup_x_lo
     lda #1
     sta g_powerup_x_hi
+    lda #$ff
+    sta s_powerup_avx
     jsr starfield_rand
     and #$01
     clc
@@ -553,9 +615,17 @@ powerups_update:
     cmp #BONUS_BOUND_MIN_Y      ; 56
     bcs @check_y_max
 
-    ; Hit Y min: clamp and reflect right (vy = +1 or +2)
+    ; If already moving rightward into screen (avy > 0, e.g. left spawn), allow entry
+    lda s_powerup_avy
+    beq @bounce_y_min
+    bpl @y_bounds_ok
+
+@bounce_y_min:
+    ; Hit Y min from inside: clamp and reflect right (vy = +1 or +2)
     lda #BONUS_BOUND_MIN_Y
     sta g_powerup_y
+    lda #1
+    sta s_powerup_avy
     jsr starfield_rand
     and #$01
     clc
@@ -574,9 +644,15 @@ powerups_update:
     cmp #BONUS_BOUND_MAX_Y      ; 232
     bcc @y_bounds_ok
 
-    ; Hit Y max: clamp and reflect left (vy = -1 or -2)
+    ; If already moving leftward into screen (avy < 0, e.g. right spawn), allow entry
+    lda s_powerup_avy
+    bmi @y_bounds_ok
+
+    ; Hit Y max from inside: clamp and reflect left (vy = -1 or -2)
     lda #BONUS_BOUND_MAX_Y
     sta g_powerup_y
+    lda #$ff
+    sta s_powerup_avy
     jsr starfield_rand
     and #$01
     clc

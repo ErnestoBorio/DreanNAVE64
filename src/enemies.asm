@@ -158,12 +158,12 @@ enemy_table_shot_type:
     !byte SPRITE_PTR_ENEMY_SHOT_2   ; Enemy 8 (Death - Spread)
 
 ; Unlock thresholds in total elapsed seconds (16-bit)
-; Spaced out late-game progression: Spider @ 155s (2:35), Eye @ 215s (3:35), Death @ 285s (4:45)
+; Spaced out late-game progression: Spider @ 200s (3:20), Eye @ 280s (4:40), Death @ 360s (6:00)
 enemy_table_unlock_sec_lo:
-    !byte <0, <20, <45, <75, <110, <155, <215, <285
+    !byte <0, <20, <45, <75, <115, <200, <280, <360
 
 enemy_table_unlock_sec_hi:
-    !byte >0, >20, >45, >75, >110, >155, >215, >285
+    !byte >0, >20, >45, >75, >115, >200, >280, >360
 
 ; ------------------------------------------------------------------------------
 ; 16-Entry Weighted Tier Spawn Table (8 Tiers x 16 bytes = 128 bytes total)
@@ -179,20 +179,20 @@ tier_spawn_table:
     ; Tier 2 (45..74s): 50% E1 (8), 31% E2 (5), 19% E3 (3)
     !byte 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3
 
-    ; Tier 3 (75..109s): E1..E4 equal distribution (4 each = 25% each)
+    ; Tier 3 (75..114s): E1..E4 equal distribution (4 each = 25% each)
     !byte 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4
 
-    ; Tier 4 (110..154s): E1: 3, E2: 3, E3: 3, E4: 3, E5: 4
+    ; Tier 4 (115..199s): E1: 3, E2: 3, E3: 3, E4: 3, E5: 4
     !byte 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5
 
-    ; Tier 5 (155..214s): E1: 2, E2: 2, E3: 3, E4: 3, E5: 4, E6: 2
-    !byte 1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6
+    ; Tier 5 (200..279s): E1: 2, E2: 3, E3: 3, E4: 3, E5: 4, E6: 1 (6.25% Spider)
+    !byte 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6
 
-    ; Tier 6 (215..284s): E1: 2, E2: 2, E3: 2, E4: 2, E5: 3, E6: 3, E7: 2
-    !byte 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7
+    ; Tier 6 (280..359s): E1: 2, E2: 2, E3: 3, E4: 3, E5: 4, E6: 1, E7: 1 (6.25% Spider, 6.25% Eye)
+    !byte 1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 7
 
-    ; Tier 7 (285s+ / 4:45+): E1: 1, E2: 1, E3: 1, E4: 2, E5: 2, E6: 2, E7: 3, E8: 4 (Death 25% of spawns)
-    !byte 1, 2, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8, 8
+    ; Tier 7 (360s+ / 6:00+): E1: 1, E2: 2, E3: 3, E4: 3, E5: 4, E6: 1, E7: 1, E8: 1 (6.25% each elite)
+    !byte 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 7, 8
 
 
 ; ------------------------------------------------------------------------------
@@ -574,43 +574,50 @@ enemies_spawn:
     lda tier_spawn_table, x     ; A = selected archetype (1..8)
 
 
-    ; Spider (Enemy 6) Presence Guard: ensure at most 1 Spider active on screen
+    ; Elite Presence Guard for Spider (6), The Eye (7), and Death (8):
+    ; - Never allow more than 1 of the same elite archetype on screen at once
+    ; - Limit total simultaneous elite enemies (6/7/8) to 1 before 420s (7:00), 2 after
     cmp #6
-    bne @check_e8_guard
+    bcc @setup_archetype
+
+    sta s_tier_offset_temp      ; Save rolled elite archetype (6, 7, or 8)
+    lda #0
+    sta s_reload_temp           ; Count of active elite enemies (archetype >= 6)
     ldx #0
 -   lda g_enemy_active, x
-    beq +
+    beq @next_elite_check
     lda g_enemy_archetype, x
+    cmp s_tier_offset_temp
+    beq @downgrade_elite        ; Same elite archetype already active -> downgrade!
     cmp #6
-    beq @downgrade_e6
-+   inx
+    bcc @next_elite_check
+    inc s_reload_temp           ; Another elite archetype is active
+@next_elite_check:
+    inx
     cpx #MAX_ENEMIES
     bne -
-    lda #6
+
+    ; Check total active elites cap: max 1 before 420s ($01A4), max 2 at 420s+
+    lda s_reload_temp
+    beq @allow_elite            ; 0 elites currently active -> always allow
+    cmp #2
+    bcs @downgrade_elite        ; >= 2 elites already active -> downgrade!
+
+    ; Exactly 1 other elite is active: allow a 2nd only after 420s (7:00)
+    lda g_game_time_total_sec + 1
+    cmp #>420
+    bcc @downgrade_elite
+    bne @allow_elite
+    lda g_game_time_total_sec + 0
+    cmp #<420
+    bcc @downgrade_elite
+
+@allow_elite:
+    lda s_tier_offset_temp
     jmp @setup_archetype
 
-@downgrade_e6:
+@downgrade_elite:
     lda #5                      ; Downgrade to Enemy 5 (Batplane)
-    jmp @setup_archetype
-
-@check_e8_guard:
-    ; Enemy 8 Presence Guard: ensure at most 1 Enemy 8 active on screen
-    cmp #8
-    bne @setup_archetype
-    ldx #0
--   lda g_enemy_active, x
-    beq +
-    lda g_enemy_archetype, x
-    cmp #8
-    beq @downgrade_e8
-+   inx
-    cpx #MAX_ENEMIES
-    bne -
-    lda #8
-    jmp @setup_archetype
-
-@downgrade_e8:
-    lda #7                      ; Downgrade to Enemy 7 (The Eye)
 
 @setup_archetype:
 enemy_setup_archetype_slot:
