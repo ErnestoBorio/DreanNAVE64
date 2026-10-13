@@ -26,6 +26,9 @@ SFX_PLAYER_DEATH    = 8     ; Player destruction (Voice 2+3: crash & dive)
 SFX_KEY_CLICK       = 9     ; Initials typewriter click (Voice 3: short blip)
 SFX_GAME_OVER       = 10    ; Ceremonial after-action anthem (Voice 1+2+3)
 
+SID_MUSIC_INIT      = $1048 ; Rhythm_Is_a_Dancer.sid init entry
+SID_MUSIC_PLAY      = $1021 ; Rhythm_Is_a_Dancer.sid 50 Hz play entry
+
 ; ------------------------------------------------------------------------------
 ; Subroutine: sound_init
 ; Purpose: Silences and clears all 29 SID registers ($D400-$D41C), sets master
@@ -64,12 +67,56 @@ sound_init:
     rts
 
 ; ==============================================================================
-; Attract mode music stubs (no-op)
+; Attract Mode Music ("Rhythm Is a Dancer" SID: Init $1048, Play $1021)
+; Plays continuously across Title Screen and Top 10 High Scores screen.
 ; ==============================================================================
 sound_music_start:
+    lda g_music_playing
+    bne @music_start_done
+
+    jsr sound_init
+    lda #1
+    sta g_music_playing
+
+    ; Preserve Zero Page $FA..$FF
+    ldx #5
+-   lda $fa, x
+    sta s_caller_zp_fa, x
+    dex
+    bpl -
+
+    lda #0
+    sta $fd
+    sta $fe
+    sta $ff
+    tax
+    tay
+    jsr SID_MUSIC_INIT
+
+    ; Save SID player's persistent ZP state ($FD..$FF) and restore caller ZP
+    lda $fd
+    sta s_sid_zp_fd
+    lda $fe
+    sta s_sid_zp_fe
+    lda $ff
+    sta s_sid_zp_ff
+
+    ldx #5
+-   lda s_caller_zp_fa, x
+    sta $fa, x
+    dex
+    bpl -
+
+@music_start_done:
     rts
 
 sound_music_stop:
+    lda g_music_playing
+    beq @music_stop_done
+    lda #0
+    sta g_music_playing
+    jsr sound_init
+@music_stop_done:
     rts
 
 ; ==============================================================================
@@ -603,10 +650,45 @@ sound_update:
     tya
     pha
 
+    lda g_music_playing
+    beq @update_sfx_channels
+
+    ; Preserve Zero Page $FA..$FF and restore SID persistent ZP ($FD..$FF)
+    ldx #5
+-   lda $fa, x
+    sta s_caller_zp_fa, x
+    dex
+    bpl -
+
+    lda s_sid_zp_fd
+    sta $fd
+    lda s_sid_zp_fe
+    sta $fe
+    lda s_sid_zp_ff
+    sta $ff
+
+    jsr SID_MUSIC_PLAY
+
+    lda $fd
+    sta s_sid_zp_fd
+    lda $fe
+    sta s_sid_zp_fe
+    lda $ff
+    sta s_sid_zp_ff
+
+    ldx #5
+-   lda s_caller_zp_fa, x
+    sta $fa, x
+    dex
+    bpl -
+    jmp @sound_update_exit
+
+@update_sfx_channels:
     jsr sound_update_v1
     jsr sound_update_v2
     jsr sound_update_v3
 
+@sound_update_exit:
     pla
     tay
     pla
@@ -1378,6 +1460,12 @@ sfx_v3_timer:       !byte 0
 sfx_v3_priority:    !byte 0
 sfx_v3_pitch_lo:    !byte 0
 sfx_v3_pitch_hi:    !byte 0
+
+g_music_playing:    !byte 0
+s_sid_zp_fd:        !byte 0
+s_sid_zp_fe:        !byte 0
+s_sid_zp_ff:        !byte 0
+s_caller_zp_fa:     !fill 6, 0
 
 
 

@@ -250,8 +250,26 @@ g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s
 !src "src/input.asm"
 !src "src/player.asm"
 !src "src/weapons.asm"
+
+; Assert that base code fits safely below Title SID Music ($1021)
+!if * > $1021 {
+    !error "Fatal: Base code exceeded $1021! SID Music collision."
+}
+
+; ------------------------------------------------------------------------------
+; Title & Attract Mode SID Music: "Rhythm Is a Dancer" ($1021 - $1B81)
+; Load = $1021, Init = $1048, Play = $1021 (skips $7E-byte PSID header + load word)
+; ------------------------------------------------------------------------------
+* = $1021
+sid_music_data:
+    !bin "assets/Rhythm_Is_a_Dancer.sid", , $7e
+
+; ------------------------------------------------------------------------------
+; Low Memory Code Section ($1B82 - $27FF)
+; ------------------------------------------------------------------------------
 !src "src/starfield.asm"
-!src "src/enemies.asm"
+!src "src/collisions.asm"
+!src "src/hud.asm"
 
 ; Assert that all executable code and variables fit safely below Charset RAM ($2800)
 !if * > $2800 {
@@ -270,7 +288,7 @@ g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s
 }
 
 ; ------------------------------------------------------------------------------
-; VIC-II Hardware Sprite Data (20 blocks x 64 bytes = 1,280 bytes: $3000 - $34FF)
+; VIC-II Hardware Sprite Data (24 blocks x 64 bytes = 1,536 bytes: $3000 - $35FF)
 ; ------------------------------------------------------------------------------
 * = $3000
 !src "src/sprites_data.asm"
@@ -281,57 +299,33 @@ g_game_over_timer:      !byte 0 ; Countdown timer after death (150 frames = 3.0s
 }
 
 ; ------------------------------------------------------------------------------
-; Intermediate Code Section: Collisions & Powerups Subsystem ($3600+)
+; Main Gameplay & Title Code + Bitmap Section ($3600 - $7FFF)
 ; ------------------------------------------------------------------------------
 * = $3600
-!src "src/collisions.asm"
+!src "src/enemies.asm"
 !src "src/powerups.asm"
-
-; Assert that intermediate code fits safely below High Memory Code ($4000)
-!if * > $4000 {
-    !error "Fatal: Intermediate code exceeded $4000! High Code collision."
-}
-
-; ------------------------------------------------------------------------------
-; High Memory Code Section: HUD, State Machine, and Title Screen ($4000+)
-; ------------------------------------------------------------------------------
-* = $4000
-!src "src/hud.asm"
 !src "src/gamestate.asm"
 !src "src/title.asm"
 
-; Assert that high code fits safely below Title Bitmap RAM ($4800)
-!if * > $4800 {
-    !error "Fatal: High code exceeded $4800! Overflows into title_bitmap_data."
-}
-
-; ------------------------------------------------------------------------------
-; Title Screen Pre-baked Hi-Res Bitmap Data (8,000 bytes: $4800 - $673F)
-; ------------------------------------------------------------------------------
-* = $4800
 title_bitmap_data:
     !bin "assets/title_bitmap.bin"
 
-; ------------------------------------------------------------------------------
-; High Score Table and C64 Directory Display Subsystem ($6740+)
-; ------------------------------------------------------------------------------
 !src "src/hiscore.asm"
 
-; Assert that high code and bitmap fit safely within RAM ($8000)
-; Assert that hiscore code fits safely below sound driver ($7000)
-!if * > $7000 {
-    !error "Fatal: Hiscore code exceeded $7000! Overflows into sound driver."
+; Assert that code and bitmap fit safely below Title Screen RAM ($8000)
+!if * > $8000 {
+    !error "Fatal: Main code and title bitmap exceeded $8000!"
 }
 
 ; ------------------------------------------------------------------------------
-; SID Sound Engine (SFX Subsystem) ($7000+)
+; SID Sound Engine & SFX Subsystem ($8400+, above Title Screen RAM $8000-$83E7)
 ; ------------------------------------------------------------------------------
-* = $7000
+* = $8400
 !src "src/sfx.asm"
 
-; Assert that sound driver fits safely within RAM ($8000)
-!if * > $8000 {
-    !error "Fatal: High code and title bitmap exceeded $8000!"
-    !error "Fatal: Sound driver exceeded $8000!"
+; Assert that sound driver fits safely below Title Bitmap Display RAM ($A000)
+!if * > $a000 {
+    !error "Fatal: Sound driver exceeded $A000!"
 }
+
 
