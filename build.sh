@@ -37,31 +37,12 @@ TMP_HISCORE="/tmp/nave_hiscores_sync.prg"
 if command -v "$C1541_BIN" >/dev/null 2>&1 || [ -x "$C1541_BIN" ]; then
     echo "==> Creating D64 disk image: $D64_TARGET..."
 
-    # 1. Locate hiscores source:
-    # If the target D64 already exists and has highscores, extract it to preserve gameplay scores
+    # 1. If target D64 already exists and has highscores, extract it to preserve gameplay scores
     HISCORES_FOUND=0
     if [ -f "$D64_TARGET" ]; then
         if "$C1541_BIN" -attach "$D64_TARGET" -read "highscores" "$TMP_HISCORE" >/dev/null 2>&1; then
             HISCORES_FOUND=1
-            # Also sync back to tools/highscores.d64 if present so repo stays updated
-            for d64_src in "tools/highscores.d64" "tools/hiscores.d64"; do
-                if [ -f "$d64_src" ]; then
-                    "$C1541_BIN" -attach "$d64_src" -delete "highscores" -write "$TMP_HISCORE" "highscores" >/dev/null 2>&1 || true
-                fi
-            done
         fi
-    fi
-
-    # If not found in target D64, extract from tools/highscores.d64 or tools/hiscores.d64
-    if [ "$HISCORES_FOUND" -eq 0 ]; then
-        for d64_src in "tools/highscores.d64" "tools/hiscores.d64"; do
-            if [ -f "$d64_src" ]; then
-                if "$C1541_BIN" -attach "$d64_src" -read "highscores" "$TMP_HISCORE" >/dev/null 2>&1; then
-                    HISCORES_FOUND=1
-                    break
-                fi
-            fi
-        done
     fi
 
     # 2. Format fresh D64 disk image and write game PRG

@@ -9,9 +9,9 @@
 ; - Displays formatted as an authentic Commodore 64 Disk Directory:
 ;     Line 0 (Col 35): 0 "TOP 10 PILOTS"   NV 2A (Header in reverse video)
 ;     Lines 1..10 (Cols 33..24): Rank #1..#10, initials in quotes, scores right-aligned
-;     Line 11 (Col 22): 64 BLOCKS FREE.
-;     Line 12 (Col 20): READY.
-;     Line 13 (Col 19): Solid block blinking cursor
+;     Line 11 (Col 24): 609 BLOCKS FREE.
+;     Line 12 (Col 23): READY.
+;     Line 13 (Col 22): Solid block blinking cursor
 ; - Color scheme: Blue background (COLOR_BLUE = 6), Light Blue text & border (COLOR_LIGHT_BLUE = 14)
 ; - Zero-stack screen rendering (uses static variables to guarantee zero stack corruption)
 ; ==============================================================================
@@ -31,7 +31,7 @@ top10_initials:
     !text "HRS" ; 2: 1,100 pts
     !text "MXB" ; 3: 1,000 pts
     !text "CBM" ; 4:   700 pts
-    !text "PTZ" ; 5:   600 pts
+    !text "SID" ; 5:   600 pts
     !text "C64" ; 6:   500 pts
     !text "ASS" ; 7:   400 pts
     !text "DRN" ; 8:   300 pts
@@ -56,8 +56,20 @@ hiscore_header_text:
     !byte 108, 108, 108, 108, 108
     !byte 146, 161
 
+; Standard 1541 35-track diskette: 683 physical sectors total.
+; Track 18 (19 sectors) is reserved for directory & BAM, leaving 664 usable data blocks.
+; The Top 10 entries occupy ranks 1..10 (sum = 1+2+3+4+5+6+7+8+9+10 = 55 blocks).
+; Total blocks free = 664 - 55 = 609 blocks.
+DISK_TOTAL_BLOCKS   = 664
+DISK_USED_BLOCKS    = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10    ; 55 blocks
+DISK_FREE_BLOCKS    = DISK_TOTAL_BLOCKS - DISK_USED_BLOCKS      ; 609 blocks
+
 text_blocks_free:
-    !text "64 BLOCKS FREE." ; 15 characters
+    !byte 48 + (DISK_FREE_BLOCKS / 100)
+    !byte 48 + ((DISK_FREE_BLOCKS / 10) % 10)
+    !byte 48 + (DISK_FREE_BLOCKS % 10)
+    !text " BLOCKS FREE."
+TEXT_BLOCKS_FREE_LEN = * - text_blocks_free
 
 text_ready:
     !text "READY."          ; 6 characters
@@ -75,14 +87,34 @@ s_str_len:          !byte 0     ; Length of string to draw
 
 ; ==============================================================================
 ; Subroutine: hiscore_init
-; Purpose: Initializes high score from Top 10 rank 1 score.
+; Purpose: Initializes high score from Top 10 rank 1 score in memory.
 ; ==============================================================================
 hiscore_init:
-    jsr hiscore_load
     lda top10_scores_lo + 0
     sta g_high_score + 0
     lda top10_scores_hi + 0
     sta g_high_score + 1
+    rts
+
+; ==============================================================================
+; Subroutine: hiscore_boot_sync
+; Purpose: At boot, after title screen bitmap is displayed and before music starts:
+;          attempts to load highscores from Drive 8.
+;          If load fails (file missing or uninitialized disk), creates empty
+;          hiscores file on disk by saving default baseline table.
+;          Re-stamps updated high score onto title screen bitmap.
+; ==============================================================================
+hiscore_boot_sync:
+    jsr hiscore_load
+    bcc @sync_done
+    ; If loading failed (file not found or error), create empty/default file on disk
+    jsr hiscore_save
+@sync_done:
+    lda top10_scores_lo + 0
+    sta g_high_score + 0
+    lda top10_scores_hi + 0
+    sta g_high_score + 1
+    jsr title_stamp_hiscore
     rts
 
 ; ==============================================================================
@@ -297,7 +329,7 @@ hiscore_screen_show:
 -   lda text_blocks_free, x
     jsr hiscore_draw_char
     inx
-    cpx #15
+    cpx #TEXT_BLOCKS_FREE_LEN
     bne -
 
     ; --------------------------------------------------------------------------
@@ -893,7 +925,7 @@ hiscore_insert_score:
     lda top10_scores_hi + 0
     sta g_high_score + 1
 
-    ; 5. Save updated Top 10 table to Drive 9
+    ; 5. Save updated Top 10 table to Drive 8
     jsr hiscore_save
     rts
 
@@ -1022,7 +1054,7 @@ hiscore_load:
     jsr KERNAL_LOAD
 
     ; Check error
-    bcs @load_done              ; If Carry set, error occurred; keep existing scores
+    bcs @load_failed
 
     ; On success, update g_high_score to rank 1 score
     lda top10_scores_lo + 0
@@ -1030,8 +1062,13 @@ hiscore_load:
     lda top10_scores_hi + 0
     sta g_high_score + 1
 
-@load_done:
     jsr hiscore_finish_io
+    clc                         ; Carry clear = success
+    rts
+
+@load_failed:
+    jsr hiscore_finish_io
+    sec                         ; Carry set = failed / missing
     rts
 
 ; ==============================================================================
@@ -1068,8 +1105,15 @@ hiscore_save:
     ldx #<(top10_initials + 30)
     ldy #>(top10_initials + 30)
     jsr KERNAL_SAVE
+    bcs @save_failed
 
     jsr hiscore_finish_io
+    clc                         ; Carry clear = success
+    rts
+
+@save_failed:
+    jsr hiscore_finish_io
+    sec                         ; Carry set = failed
     rts
 
 

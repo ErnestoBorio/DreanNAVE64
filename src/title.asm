@@ -63,10 +63,7 @@ col23_bitmap_hi:
 ;          Title Bitmap screen.
 ; ==============================================================================
 title_enter:
-    ; 1. Start attract mode demo techno music (no-op if already running)
-    jsr sound_music_start
-
-    ; 2. Reset debounce safety lockout & require fresh button release
+    ; 1. Reset debounce safety lockout & require fresh button release
     lda #20
     sta s_title_lockout
     lda #0
@@ -82,11 +79,13 @@ title_enter:
     sta g_title_show_hiscore_first
     lda #1
     sta s_attract_screen
-    jmp hiscore_screen_show
+    jsr hiscore_screen_show
+    jmp sound_music_start
 
 +   lda #0
     sta s_attract_screen        ; 0 = Title Bitmap screen
-    ; Fall through to title_enter_bitmap
+    jsr title_enter_bitmap
+    jmp sound_music_start
 
 ; ==============================================================================
 ; Subroutine: title_enter_bitmap

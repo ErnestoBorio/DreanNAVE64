@@ -126,7 +126,6 @@ state_title_enter:
     ; Hide HUD from Row 0
     jsr hud_clear
     jsr irq_reset_to_top
-    jsr sound_music_start
     jmp title_enter
 
 state_title_update:

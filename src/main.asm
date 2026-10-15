@@ -94,6 +94,14 @@ start:
     jsr powerups_init
     jsr hud_init
     jsr hiscore_init
+
+    ; 1. At boot, first load and display the title screen
+    jsr title_enter_bitmap
+
+    ; 2. Before starting the music, try to load highscores; if it fails, create empty file
+    jsr hiscore_boot_sync
+
+    ; 3. Initialize game state machine (enters STATE_TITLE and starts attract music)
     jsr gamestate_init
 
     ; 8. Setup VIC-II Raster Interrupt for 3-lane enemy multiplexer
