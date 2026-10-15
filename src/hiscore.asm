@@ -898,9 +898,9 @@ hiscore_insert_score:
     rts
 
 ; ==============================================================================
-; Top 10 High Scores Disk Persistence Subsystem (Drive 9)
+; Top 10 High Scores Disk Persistence Subsystem (Drive 8)
 ; ==============================================================================
-HISCORE_DEVICE_NUM  = 9
+HISCORE_DEVICE_NUM  = 8
 
 s_hiscore_fname_load:
     !text "HIGHSCORES"
@@ -997,13 +997,13 @@ hiscore_finish_io:
 
 ; ==============================================================================
 ; Subroutine: hiscore_load
-; Purpose: Loads Top 10 high score table (50 bytes) from Drive 9 ("HIGHSCORES").
+; Purpose: Loads Top 10 high score table (50 bytes) from Drive 8 ("HIGHSCORES").
 ;          If drive not present or file not found, leaves default table intact.
 ; ==============================================================================
 hiscore_load:
     jsr hiscore_prepare_io
 
-    ; Set file parameters: Logical file 1, Device 9, Secondary address 0
+    ; Set file parameters: Logical file 1, Device 8, Secondary address 0
     lda #1
     ldx #HISCORE_DEVICE_NUM
     ldy #0                      ; Secondary 0 = load to address specified in X/Y
@@ -1036,13 +1036,13 @@ hiscore_load:
 
 ; ==============================================================================
 ; Subroutine: hiscore_save
-; Purpose: Saves Top 10 high score table (50 bytes) to Drive 9 ("@0:HIGHSCORES").
+; Purpose: Saves Top 10 high score table (50 bytes) to Drive 8 ("@0:HIGHSCORES").
 ;          Overwrites existing file or creates new file if not present.
 ; ==============================================================================
 hiscore_save:
     jsr hiscore_prepare_io
 
-    ; Set file parameters: Logical file 1, Device 9, Secondary address 0
+    ; Set file parameters: Logical file 1, Device 8, Secondary address 0
     lda #1
     ldx #HISCORE_DEVICE_NUM
     ldy #0

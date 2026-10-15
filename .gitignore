@@ -13,4 +13,5 @@ bin/
 # Development helper scripts
 tools/*
 !tools/build_title_bitmap.py
-
+# IDE / editor settings
+.vscode/

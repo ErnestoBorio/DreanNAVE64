@@ -2,46 +2,37 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+D64_PATH="$SCRIPT_DIR/bin/drean_nave_64.d64"
 PRG_PATH="$SCRIPT_DIR/bin/drean_nave_64.prg"
-DISK_PATH=""
-for candidate in \
-    "$SCRIPT_DIR/tools/highscores.d64" \
-    "$SCRIPT_DIR/tools/nave-highscore.d64" \
-    "./tools/highscores.d64" \
-    "./tools/nave-highscore.d64"; do
-    if [[ -f "$candidate" ]]; then
-        DISK_PATH="$candidate"
-        break
-    fi
-done
 
-DISK_ARGS=()
-if [[ -n "$DISK_PATH" ]]; then
-    DISK_ARGS=(-drive9type 1541 -drive9truedrive -attach9rw -9 "$DISK_PATH")
+echo "==> Compiling latest C64 binary and D64 disk image..."
+"$SCRIPT_DIR/build.sh"
+
+TARGET_MEDIA="$D64_PATH"
+if [[ ! -f "$TARGET_MEDIA" ]]; then
+    TARGET_MEDIA="$PRG_PATH"
 fi
 
-
-echo "==> Compiling latest C64 binary..."
-"$SCRIPT_DIR/build.sh"
+DISK_ARGS=(-drive8type 1541 -drive8truedrive -attach8rw)
 
 # 1. Check if user specified a custom VICE path in environment
 if [[ -n "$VICE_BIN" && -x "$VICE_BIN" ]]; then
-    EXEC_CMD=("$VICE_BIN" "${DISK_ARGS[@]}" "$PRG_PATH")
+    EXEC_CMD=("$VICE_BIN" "${DISK_ARGS[@]}" "$TARGET_MEDIA")
 elif [[ -n "$VICE_APP" && -d "$VICE_APP" ]]; then
-    EXEC_CMD=(open -a "$VICE_APP" --args "${DISK_ARGS[@]}" "$PRG_PATH")
+    EXEC_CMD=(open -a "$VICE_APP" --args "${DISK_ARGS[@]}" "$TARGET_MEDIA")
 fi
 
 # 2. Check for CLI executables in PATH and standard locations
 if [[ -z "$EXEC_CMD" ]]; then
     for bin in x64sc x64; do
         if command -v "$bin" >/dev/null 2>&1; then
-            EXEC_CMD=("$bin" "${DISK_ARGS[@]}" "$PRG_PATH")
+            EXEC_CMD=("$bin" "${DISK_ARGS[@]}" "$TARGET_MEDIA")
             break
         elif [[ -x "/opt/homebrew/bin/$bin" ]]; then
-            EXEC_CMD=("/opt/homebrew/bin/$bin" "${DISK_ARGS[@]}" "$PRG_PATH")
+            EXEC_CMD=("/opt/homebrew/bin/$bin" "${DISK_ARGS[@]}" "$TARGET_MEDIA")
             break
         elif [[ -x "/usr/local/bin/$bin" ]]; then
-            EXEC_CMD=("/usr/local/bin/$bin" "${DISK_ARGS[@]}" "$PRG_PATH")
+            EXEC_CMD=("/usr/local/bin/$bin" "${DISK_ARGS[@]}" "$TARGET_MEDIA")
             break
         fi
     done
@@ -61,7 +52,7 @@ if [[ -z "$EXEC_CMD" ]]; then
         "$HOME/Applications/VICE/x64.app" \
         "$HOME/Applications/x64.app"; do
         if [[ -d "$app" ]]; then
-            EXEC_CMD=(open -a "$app" --args "${DISK_ARGS[@]}" "$PRG_PATH")
+            EXEC_CMD=(open -a "$app" --args "${DISK_ARGS[@]}" "$TARGET_MEDIA")
             break
         fi
     done
@@ -71,7 +62,7 @@ fi
 if [[ -z "$EXEC_CMD" ]]; then
     for app_name in "x64sc" "VICE" "x64"; do
         if open -Ra "$app_name" 2>/dev/null; then
-            EXEC_CMD=(open -a "$app_name" --args "${DISK_ARGS[@]}" "$PRG_PATH")
+            EXEC_CMD=(open -a "$app_name" --args "${DISK_ARGS[@]}" "$TARGET_MEDIA")
             break
         fi
     done
@@ -79,11 +70,7 @@ fi
 
 # 5. Run emulator or report missing binary
 if [[ -n "$EXEC_CMD" ]]; then
-    if [[ ${#DISK_ARGS[@]} -gt 0 ]]; then
-        echo "==> Launching VICE with $PRG_PATH (attached Drive 9: $DISK_PATH)..."
-    else
-        echo "==> Launching VICE with $PRG_PATH..."
-    fi
+    echo "==> Launching VICE with $TARGET_MEDIA (Drive 8)..."
     "${EXEC_CMD[@]}"
 else
     echo "==> Error: VICE emulator executable not found."

@@ -22,3 +22,61 @@ fi
 "$ACME_BIN" --cpu 6502 --labeldump bin/drean_nave_64.vs --vicelabels bin/vice.lbl src/main.asm
 
 echo "==> Build successful: bin/drean_nave_64.prg"
+
+# Find c1541 disk utility executable
+C1541_BIN="/opt/homebrew/bin/c1541"
+if [ ! -f "$C1541_BIN" ]; then
+    C1541_BIN="c1541"
+fi
+
+# Build D64 disk image with game PRG and hiscores file
+D64_TARGET="bin/drean_nave_64.d64"
+PRG_FILE="bin/drean_nave_64.prg"
+TMP_HISCORE="/tmp/nave_hiscores_sync.prg"
+
+if command -v "$C1541_BIN" >/dev/null 2>&1 || [ -x "$C1541_BIN" ]; then
+    echo "==> Creating D64 disk image: $D64_TARGET..."
+
+    # 1. Locate hiscores source:
+    # If the target D64 already exists and has highscores, extract it to preserve gameplay scores
+    HISCORES_FOUND=0
+    if [ -f "$D64_TARGET" ]; then
+        if "$C1541_BIN" -attach "$D64_TARGET" -read "highscores" "$TMP_HISCORE" >/dev/null 2>&1; then
+            HISCORES_FOUND=1
+            # Also sync back to tools/highscores.d64 if present so repo stays updated
+            for d64_src in "tools/highscores.d64" "tools/hiscores.d64"; do
+                if [ -f "$d64_src" ]; then
+                    "$C1541_BIN" -attach "$d64_src" -delete "highscores" -write "$TMP_HISCORE" "highscores" >/dev/null 2>&1 || true
+                fi
+            done
+        fi
+    fi
+
+    # If not found in target D64, extract from tools/highscores.d64 or tools/hiscores.d64
+    if [ "$HISCORES_FOUND" -eq 0 ]; then
+        for d64_src in "tools/highscores.d64" "tools/hiscores.d64"; do
+            if [ -f "$d64_src" ]; then
+                if "$C1541_BIN" -attach "$d64_src" -read "highscores" "$TMP_HISCORE" >/dev/null 2>&1; then
+                    HISCORES_FOUND=1
+                    break
+                fi
+            fi
+        done
+    fi
+
+    # 2. Format fresh D64 disk image and write game PRG
+    rm -f "$D64_TARGET"
+    if [ "$HISCORES_FOUND" -eq 1 ] && [ -f "$TMP_HISCORE" ]; then
+        "$C1541_BIN" -format "drean nave 64,dn" d64 "$D64_TARGET" \
+                    -write "$PRG_FILE" "drean nave 64" \
+                    -write "$TMP_HISCORE" "highscores" >/dev/null
+        rm -f "$TMP_HISCORE"
+    else
+        "$C1541_BIN" -format "drean nave 64,dn" d64 "$D64_TARGET" \
+                    -write "$PRG_FILE" "drean nave 64" >/dev/null
+    fi
+
+    echo "==> Disk image created: $D64_TARGET"
+else
+    echo "==> Note: c1541 utility not found. Skipping D64 creation."
+fi
