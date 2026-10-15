@@ -149,3 +149,4 @@ The game is written in modular 6502 assembly with strict zero-stack-corruption c
 * **Original Concept & Arcade Design**: [Videogamo Inc.](https://videogamo.com/) – Hernán Saez & Máximo Balestrini.
 * **Commodore 64 Demake**: Ernesto Borio ([@petruza](https://github.com/petruza)).
 * **Homage**: Drean Commodore 64 (Argentina).
+

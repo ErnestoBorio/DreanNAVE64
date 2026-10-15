@@ -2,7 +2,6 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DEBUGGER_APP="/Users/petruza/Source/Drean64/RetroDebugger/Retro Debugger.app"
 D64_PATH="$SCRIPT_DIR/bin/drean_nave_64.d64"
 PRG_PATH="$SCRIPT_DIR/bin/drean_nave_64.prg"
 SYMBOLS_PATH="$SCRIPT_DIR/bin/vice.lbl"
@@ -26,11 +25,85 @@ else
     DEBUGGER_ARGS+=(-prg "$TARGET_MEDIA")
 fi
 
-echo "==> Launching Retro Debugger with $TARGET_MEDIA..."
-DEBUGGER_EXE="$DEBUGGER_APP/Contents/MacOS/Retro Debugger"
-if pgrep -f "Retro Debugger" >/dev/null 2>&1 && [[ -x "$DEBUGGER_EXE" ]]; then
-    "$DEBUGGER_EXE" -pass "${DEBUGGER_ARGS[@]}" &
-    osascript -e 'tell application "Retro Debugger" to activate' 2>/dev/null || true
+# Locate Retro Debugger / C64 Debugger across environments
+DEBUGGER_APP="${DEBUGGER_APP:-${RETRO_DEBUGGER_APP:-}}"
+
+# 1. Check relative sibling repositories & standard application locations
+if [[ -z "$DEBUGGER_APP" || ! -d "$DEBUGGER_APP" ]]; then
+    for candidate in \
+        "$SCRIPT_DIR/../Drean64/RetroDebugger/Retro Debugger.app" \
+        "$SCRIPT_DIR/../RetroDebugger/Retro Debugger.app" \
+        "$SCRIPT_DIR/../RetroDebugger/RetroDebugger.app" \
+        "$SCRIPT_DIR/../C64Debugger/C64 Debugger.app" \
+        "$SCRIPT_DIR/../C64Debugger/C64Debugger.app" \
+        "/Applications/Retro Debugger.app" \
+        "/Applications/RetroDebugger.app" \
+        "/Applications/C64 Debugger.app" \
+        "/Applications/C64Debugger.app" \
+        "$HOME/Applications/Retro Debugger.app" \
+        "$HOME/Applications/RetroDebugger.app" \
+        "$HOME/Applications/C64 Debugger.app" \
+        "$HOME/Applications/C64Debugger.app"; do
+        if [[ -d "$candidate" ]]; then
+            DEBUGGER_APP="$candidate"
+            break
+        fi
+    done
+fi
+
+# 2. Check macOS Spotlight metadata if still not found
+if [[ -z "$DEBUGGER_APP" || ! -d "$DEBUGGER_APP" ]] && command -v mdfind >/dev/null 2>&1; then
+    for name in "Retro Debugger.app" "RetroDebugger.app" "C64 Debugger.app" "C64Debugger.app"; do
+        found="$(mdfind "kMDItemFSName == '$name'" 2>/dev/null | head -n 1)"
+        if [[ -n "$found" && -d "$found" ]]; then
+            DEBUGGER_APP="$found"
+            break
+        fi
+    done
+fi
+
+# 3. Check for standalone CLI executable in PATH
+DEBUGGER_BIN="${RETRO_DEBUGGER_BIN:-}"
+if [[ -z "$DEBUGGER_APP" && -z "$DEBUGGER_BIN" ]]; then
+    for bin in "Retro Debugger" "RetroDebugger" "retrodebugger" "C64 Debugger" "C64Debugger" "c64debugger"; do
+        if command -v "$bin" >/dev/null 2>&1; then
+            DEBUGGER_BIN="$bin"
+            break
+        fi
+    done
+fi
+
+# 4. Launch debugger
+if [[ -n "$DEBUGGER_APP" && -d "$DEBUGGER_APP" ]]; then
+    echo "==> Launching Retro Debugger with $TARGET_MEDIA..."
+    DEBUGGER_EXE=""
+    for exe_candidate in \
+        "$DEBUGGER_APP/Contents/MacOS/Retro Debugger" \
+        "$DEBUGGER_APP/Contents/MacOS/RetroDebugger" \
+        "$DEBUGGER_APP/Contents/MacOS/C64 Debugger" \
+        "$DEBUGGER_APP/Contents/MacOS/C64Debugger"; do
+        if [[ -x "$exe_candidate" ]]; then
+            DEBUGGER_EXE="$exe_candidate"
+            break
+        fi
+    done
+
+    # If already running, pass new disk/prg via -pass hot-reload
+    APP_NAME="$(basename "$DEBUGGER_APP" .app)"
+    if pgrep -f "$APP_NAME" >/dev/null 2>&1 && [[ -n "$DEBUGGER_EXE" ]]; then
+        "$DEBUGGER_EXE" -pass "${DEBUGGER_ARGS[@]}" &
+        osascript -e "tell application \"$APP_NAME\" to activate" 2>/dev/null || true
+    else
+        open -a "$DEBUGGER_APP" --args "${DEBUGGER_ARGS[@]}"
+    fi
+elif [[ -n "$DEBUGGER_BIN" ]]; then
+    echo "==> Launching $DEBUGGER_BIN with $TARGET_MEDIA..."
+    "$DEBUGGER_BIN" "${DEBUGGER_ARGS[@]}"
 else
-    open -a "$DEBUGGER_APP" --args "${DEBUGGER_ARGS[@]}"
+    echo "==> Error: Retro Debugger / C64 Debugger not found."
+    echo ""
+    echo "Please install Retro Debugger (or C64 Debugger) into /Applications,"
+    echo "place it in a sibling folder, or export DEBUGGER_APP:"
+    echo "  export DEBUGGER_APP=\"/path/to/Retro Debugger.app\""
+    exit 1
 fi
