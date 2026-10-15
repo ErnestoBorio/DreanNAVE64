@@ -995,6 +995,9 @@ powerups_check_collision:
 
 @heal_hp:
     inc g_player_hp             ; Restore exactly +1 HP
+    lda #0
+    sta g_clutch_timer_lo
+    sta g_clutch_timer_hi
 
     ; Award 500 bonus points (5 * 100)
     lda #5

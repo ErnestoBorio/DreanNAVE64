@@ -163,6 +163,23 @@ collisions_kill_enemy:
     lda #SFX_EXPLOSION_ENEMY
     jsr sound_play_sfx
 
+    ; Check if this was the boss during a boss duel
+    lda g_boss_duel_active
+    beq @normal_kill
+    cpx #0                      ; Boss is always in slot 0
+    bne @normal_kill
+
+    ; Boss defeated!
+    lda #0
+    sta g_boss_duel_active
+    ; Award 50 bonus points (50 * 100 = 5,000 pts)
+    lda #50
+    jsr hud_add_score
+    ; Trigger victory sound
+    lda #SFX_START
+    jsr sound_play_sfx
+
+@normal_kill:
     ; Award score points based on enemy archetype (0..7)
     ldy g_enemy_archetype, x
     lda enemy_score_table, y
@@ -391,7 +408,16 @@ collisions_check_player:
     ; When in Phase 1, each hit decrements 1 of 5 HP
     dec g_player_hp
     beq @player_destroyed
-    rts
+
+    ; Check if HP dropped to 1: trigger 10-second clutch relief (500 PAL frames)
+    lda g_player_hp
+    cmp #1
+    bne +
+    lda #<500
+    sta g_clutch_timer_lo
+    lda #>500
+    sta g_clutch_timer_hi
++   rts
 
 @player_destroyed:
     ; Reached 0 HP: player is dead, ship motion stops, trigger explosion

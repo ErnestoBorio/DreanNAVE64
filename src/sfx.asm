@@ -25,6 +25,7 @@ SFX_EXPLOSION_ENEMY = 7     ; Enemy destroyed (Voice 2: noise burst)
 SFX_PLAYER_DEATH    = 8     ; Player destruction (Voice 2+3: crash & dive)
 SFX_KEY_CLICK       = 9     ; Initials typewriter click (Voice 3: short blip)
 SFX_GAME_OVER       = 10    ; Ceremonial after-action anthem (Voice 1+2+3)
+SFX_SIREN           = 11    ; Boss warning emergency siren (Voice 2)
 
 SID_MUSIC_INIT      = $1048 ; Rhythm_Is_a_Dancer.sid init entry
 SID_MUSIC_PLAY      = $1021 ; Rhythm_Is_a_Dancer.sid 50 Hz play entry
@@ -176,8 +177,13 @@ sound_play_sfx:
     jmp @sfx_restore
 
 +   cmp #SFX_GAME_OVER
-    bne @sfx_restore
+    bne +
     jsr sfx_play_game_over
+    jmp @sfx_restore
+
++   cmp #SFX_SIREN
+    bne @sfx_restore
+    jsr sfx_play_siren
 
 @sfx_restore:
     ldy sfx_y_temp
@@ -393,6 +399,35 @@ sfx_play_bomb:
     lda #3
     sta sfx_v2_priority
 @bomb_skip:
+    rts
+
+; ------------------------------------------------------------------------------
+; SFX_SIREN: Boss Warning Emergency Siren (Voice 2)
+; Urgent wailing siren alarm (80 frames = 1.6s)
+; ------------------------------------------------------------------------------
+sfx_play_siren:
+    lda #0
+    sta SID_V2_CTRL
+    sta SID_V2_FREQ_LO
+    lda #$20
+    sta SID_V2_FREQ_HI
+    lda #$08                    ; Fast attack 2ms, medium decay 300ms
+    sta SID_V2_AD
+    lda #$f0                    ; Max sustain 15
+    sta SID_V2_SR
+    lda #$08
+    sta SID_V2_PW_HI
+    lda #$00
+    sta SID_V2_PW_LO
+    lda #(SID_PULSE | SID_GATE)
+    sta SID_V2_CTRL
+
+    lda #SFX_SIREN
+    sta sfx_v2_id
+    lda #80                     ; 80 frames = 1.6s
+    sta sfx_v2_timer
+    lda #4                      ; Highest priority 4
+    sta sfx_v2_priority
     rts
 
 ; ------------------------------------------------------------------------------
@@ -956,6 +991,10 @@ sound_update_v2:
     bne +
     jmp @v2_mod_death
 
++   cmp #SFX_SIREN
+    bne +
+    jmp @v2_mod_siren
+
 +   rts
 
 @v2_mod_game_over:
@@ -1169,6 +1208,18 @@ sound_update_v2:
     sta sfx_v2_pitch_hi
     sta SID_V2_FREQ_HI
 +   rts
+
+@v2_mod_siren:
+    ; Modulate siren pitch across 8-frame wave
+    lda sfx_v2_timer
+    and #$07
+    tax
+    lda siren_freq_table, x
+    sta SID_V2_FREQ_HI
+    rts
+
+siren_freq_table:
+    !byte $1c, $24, $2e, $38, $38, $2e, $24, $1c
 
 ; ------------------------------------------------------------------------------
 ; Helper: sound_update_v3 (Bonuses, Alerts & UI)

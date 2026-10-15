@@ -87,6 +87,23 @@ g_wave_spawn_timer: !byte 20
 g_first_spawn_force: !byte 0    ; 0 = timeline progression, 1..8 = force Enemy 1..8 on next spawn only
 
 ; ------------------------------------------------------------------------------
+; Dynamic Difficulty, Squadron & Boss Milestone State
+; ------------------------------------------------------------------------------
+g_squadron_remaining:   !byte 0     ; Remaining members in current squadron (0..3)
+g_squadron_burst_timer: !byte 0     ; Countdown frames until next squad member spawns
+g_squadron_type:        !byte 0     ; 1 = Convoy, 2 = Pincer, 3 = Sine Flotilla
+g_squadron_y:           !byte 0     ; Shared spawn coordinate for convoy
+
+g_clutch_timer_lo:      !byte 0     ; 1 HP Clutch Relief Timer (50 Hz PAL: 500 frames = 10.0s)
+g_clutch_timer_hi:      !byte 0
+
+g_boss_milestone_sec_lo:!byte <180  ; First boss at 180s (3:00)
+g_boss_milestone_sec_hi:!byte >180
+g_boss_warning_timer:   !byte 0     ; Border flash & siren countdown (80 frames = 1.6s)
+g_boss_duel_active:     !byte 0     ; 1 = Solo boss duel active, 0 = Normal wave flow
+g_boss_duel_count:      !byte 0     ; Count of boss duels triggered (0=Death, 1=The Eye...)
+
+; ------------------------------------------------------------------------------
 ; Enemy Bullet State Variables (4 slots: 0..3)
 ; ------------------------------------------------------------------------------
 g_bullet_active:    !fill MAX_ENEMY_BULLETS, 0
@@ -278,6 +295,11 @@ enemies_clear_all:
 -   sta g_bullet_active, x
     dex
     bpl -
+
+    sta g_squadron_remaining
+    sta g_squadron_burst_timer
+    sta g_boss_warning_timer
+    sta g_boss_duel_active
     rts
 
 ; ==============================================================================
@@ -325,6 +347,17 @@ enemies_init:
     sta g_multiplexer_active
     sta g_sort_count
     sta g_first_spawn_force
+    sta g_squadron_remaining
+    sta g_squadron_burst_timer
+    sta g_clutch_timer_lo
+    sta g_clutch_timer_hi
+    sta g_boss_warning_timer
+    sta g_boss_duel_active
+    sta g_boss_duel_count
+    lda #<180
+    sta g_boss_milestone_sec_lo
+    lda #>180
+    sta g_boss_milestone_sec_hi
     lda #40
     sta g_wave_spawn_timer
 
@@ -825,10 +858,299 @@ enemy_setup_archetype_slot:
     rts
 
 ; ==============================================================================
+; Subroutine: enemies_start_squadron
+; Purpose: Initiates a choreographed formation burst (Convoy, Pincer, Sine Flotilla).
+; ==============================================================================
+enemies_start_squadron:
+    jsr starfield_rand
+    and #$03                    ; 0, 1, 2, 3
+    cmp #2
+    bcc @squad_convoy           ; 0, 1 -> Convoy (50%)
+    cmp #2
+    beq @squad_pincer           ; 2 -> Pincer (25%)
+
+@squad_flotilla:
+    ; Type 3: Sine Flotilla (3 Sine Interceptors from Top)
+    lda #3
+    sta g_squadron_type
+    sta g_squadron_remaining
+    lda #1
+    sta g_squadron_burst_timer
+    rts
+
+@squad_pincer:
+    ; Type 2: Pincer (2 Flankers from Left & Right)
+    lda #2
+    sta g_squadron_type
+    sta g_squadron_remaining
+    lda #1
+    sta g_squadron_burst_timer
+    rts
+
+@squad_convoy:
+    ; Type 1: Convoy (3 Scouts along same Y corridor)
+    lda #1
+    sta g_squadron_type
+    lda #3
+    sta g_squadron_remaining
+    jsr enemies_get_random_spawn_y
+    sta g_squadron_y
+    lda #1
+    sta g_squadron_burst_timer
+    rts
+
+; ==============================================================================
+; Subroutine: enemies_spawn_squadron_member
+; Purpose: Spawns one member of the currently active squadron formation.
+; ==============================================================================
+enemies_spawn_squadron_member:
+    ; Count active enemies to respect max density limit (5 enemies)
+    lda #0
+    sta s_active_count
+    ldx #0
+-   lda g_enemy_active, x
+    beq +
+    inc s_active_count
++   inx
+    cpx #MAX_ENEMIES
+    bne -
+
+    lda s_active_count
+    cmp #5
+    bcs @squad_member_skip
+
+    ; Find free slot
+    ldx #0
+-   lda g_enemy_active, x
+    beq @squad_slot_found
+    inx
+    cpx #MAX_ENEMIES
+    bne -
+@squad_member_skip:
+    rts
+
+@squad_slot_found:
+    txa
+    tay                         ; Y = free enemy slot (0..11)
+
+    lda g_squadron_type
+    cmp #1
+    bne +
+    jmp @spawn_convoy_member
++   cmp #2
+    bne +
+    jmp @spawn_pincer_member
++   cmp #3
+    bne +
+    jmp @spawn_flotilla_member
++   rts
+
+@spawn_convoy_member:
+    ; Convoy: All members follow the same Y corridor from Top (X=344)
+    lda #1
+    sta g_enemy_active, y
+    lda #0
+    sta g_enemy_exploding, y
+    sta g_enemy_flash, y
+    sta g_enemy_entry_dir, y
+    sta g_enemy_curve_timer, y
+    sta g_enemy_dir_x, y
+    lda #88
+    sta g_enemy_x_lo, y
+    lda #1
+    sta g_enemy_x_hi, y
+    lda g_squadron_y
+    sta g_enemy_y, y
+    sta g_enemy_base_y, y
+    lda #1                      ; Archetype 1: Scout
+    jmp enemy_setup_archetype_slot
+
+@spawn_pincer_member:
+    ; Pincer: 2 members from Left (Y=48) and Right (Y=224)
+    lda #1
+    sta g_enemy_active, y
+    lda #0
+    sta g_enemy_exploding, y
+    sta g_enemy_flash, y
+    lda g_squadron_remaining
+    cmp #2
+    beq @pincer_left
+
+@pincer_right:
+    lda #2
+    sta g_enemy_entry_dir, y
+    lda #224
+    sta g_enemy_y, y
+    sta g_enemy_base_y, y
+    lda #1
+    sta g_enemy_dir_x, y
+    bne @pincer_common
+
+@pincer_left:
+    lda #1
+    sta g_enemy_entry_dir, y
+    lda #48
+    sta g_enemy_y, y
+    sta g_enemy_base_y, y
+    lda #0
+    sta g_enemy_dir_x, y
+
+@pincer_common:
+    lda #24
+    sta g_enemy_curve_timer, y
+    ; Pincers swoop in at upper/mid altitude: X = 170..233
+    jsr starfield_rand
+    and #$3f
+    clc
+    adc #170
+    sta g_enemy_x_lo, y
+    lda #0
+    sta g_enemy_x_hi, y
+    lda #2                      ; Archetype 2: Light Fighter
+    jmp enemy_setup_archetype_slot
+
+@spawn_flotilla_member:
+    ; Sine Flotilla: Sine Interceptors from Top, staggered Y
+    lda #1
+    sta g_enemy_active, y
+    lda #0
+    sta g_enemy_exploding, y
+    sta g_enemy_flash, y
+    sta g_enemy_entry_dir, y
+    sta g_enemy_curve_timer, y
+    sta g_enemy_dir_x, y
+    lda #88
+    sta g_enemy_x_lo, y
+    lda #1
+    sta g_enemy_x_hi, y
+
+    ; Stagger Y: remaining=3 -> 88, remaining=2 -> 136, remaining=1 -> 184
+    lda g_squadron_remaining
+    cmp #3
+    beq @flot_1
+    cmp #2
+    beq @flot_2
+@flot_3:
+    lda #184
+    bne @flot_store_y
+@flot_2:
+    lda #136
+    bne @flot_store_y
+@flot_1:
+    lda #88
+@flot_store_y:
+    sta s_spawn_y_temp
+    lda #3                      ; Archetype 3: Interceptor
+    jsr enemy_setup_archetype_slot
+    ; Enforce desired staggered Y altitude for flotilla member
+    lda s_spawn_y_temp
+    sta g_enemy_y, y
+    sta g_enemy_base_y, y
+    rts
+
+; ==============================================================================
+; Subroutine: enemies_clear_minors_for_boss
+; Purpose: Gracefully explodes active minor enemies and clears bullets for Boss Duel.
+; ==============================================================================
+enemies_clear_minors_for_boss:
+    ; Explode any active enemies in slots 0..11
+    ldx #0
+-   lda g_enemy_active, x
+    beq +
+    lda g_enemy_exploding, x
+    bne +
+    lda #10
+    sta g_enemy_exploding, x
+    lda #SPRITE_PTR_EXPLOSION_1
+    sta g_enemy_type, x
++   inx
+    cpx #MAX_ENEMIES
+    bne -
+
+    ; Clear all 4 bullets instantly
+    lda #0
+    ldx #MAX_ENEMY_BULLETS - 1
+-   sta g_bullet_active, x
+    dex
+    bpl -
+
+    ; Reset squadron state
+    sta g_squadron_remaining
+    sta g_squadron_burst_timer
+    rts
+
+; ==============================================================================
+; Subroutine: enemies_spawn_boss_duel
+; Purpose: Spawns the solo boss encounter into slot 0.
+;          Alternates between Boss Death (Archetype 8) and Boss The Eye (Archetype 7).
+; ==============================================================================
+enemies_spawn_boss_duel:
+    ldy #0                      ; Slot 0
+    lda #1
+    sta g_enemy_active, y
+    sta g_boss_duel_active
+
+    ; Clear state flags
+    lda #0
+    sta g_enemy_exploding, y
+    sta g_enemy_flash, y
+    sta g_enemy_roam_timer, y
+    sta g_enemy_phase, y
+    sta g_enemy_pattern, y
+    sta g_enemy_entry_dir, y
+    sta g_enemy_curve_timer, y
+
+    ; Start Boss at top-center of screen
+    lda #24                     ; X = 280 (256 + 24)
+    sta g_enemy_x_lo, y
+    lda #1
+    sta g_enemy_x_hi, y
+    lda #136                    ; Y = screen center
+    sta g_enemy_y, y
+    sta g_enemy_base_y, y
+
+    ; Alternate boss archetype based on g_boss_duel_count:
+    ; Count 0, 2, 4... -> Death (Archetype 8)
+    ; Count 1, 3, 5... -> The Eye (Archetype 7)
+    lda g_boss_duel_count
+    inc g_boss_duel_count
+    lsr
+    bcs @boss_eye
+
+@boss_death:
+    lda #8                      ; Archetype 8: Death
+    jsr enemy_setup_archetype_slot
+    ; Boss HP: 16 hits!
+    lda #16
+    sta g_enemy_hp + 0
+    rts
+
+@boss_eye:
+    lda #7                      ; Archetype 7: The Eye
+    jsr enemy_setup_archetype_slot
+    ; Boss HP: 20 hits!
+    lda #20
+    sta g_enemy_hp + 0
+    rts
+
+; ==============================================================================
 ; Subroutine: enemies_update
 ; Purpose: Updates wave timers, enemies, and free-flying aimed bullets.
 ; ==============================================================================
 enemies_update:
+    ; 0. 1 HP Clutch Relief Timer countdown (500 frames = 10.0s @ 50 Hz PAL)
+    lda g_clutch_timer_lo
+    ora g_clutch_timer_hi
+    beq @clutch_done
+    lda g_clutch_timer_lo
+    sec
+    sbc #1
+    sta g_clutch_timer_lo
+    lda g_clutch_timer_hi
+    sbc #0
+    sta g_clutch_timer_hi
+@clutch_done:
+
     ; 1. Enemy color cycling timer (25 frames = 0.5s in 50 Hz PAL)
     dec s_enemy_color_timer
     bne +
@@ -839,13 +1161,142 @@ enemies_update:
     lda #5
     sta s_enemy_color_idx
 +
-    ; 2. Wave Spawn Timer
-    dec g_wave_spawn_timer
-    bne @update_entities
+    ; 2. Boss Warning Timer & Milestone Check
+    lda g_boss_warning_timer
+    beq @check_boss_milestone
 
-    ; Timer fired: spawn an enemy
+    dec g_boss_warning_timer
+    lda g_boss_warning_timer
+    beq @boss_warning_ended
+
+    ; Clear debug border timer so it does not interfere with boss alarm
+    lda #0
+    sta g_debug_border_timer
+
+    ; Alternate border color every 4 frames (red vs black)
+    lda g_boss_warning_timer
+    and #$04
+    beq +
+    lda #COLOR_RED
+    bne ++
++   lda #COLOR_BLACK
+++  sta VIC_BORDER_COLOR
+    jmp @update_entities
+
+@boss_warning_ended:
+    lda #COLOR_BLACK
+    sta VIC_BORDER_COLOR
+    jsr enemies_spawn_boss_duel
+    jmp @update_entities
+
+@check_boss_milestone:
+    lda g_boss_duel_active
+    beq +
+    jmp @update_entities        ; While boss duel is active: suppress wave spawns
++
+
+    ; Compare total game elapsed seconds against milestone
+    lda g_game_time_total_sec + 1
+    cmp g_boss_milestone_sec_hi
+    bcc @check_breather
+    bne @boss_milestone_triggered
+    lda g_game_time_total_sec + 0
+    cmp g_boss_milestone_sec_lo
+    bcc @check_breather
+
+@boss_milestone_triggered:
+    ; Set next boss milestone: +150 seconds (2:30)
+    lda g_boss_milestone_sec_lo
+    clc
+    adc #<150
+    sta g_boss_milestone_sec_lo
+    lda g_boss_milestone_sec_hi
+    adc #>150
+    sta g_boss_milestone_sec_hi
+
+    ; Start 80-frame border flash & siren
+    lda #80
+    sta g_boss_warning_timer
+    lda #SFX_SIREN
+    jsr sound_play_sfx
+
+    ; Clear screen for boss arena
+    jsr enemies_clear_minors_for_boss
+    jmp @update_entities
+
+@check_breather:
+    ; Check 30s micro-wave cycle: seconds 26..29 are calm breather
+    lda g_game_time_sec
+    cmp #30
+    bcc +
+    sec
+    sbc #30
++   ; A is 0..29
+    cmp #26
+    bcc @active_combat_phase
+
+    ; In Breather (seconds 26..29):
+    ; If frame 0 of second 26 and no active powerup, guarantee powerup drop!
+    cmp #26
+    bne @in_breather
+    lda g_game_time_frames
+    bne @in_breather
+    lda g_powerup_active
+    bne @in_breather
+    lda #1
+    sta g_powerup_timer_lo
+    lda #0
+    sta g_powerup_timer_hi
+
+@in_breather:
+    ; Suppress wave spawns and squadrons during breather
+    jmp @update_entities
+
+@active_combat_phase:
+    ; Active combat!
+    ; 1. Check if squadron burst is in progress
+    lda g_squadron_remaining
+    beq @check_wave_timer
+
+    dec g_squadron_burst_timer
+    beq +
+    jmp @update_entities
++
+
+    ; Spawn next squadron member
+    jsr enemies_spawn_squadron_member
+    dec g_squadron_remaining
+    lda #12                     ; 12 frames until next member
+    sta g_squadron_burst_timer
+    jmp @update_entities
+
+@check_wave_timer:
+    dec g_wave_spawn_timer
+    beq +
+    jmp @update_entities
++
+
+    ; Timer fired: roll for squadron (25%) vs normal spawn (75%)
+    ; Only allow squadrons after 15s of play
+    lda g_game_time_total_sec + 1
+    bne @try_squadron
+    lda g_game_time_total_sec + 0
+    cmp #15
+    bcc @do_normal_spawn
+
+@try_squadron:
+    jsr starfield_rand
+    and #$03                    ; 0..3
+    bne @do_normal_spawn        ; 1, 2, 3 -> normal spawn (75%)
+
+    ; 0 -> Start Choreographed Squadron (25%)
+    jsr enemies_start_squadron
+    jmp @reset_spawn_timer
+
+@do_normal_spawn:
     jsr enemies_spawn
 
+@reset_spawn_timer:
     ; Reset timer based on elapsed time:
     lda g_game_time_total_sec + 1
     bne @late_spawn             ; T >= 256s
@@ -2212,6 +2663,31 @@ enemies_update:
     dec g_enemy_reload_timer, x
     bne @next_enemy_upd
 
+    ; 1 HP Clutch Relief: dial back bullet frequency when player is in clutch state
+    lda g_clutch_timer_lo
+    ora g_clutch_timer_hi
+    beq @rearm_and_fire
+
+    ; Clutch active:
+    ; 1. If any enemy bullet is already flying, suppress fire (max 1 bullet on screen)
+    lda g_bullet_active + 0
+    ora g_bullet_active + 1
+    ora g_bullet_active + 2
+    ora g_bullet_active + 3
+    bne @clutch_suppress_shot
+
+    ; 2. 75% random skip even if no bullets are active
+    jsr starfield_rand
+    and #$03
+    bne @clutch_suppress_shot
+    jmp @rearm_and_fire
+
+@clutch_suppress_shot:
+    lda #30
+    sta g_enemy_reload_timer, x
+    jmp @next_enemy_upd
+
+@rearm_and_fire:
     ; Reload timer reached 0: re-arm
     ldy g_enemy_archetype, x
     txa
