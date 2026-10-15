@@ -454,7 +454,6 @@ game_over_trigger:
     sta g_missile_active
     sta VIC_SPR_ENABLE
     sta g_multiplexer_active
-    sta VIC_RASTER
     sta VIC_BORDER_COLOR        ; COLOR_BLACK = 0
 
     ; 3. Erase any active grid powerup

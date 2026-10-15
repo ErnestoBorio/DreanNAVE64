@@ -125,6 +125,7 @@ state_title_enter:
 
     ; Hide HUD from Row 0
     jsr hud_clear
+    jsr irq_reset_to_top
     jsr sound_music_start
     jmp title_enter
 
@@ -147,6 +148,8 @@ state_ready_enter:
     jsr powerups_init
     jsr hud_init
     jsr hud_clear               ; Hide HUD during READY
+    jsr starfield_init          ; Initialize starfield and static palette
+    jsr irq_reset_to_top        ; Ensure standard unshifted mode during READY
 
     ; 2. Display "READY!" at Column 20, Rows 10..15 in White
     lda #COLOR_WHITE
@@ -281,6 +284,9 @@ state_dying_exit:
 ; State 4: STATE_GAME_OVER
 ; ==============================================================================
 state_game_over_enter:
+    ; Restore standard 40-column text mode and reset IRQ chain
+    jsr irq_reset_to_top
+
     ; 1. Despawn enemies, disable sprites, draw GAME OVER & final SCORE
     jsr game_over_trigger
 

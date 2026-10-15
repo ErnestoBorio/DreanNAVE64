@@ -36,7 +36,8 @@ v_spr_mc:           !fill MAX_VIRTUAL_SPRITES, 0 ; 1 = Multicolor (enemies), 0 =
 ; ------------------------------------------------------------------------------
 g_sort_order:       !byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 g_sort_count:       !byte 0
-g_multiplexer_active: !byte 0
+g_multiplexer_active:       !byte 0
+g_multiplexer_first_raster: !byte 0
 g_irq_curr_virt:    !byte 0
 g_irq_next_virt:    !byte 0
 g_irq_phys_slot:    !byte 0
@@ -2714,7 +2715,6 @@ multiplexer_prime:
     sta VIC_SPR_ENABLE
     lda #0
     sta g_multiplexer_active
-    sta VIC_RASTER
     rts
 
 @have_sprites:
@@ -2832,18 +2832,17 @@ multiplexer_prime:
     lda #6
     sta g_irq_next_virt         ; Virtual 6 waiting to load
 
-    ; Trigger line = v_spr_y[g_sort_order[0]] + 21
+    ; First trigger line = v_spr_y[g_sort_order[0]] + 21
     ldy g_sort_order + 0
     lda v_spr_y, y
     clc
     adc #21
-    sta VIC_RASTER
+    sta g_multiplexer_first_raster
     rts
 
 @no_multiplex:
     lda #0
     sta g_multiplexer_active
-    sta VIC_RASTER
     rts
 
 ; ==============================================================================
@@ -2951,6 +2950,9 @@ multiplexer_irq_step:
     lda v_spr_y, y
     clc
     adc #21
+    bcs @multiplex_done
+    cmp #245
+    bcs @multiplex_done
     cmp VIC_RASTER
     bcc @clamp_raster
     beq @clamp_raster
@@ -2967,5 +2969,4 @@ multiplexer_irq_step:
 @multiplex_done:
     lda #0
     sta g_multiplexer_active
-    sta VIC_RASTER
     rts
