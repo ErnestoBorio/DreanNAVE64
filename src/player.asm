@@ -21,6 +21,7 @@ g_player_exploding: !byte 0     ; Player explosion countdown timer (0 = Inactive
 g_player_phase:     !byte 1     ; Ship evolution phase (1..5, starts at 1)
 g_player_hp:        !byte 5     ; Player health points in Phase 1 (0..5, starts at 5)
 g_player_invuln_timer: !byte 0  ; Invulnerability frames remaining (0 = vulnerable)
+g_player_invincible:   !byte 0  ; Debug invincibility toggle (1 = Invincible, 0 = Normal)
 
 ; ==============================================================================
 ; Subroutine: player_init
@@ -32,6 +33,7 @@ player_init:
     lda #0
     sta g_player_x + 1
     sta g_player_invuln_timer
+    sta g_player_invincible
     sta g_player_exploding
     lda #60
     sta g_player_x + 0

@@ -5,7 +5,12 @@
 ; Assembler: ACME 6502 Assembler
 ; ==============================================================================
 ; INPUT MAPPINGS SUPPORTED:
-; 1. Joystick Port 2 ($DC00): Up, Down, Left, Right, Fire button
+; 1. Joystick Port 2 ($DC00): Configured for vertical TATE play:
+;    - Up = Forward towards enemies (+X)
+;    - Down = Backward away from enemies (-X)
+;    - Left = TATE Left (-Y)
+;    - Right = TATE Right (+Y)
+;    - Fire button = Fire laser
 ; 2. Horizontal Mode Key Set (R-D-F-G):
 ;    - R = Move Up   (Column 2, Row PB1)
 ;    - D = Move Left (Column 2, Row PB2)
@@ -39,11 +44,12 @@ s_col2_active:         !byte 0   ; 6:  1 = Horizontal Column 2 active (R, D, F)
 s_col4_active:         !byte 0   ; 7:  1 = TATE Column 4 active (J, K)
 s_current_debug_key:   !byte 0   ; 8:  1 = Spawn Enemy 1..8, 9 = Clear
 
-; Frame-preserved State Variables (9..12)
+; Frame-preserved State Variables (9..13)
 s_prev_fire:           !byte 0   ; 9:  Previous frame fire state (used for edge-detection)
 s_prev_debug_key:      !byte 0   ; 10: Previous frame debug key (edge detector)
 g_debug_border_timer:  !byte 0   ; 11: Countdown frames for border flash feedback
 s_scan_portb:          !byte 0   ; 12: Saved Port B reading to prevent register clobbering
+s_prev_f3_key:         !byte 0   ; 13: Previous frame Shift+F3 state (edge detector)
 
 ; ==============================================================================
 ; Subroutine: input_init
@@ -54,7 +60,7 @@ input_init:
     sta CIA1_DIR_A      ; Port A = Input mode
     sta CIA1_DIR_B      ; Port B = Input mode
 
-    ldx #12
+    ldx #13
 -   sta g_input_up, x
     dex
     bpl -
@@ -198,6 +204,69 @@ input_update:
     inc g_input_fire
 +
 
+    ; --------------------------------------------------------------------------
+    ; Check Shift + F3 Shortcut (Debug Invincibility Toggle)
+    ; F3 is in Column 0 ($FE), Row PB5 (Bit 5 = 0 when pressed)
+    ; Shift is either Left Shift (Col 1 $FD, Row PB7) or Right Shift (Col 6 $BF, Row PB4)
+    ; --------------------------------------------------------------------------
+    ; 1. Check if F3 is pressed (Col 0, PB5)
+    lda #$fe
+    sta CIA1_DATA_A
+    lda CIA1_DATA_B
+    and #$20            ; Bit 5: F3 (0 = pressed)
+    bne @f3_not_pressed
+
+    ; 2. F3 is pressed. Check if Shift is also held down:
+    ; Check Left Shift (Col 1, PB7)
+    lda #$fd
+    sta CIA1_DATA_A
+    lda CIA1_DATA_B
+    bpl @shift_f3_held  ; Bit 7 = 0 -> Left Shift pressed!
+
+    ; Check Right Shift (Col 6, PB4)
+    lda #$bf
+    sta CIA1_DATA_A
+    lda CIA1_DATA_B
+    and #$10            ; Bit 4 = 0 -> Right Shift pressed!
+    beq @shift_f3_held
+
+@f3_not_pressed:
+    lda #0
+    sta s_prev_f3_key   ; Release edge detector
+    jmp @after_shift_f3
+
+@shift_f3_held:
+    ; Edge-triggered toggle check
+    lda s_prev_f3_key
+    bne @after_shift_f3 ; Already held down last frame: wait for release
+    lda #1
+    sta s_prev_f3_key
+
+    ; Toggle g_player_invincible
+    lda g_player_invincible
+    eor #$01
+    sta g_player_invincible
+    beq @invuln_toggled_off
+
+    ; Toggled ON: flash border White/Cyan and play SFX
+    lda #COLOR_CYAN
+    sta VIC_BORDER_COLOR
+    lda #15             ; 15 frames feedback
+    sta g_debug_border_timer
+    lda #SFX_BONUS
+    jsr sound_play_sfx
+    jmp @after_shift_f3
+
+@invuln_toggled_off:
+    ; Toggled OFF: flash border Red and play SFX
+    lda #COLOR_RED
+    sta VIC_BORDER_COLOR
+    lda #15             ; 15 frames feedback
+    sta g_debug_border_timer
+    lda #SFX_ENEMY_SHOT
+    jsr sound_play_sfx
+
+@after_shift_f3:
     ; Release all column drivers and restore Port A & B to all-inputs
     lda #$ff
     sta CIA1_DATA_A     ; Release driven lines high
@@ -219,25 +288,33 @@ input_update:
 
     lda CIA1_DATA_A     ; Read Joystick Port 2 (Bits are 0 when pressed, 1 when unpressed)
 
+    ; --------------------------------------------------------------------------
+    ; TATE Vertical Joystick Mapping:
+    ; Monitor/screen is rotated 90 degrees CCW (or player sits facing vertical display).
+    ; - Physical JOY UP    -> Points towards enemy spawn (TATE Up / Horiz Right: +X)
+    ; - Physical JOY DOWN  -> Points towards player bottom (TATE Down / Horiz Left: -X)
+    ; - Physical JOY LEFT  -> Points towards TATE Left (Horiz Up: -Y)
+    ; - Physical JOY RIGHT -> Points towards TATE Right (Horiz Down: +Y)
+    ; --------------------------------------------------------------------------
 @check_joy_up:
-    lsr                 ; Shift Bit 0 (Up) into Carry flag
+    lsr                 ; Shift Bit 0 (Physical Up) into Carry flag
     bcs @check_joy_down
-    inc g_input_up
+    inc g_input_right   ; TATE Move Up (+X: towards enemy arrival)
 
 @check_joy_down:
-    lsr                 ; Shift Bit 1 (Down) into Carry flag
+    lsr                 ; Shift Bit 1 (Physical Down) into Carry flag
     bcs @check_joy_left
-    inc g_input_down
+    inc g_input_left    ; TATE Move Down (-X: back towards player retreat)
 
 @check_joy_left:
-    lsr                 ; Shift Bit 2 (Left) into Carry flag
+    lsr                 ; Shift Bit 2 (Physical Left) into Carry flag
     bcs @check_joy_right
-    inc g_input_left
+    inc g_input_up      ; TATE Move Left (-Y)
 
 @check_joy_right:
-    lsr                 ; Shift Bit 3 (Right) into Carry flag
+    lsr                 ; Shift Bit 3 (Physical Right) into Carry flag
     bcs @check_joy_fire
-    inc g_input_right
+    inc g_input_down    ; TATE Move Right (+Y)
 
 @check_joy_fire:
     lsr                 ; Shift Bit 4 (Fire button) into Carry flag

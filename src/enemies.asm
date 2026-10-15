@@ -63,6 +63,10 @@ s_enemy_color_idx:   !byte 0    ; Current index in enemy energy sequence (0..5)
 enemy_energy_colors:
     !byte COLOR_CYAN, COLOR_ORANGE, COLOR_LIGHT_BLUE, COLOR_LIGHT_GREEN
     !byte COLOR_GREEN, COLOR_PURPLE
+    !byte COLOR_CYAN, COLOR_ORANGE, COLOR_LIGHT_BLUE, COLOR_LIGHT_GREEN
+    !byte COLOR_GREEN, COLOR_PURPLE
+    !byte COLOR_CYAN, COLOR_ORANGE, COLOR_LIGHT_BLUE, COLOR_LIGHT_GREEN
+    !byte COLOR_GREEN, COLOR_PURPLE
 
 g_enemy_pattern:    !fill MAX_ENEMIES, 0
 g_enemy_phase:      !fill MAX_ENEMIES, 0
@@ -114,6 +118,17 @@ s_enemy_slot_temp:  !byte 0
 s_patrol_limit:     !byte 0
 s_curve_dy_temp:    !byte 0
 s_curve_dx_temp:    !byte 0
+
+s_spider_child_slot:!byte 0
+s_shot_speed_temp:  !byte 0
+s_aim_dx_lo:        !byte 0
+s_aim_dx_hi:        !byte 0
+s_aim_adx:          !byte 0
+s_aim_ady:          !byte 0
+s_aim_sign_x:       !byte 0
+s_aim_sign_y:       !byte 0
+s_aim_vx_mag:       !byte 0
+s_aim_vy_mag:       !byte 0
 
 ; ------------------------------------------------------------------------------
 ; Enemy Archetype Data Tables (8 Archetypes: Index 1 to 8, Index 0 is dummy)
@@ -745,6 +760,9 @@ enemy_setup_archetype_slot:
     sta g_enemy_base_y, y       ; Initial Y_center = 136
     lda #8
     sta g_enemy_roam_timer, y
+    ; Spider Scout Spawn timer: start with initial delay (e.g., 100 frames ~ 2 seconds)
+    lda #100
+    sta g_enemy_curve_timer, y
     rts
 
 @setup_eye:
@@ -1092,9 +1110,9 @@ enemies_update:
 +   lda g_enemy_x_hi, x
     beq @patrol_shoot
     lda g_enemy_x_lo, x
-    cmp #24                     ; 256 + 24 = 280
+    cmp #49                     ; 256 + 49 = 305
     bcc @patrol_shoot
-    lda #24
+    lda #49
     sta g_enemy_x_lo, x
     lda #0
     sta g_enemy_dir_x, x
@@ -1138,9 +1156,9 @@ enemies_update:
     lda g_enemy_x_hi, x
     beq @e2_timer
     lda g_enemy_x_lo, x
-    cmp #24                     ; 256 + 24 = 280
+    cmp #49                     ; 256 + 49 = 305
     bcc @e2_timer
-    lda #24
+    lda #49
     sta g_enemy_x_lo, x
     lda #0
     sta g_enemy_dir_x, x        ; Bounce: now moving down!
@@ -1326,9 +1344,9 @@ enemies_update:
     inc g_enemy_y, x
 @e3_p2_check_top:
     lda g_enemy_x_lo, x
-    cmp #24                     ; 256 + 24 = 280
+    cmp #49                     ; 256 + 49 = 305
     bcc @e3_p2_done
-    lda #24
+    lda #49
     sta g_enemy_x_lo, x
     lda #1
     sta g_enemy_x_hi, x
@@ -1433,9 +1451,9 @@ enemies_update:
     lda g_enemy_x_hi, x
     beq @scorp_check_y
     lda g_enemy_x_lo, x
-    cmp #24
+    cmp #49                     ; 256 + 49 = 305
     bcc @scorp_check_y
-    lda #24
+    lda #49
     sta g_enemy_x_lo, x
     ; Bounce X: reverse vertical component
     lda g_enemy_pattern, x
@@ -1613,9 +1631,9 @@ enemies_update:
     lda g_enemy_x_hi, x
     beq @bat_sin_y
     lda g_enemy_x_lo, x
-    cmp #24                     ; 280
+    cmp #49                     ; 256 + 49 = 305
     bcc @bat_sin_y
-    lda #24
+    lda #49
     sta g_enemy_x_lo, x
     lda #0
     sta g_enemy_pattern, x      ; Turn around: move Down
@@ -1811,6 +1829,101 @@ enemies_update:
     sta g_enemy_x_hi, x
 
 @spider_shoot:
+    ; --------------------------------------------------------------------------
+    ; Spider Scout Birth Mechanic:
+    ; Spawns a Scout (Enemy 1) directly over or under the mother spider.
+    ; Uses g_enemy_curve_timer, x as spawn countdown.
+    ; --------------------------------------------------------------------------
+    dec g_enemy_curve_timer, x
+    beq +
+    jmp @spider_check_fire
++
+
+    ; Reset timer: random delay between 150..277 frames (~3 to 5.5 seconds)
+    jsr starfield_rand
+    and #$7f
+    clc
+    adc #150
+    sta g_enemy_curve_timer, x
+
+    ; Find free enemy slot (0..11)
+    ldy #0
+-   lda g_enemy_active, y
+    beq @spider_found_slot
+    iny
+    cpy #MAX_ENEMIES
+    bne -
+    jmp @spider_check_fire      ; No free enemy slots available
+
+@spider_found_slot:
+    sty s_spider_child_slot
+
+    ; Activate new child entity
+    lda #1
+    sta g_enemy_active, y
+
+    ; Setup child as Archetype 1 (Scout)
+    lda #1
+    sta g_enemy_archetype, y
+    tax                         ; X = 1
+    lda enemy_table_sprite, x
+    sta g_enemy_type, y
+    lda enemy_table_hp, x
+    sta g_enemy_hp, y
+    lda enemy_table_speed, x
+    sta g_enemy_speed, y
+
+    ; Child reload timer
+    jsr starfield_rand
+    and #$1f
+    clc
+    adc enemy_table_reload, x
+    sta g_enemy_reload_timer, y
+
+    ; Scout parameters: normal patrol limit
+    lda #0
+    sta g_enemy_exploding, y
+    sta g_enemy_flash, y
+    sta g_enemy_phase, y
+    sta g_enemy_entry_dir, y
+    sta g_enemy_curve_timer, y
+
+    ; Mother spider slot is in s_enemy_slot_temp
+    ldx s_enemy_slot_temp
+
+    ; Position scout exactly at mother spider's position
+    ; Horizontal Y: matches mother spider exactly
+    lda g_enemy_y, x
+    sta g_enemy_y, y
+    sta g_enemy_base_y, y
+
+    ; Vertical X: exactly at mother spider's X
+    lda g_enemy_x_lo, x
+    sta g_enemy_x_lo, y
+    lda g_enemy_x_hi, x
+    sta g_enemy_x_hi, y
+
+    ; Determine drift direction (over or under):
+    ; 50% chance to drift up (X increases) or drift down (X decreases)
+    jsr starfield_rand
+    and #$01
+    sta g_enemy_dir_x, y        ; 0 = drift down towards player, 1 = drift up towards top
+
+    ; Give born scout its initial color
+    lda s_enemy_color_idx
+    tay
+    lda enemy_energy_colors, y
+    ldy s_spider_child_slot
+    sta g_enemy_color, y
+
+    ; Play enemy spawn/action chirp sound effect
+    lda #SFX_ENEMY_SHOT
+    jsr sound_play_sfx
+
+    ; Restore mother spider's slot in X register
+    ldx s_enemy_slot_temp
+
+@spider_check_fire:
     jmp @check_shooting
 
 ; ==============================================================================
@@ -1997,10 +2110,10 @@ enemies_update:
     lda g_enemy_x_hi, x
     beq @death_move_y
     lda g_enemy_x_lo, x
-    cmp #24
+    cmp #49                     ; 256 + 49 = 305
     bcc @death_move_y
     ; Hit top: clamp and bounce (reverse Vx)
-    lda #24
+    lda #49
     sta g_enemy_x_lo, x
     lda g_enemy_dir_x, x
     eor #$ff
@@ -2060,16 +2173,38 @@ enemies_update:
     jmp @check_shooting
 
 @check_shooting:
-    ; Check if within firing range: 60 <= X <= 300
+    ; Anti-Corner-Camping detection:
+    ; If player is camping in either top corner, accelerate enemy reload
+    lda g_player_x + 1
+    beq @normal_shooting_range
+    lda g_player_x + 0
+    cmp #4                      ; player_x >= 260
+    bcc @normal_shooting_range
+    lda g_player_y
+    cmp #76                     ; top-left corner?
+    bcc @corner_camper
+    cmp #210                    ; top-right corner?
+    bcs @corner_camper
+    jmp @normal_shooting_range
+
+@corner_camper:
+    ; Camper detected in top corner! Accelerate reload countdown
+    lda g_enemy_reload_timer, x
+    cmp #8
+    bcc @normal_shooting_range
+    dec g_enemy_reload_timer, x ; Extra countdown tick
+
+@normal_shooting_range:
+    ; Check if enemy is within firing range: 50 <= X <= 325
     lda g_enemy_x_hi, x
     beq @check_left_x
     lda g_enemy_x_lo, x
-    cmp #45                     ; X <= 300
+    cmp #69                     ; 256 + 69 = 325
     bcs @next_enemy_upd
     jmp @can_fire
 @check_left_x:
     lda g_enemy_x_lo, x
-    cmp #60
+    cmp #50
     bcc @next_enemy_upd
 
 @can_fire:
@@ -2134,27 +2269,45 @@ enemies_update:
     lda g_energy_colors, y
     sta g_bullet_color, x
 
-    ; Move X leftward
-    lda g_bullet_x_lo, x
-    sec
-    sbc g_bullet_vel_x, x
+    ; Move X with signed 8-bit velocity (g_bullet_vel_x)
+    lda g_bullet_vel_x, x
+    bmi @bullet_move_x_neg
+@bullet_move_x_pos:
+    clc
+    adc g_bullet_x_lo, x
     sta g_bullet_x_lo, x
-    bcs +
+    bcc +
+    inc g_bullet_x_hi, x
++   jmp @check_x_bounds
+
+@bullet_move_x_neg:
+    ; A is negative (2's complement). Add directly to lo byte.
+    clc
+    adc g_bullet_x_lo, x
+    sta g_bullet_x_lo, x
+    bcs @check_x_bounds
     dec g_bullet_x_hi, x
-+
-    ; Despawn check: X < 16 or negative underflow
+
+@check_x_bounds:
+    ; Despawn check: X < 16 or X >= 344 ($0158) or negative underflow
     lda g_bullet_x_hi, x
-    bmi @despawn_b
-    bne @bullet_move_y
+    bmi @despawn_b              ; Negative X -> despawn
+    beq @check_x_lo_min         ; If X_hi == 0, check X < 16
+    cmp #1
+    bne @despawn_b              ; If X_hi > 1, despawn (> 511)
+    ; X_hi == 1: check if X >= 344 (1 * 256 + 88 = 344)
+    lda g_bullet_x_lo, x
+    cmp #88
+    bcs @despawn_b
+    jmp @bullet_move_y
+
+@check_x_lo_min:
     lda g_bullet_x_lo, x
     cmp #16
-    bcs @bullet_move_y
-    lda #0
-    sta g_bullet_active, x
-    jmp @next_bullet
+    bcc @despawn_b
 
 @bullet_move_y:
-    ; Move Y vertically (signed velocity)
+    ; Move Y horizontally/scanline axis (signed velocity)
     lda g_bullet_y, x
     clc
     adc g_bullet_vel_y, x
@@ -2211,13 +2364,14 @@ enemies_fire_aimed_bullet:
     sta g_bullet_y, y
 
     ; Speed & Type from archetype tables
+    ; Save shot speed & type
     sty s_shot_slot_temp
     ldy g_enemy_archetype, x
     lda enemy_table_shot_type, y
     tax                         ; X = shot type
-    lda enemy_table_shot_speed, y ; A = shot speed
+    lda enemy_table_shot_speed, y
+    sta s_shot_speed_temp       ; Shot speed S (3 or 4)
     ldy s_shot_slot_temp        ; Y = bullet slot
-    sta g_bullet_vel_x, y
     txa
     sta g_bullet_type, y
 
@@ -2226,44 +2380,150 @@ enemies_fire_aimed_bullet:
     lda g_energy_colors, x
     sta g_bullet_color, y
 
-    ; Calculate Aimed Vel Y:
+    ; --------------------------------------------------------------------------
+    ; Full 2D Aim Vector Calculation: Delta X & Delta Y towards Player
+    ; --------------------------------------------------------------------------
+    ; 1. Calculate 16-bit Delta X = g_player_x - g_bullet_x
+    lda g_player_x + 0
+    sec
+    sbc g_bullet_x_lo, y
+    sta s_aim_dx_lo
+    lda g_player_x + 1
+    sbc g_bullet_x_hi, y
+    sta s_aim_dx_hi
+
+    ; Determine sign of Delta X: 1 = positive (player at higher X), 0 = negative
+    lda s_aim_dx_hi
+    bmi @aim_x_neg
+    lda #1
+    sta s_aim_sign_x
+    ; Absolute value of Delta X: clamp to 255
+    lda s_aim_dx_hi
+    bne @aim_x_clamp_pos
+    lda s_aim_dx_lo
+    sta s_aim_adx
+    jmp @aim_calc_dy
+@aim_x_clamp_pos:
+    lda #255
+    sta s_aim_adx
+    jmp @aim_calc_dy
+
+@aim_x_neg:
+    lda #0
+    sta s_aim_sign_x
+    ; Invert 16-bit negative delta to get absolute value
+    lda #0
+    sec
+    sbc s_aim_dx_lo
+    sta s_aim_dx_lo
+    lda #0
+    sbc s_aim_dx_hi
+    sta s_aim_dx_hi
+    bne @aim_x_clamp_neg
+    lda s_aim_dx_lo
+    sta s_aim_adx
+    jmp @aim_calc_dy
+@aim_x_clamp_neg:
+    lda #255
+    sta s_aim_adx
+
+@aim_calc_dy:
+    ; 2. Calculate 8-bit Delta Y = g_player_y - g_bullet_y
     lda g_player_y
     sec
     sbc g_bullet_y, y
-    bpl @player_below
-
-    ; Player is ABOVE: A is negative
+    bpl @aim_y_pos
+    ; Negative: player is towards lower Y
     eor #$ff
     clc
-    adc #1                      ; Distance (bullet_y - player_y)
-    cmp #35
-    bcs @aim_steep_up
-    cmp #10
-    bcs @aim_shallow_up
-    lda #0                      ; Straight
-    jmp @store_vel_y
-@aim_shallow_up:
-    lda #$ff                    ; -1 px/frame
-    jmp @store_vel_y
-@aim_steep_up:
-    lda #$fe                    ; -2 px/frame
-    jmp @store_vel_y
+    adc #1
+    sta s_aim_ady
+    lda #0
+    sta s_aim_sign_y
+    jmp @aim_determine_ratio
 
-@player_below:
-    cmp #35
-    bcs @aim_steep_down
-    cmp #10
-    bcs @aim_shallow_down
-    lda #0                      ; Straight
-    jmp @store_vel_y
-@aim_shallow_down:
-    lda #1                      ; +1 px/frame
-    jmp @store_vel_y
-@aim_steep_down:
-    lda #2                      ; +2 px/frame
+@aim_y_pos:
+    sta s_aim_ady
+    lda #1
+    sta s_aim_sign_y
 
-@store_vel_y:
-    sta g_bullet_vel_y, y
+@aim_determine_ratio:
+    ; Compare |Delta X| (adx) vs |Delta Y| (ady)
+    ; Ratio threshold: ady * 2
+    lda s_aim_ady
+    asl                         ; ady * 2
+    bcs @aim_y_dominant         ; Overflow -> ady is definitely dominant
+    cmp s_aim_adx
+    bcc @aim_x_dominant         ; adx > 2 * ady -> primary X axis
+    ; Check if ady > 2 * adx
+    lda s_aim_adx
+    asl                         ; adx * 2
+    bcs @aim_diagonal           ; If adx overflows, adx is large -> diagonal
+    cmp s_aim_ady
+    bcc @aim_y_dominant         ; ady > 2 * adx -> primary Y axis
+
+@aim_diagonal:
+    ; Mostly 45-degree diagonal: S=3 -> (2, 2), S=4 -> (3, 3)
+    lda s_shot_speed_temp
+    cmp #4
+    bcs +
+    lda #2
+    sta s_aim_vx_mag
+    sta s_aim_vy_mag
+    jmp @apply_signs
++   lda #3
+    sta s_aim_vx_mag
+    sta s_aim_vy_mag
+    jmp @apply_signs
+
+@aim_x_dominant:
+    ; Delta X dominates: S=3 -> (3, 1), S=4 -> (4, 1)
+    lda s_shot_speed_temp
+    sta s_aim_vx_mag
+    lda s_aim_ady
+    cmp #12
+    bcc +
+    lda #1
+    sta s_aim_vy_mag
+    jmp @apply_signs
++   lda #0
+    sta s_aim_vy_mag
+    jmp @apply_signs
+
+@aim_y_dominant:
+    ; Delta Y dominates: S=3 -> (1, 3), S=4 -> (1, 4)
+    lda s_shot_speed_temp
+    sta s_aim_vy_mag
+    lda s_aim_adx
+    cmp #12
+    bcc +
+    lda #1
+    sta s_aim_vx_mag
+    jmp @apply_signs
++   lda #0
+    sta s_aim_vx_mag
+
+@apply_signs:
+    ldy s_shot_slot_temp
+    ; Apply sign to Vx
+    lda s_aim_vx_mag
+    ldx s_aim_sign_x
+    bne +
+    ; Negative Vx: invert
+    eor #$ff
+    clc
+    adc #1
++   sta g_bullet_vel_x, y
+
+    ; Apply sign to Vy
+    lda s_aim_vy_mag
+    ldx s_aim_sign_y
+    bne +
+    ; Negative Vy: invert
+    eor #$ff
+    clc
+    adc #1
++   sta g_bullet_vel_y, y
 
     ; Trigger enemy shot sound effect
     lda #SFX_ENEMY_SHOT

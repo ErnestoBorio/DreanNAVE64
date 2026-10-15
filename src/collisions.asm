@@ -179,9 +179,12 @@ collisions_check_player:
     bne +
     rts
 +
-    ; Exit if player is currently invulnerable
+    ; Exit if player is currently invulnerable or in debug invincibility mode
+    lda g_player_invincible
+    bne @skip_player_hits
     lda g_player_invuln_timer
     beq +
+@skip_player_hits:
     rts
 +
     ; --------------------------------------------------------------------------
