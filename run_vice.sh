@@ -5,8 +5,25 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 D64_PATH="$SCRIPT_DIR/bin/drean_nave_64.d64"
 PRG_PATH="$SCRIPT_DIR/bin/drean_nave_64.prg"
 
-echo "==> Compiling latest C64 binary and D64 disk image..."
-"$SCRIPT_DIR/build.sh"
+NO_BUILD=0
+for arg in "$@"; do
+    case "$arg" in
+        --no-build|--skip-build|-n)
+            NO_BUILD=1
+            ;;
+    esac
+done
+
+if [[ "$NO_BUILD" -eq 1 ]]; then
+    echo "==> Skipping build (launching existing build without rebuilding)..."
+    if [[ ! -f "$D64_PATH" && ! -f "$PRG_PATH" ]]; then
+        echo "==> Note: No existing binary or disk image found. Running build.sh first..."
+        "$SCRIPT_DIR/build.sh"
+    fi
+else
+    echo "==> Compiling latest C64 binary and D64 disk image..."
+    "$SCRIPT_DIR/build.sh"
+fi
 
 TARGET_MEDIA="$D64_PATH"
 if [[ ! -f "$TARGET_MEDIA" ]]; then

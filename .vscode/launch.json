@@ -16,6 +16,14 @@
 			"preLaunchTask": "Build PRG Only",
 			"runtimeExecutable": "${workspaceFolder}/run_vice.sh",
 			"console": "integratedTerminal"
+		},
+		{
+			"name": "Launch VICE (No Build)",
+			"type": "node",
+			"request": "launch",
+			"runtimeExecutable": "${workspaceFolder}/run_vice.sh",
+			"runtimeArgs": ["--no-build"],
+			"console": "integratedTerminal"
 		}
 	]
 }

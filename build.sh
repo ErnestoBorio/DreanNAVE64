@@ -29,33 +29,19 @@ if [ ! -f "$C1541_BIN" ]; then
     C1541_BIN="c1541"
 fi
 
-# Build D64 disk image with game PRG and hiscores file
+# Build D64 disk image with game PRG (fresh factory state without saved highscores)
 D64_TARGET="bin/drean_nave_64.d64"
 PRG_FILE="bin/drean_nave_64.prg"
 TMP_HISCORE="/tmp/nave_hiscores_sync.prg"
 
+rm -f "$TMP_HISCORE"
+
 if command -v "$C1541_BIN" >/dev/null 2>&1 || [ -x "$C1541_BIN" ]; then
-    echo "==> Creating D64 disk image: $D64_TARGET..."
+    echo "==> Creating fresh D64 disk image (resetting high scores to factory defaults): $D64_TARGET..."
 
-    # 1. If target D64 already exists and has highscores, extract it to preserve gameplay scores
-    HISCORES_FOUND=0
-    if [ -f "$D64_TARGET" ]; then
-        if "$C1541_BIN" -attach "$D64_TARGET" -read "highscores" "$TMP_HISCORE" >/dev/null 2>&1; then
-            HISCORES_FOUND=1
-        fi
-    fi
-
-    # 2. Format fresh D64 disk image and write game PRG
     rm -f "$D64_TARGET"
-    if [ "$HISCORES_FOUND" -eq 1 ] && [ -f "$TMP_HISCORE" ]; then
-        "$C1541_BIN" -format "drean nave 64,dn" d64 "$D64_TARGET" \
-                    -write "$PRG_FILE" "drean nave 64" \
-                    -write "$TMP_HISCORE" "highscores" >/dev/null
-        rm -f "$TMP_HISCORE"
-    else
-        "$C1541_BIN" -format "drean nave 64,dn" d64 "$D64_TARGET" \
-                    -write "$PRG_FILE" "drean nave 64" >/dev/null
-    fi
+    "$C1541_BIN" -format "drean nave 64,dn" d64 "$D64_TARGET" \
+                -write "$PRG_FILE" "drean nave 64" >/dev/null
 
     echo "==> Disk image created: $D64_TARGET"
 else

@@ -96,29 +96,36 @@ Build outputs in `bin/`:
 
 ### Launching Emulators
 
-* **VICE**:
+* **VICE (with Rebuild)**:
   ```bash
   ./run_vice.sh
   ```
-  Launches `x64sc` with Drive 8 attached in read/write mode and autostarts the game.
+  Rebuilds the project (resetting high scores to factory defaults) and launches `x64sc` with Drive 8 attached in read/write mode.
+
+* **VICE (Preserve High Scores / No Build)**:
+  ```bash
+  ./run_vice.sh --no-build
+  ```
+  Launches VICE using the existing D64 image without rebuilding, preserving saved high scores across play sessions.
 
 * **Retro Debugger**:
   ```bash
   ./run_debugger.sh
   ```
-  Launches C64 Retro Debugger with `-d64`, `-autorundisk`, and debug symbols loaded.
+  Launches C64 Retro Debugger with `-d64`, `-autorundisk`, and debug symbols loaded (also supports `--no-build`).
 
 * **Reset High Scores**:
   ```bash
   ./delete_hiscores.sh
   ```
-  Removes the `highscores` file from `bin/drean_nave_64.d64`. Next time the game launches, it will re-initialize to factory default scores.
+  Removes the `highscores` file from `bin/drean_nave_64.d64`. Next time the game launches, it will re-initialize to factory default scores. (Note: Running `./build.sh` also resets high scores to factory defaults).
 
 ### VS Code Integration
 
 Pre-configured tasks are available under **Terminal $\rightarrow$ Run Task...**:
 * `Build & Run Debugger` (<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> default build task)
-* `Build & Run VICE`
+* `Build & Run VICE` (rebuilds and resets high scores)
+* `Launch VICE (No Build)` (launches emulator without rebuilding; preserves saved high scores)
 * `Build PRG Only`
 * `Delete High Scores`
 
