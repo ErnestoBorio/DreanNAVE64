@@ -115,12 +115,18 @@ SPRITE_MAX_Y        = 240       ; Bottom visible border edge
 ; KERNAL Jump Table & Operating System Variables
 ; ------------------------------------------------------------------------------
 KERNAL_SCNKEY       = $ff9f     ; Scan keyboard matrix
-KERNAL_GETIN        = $ffe4     ; Get character from keyboard buffer
+KERNAL_READST       = $ffb7     ; Read I/O status word
 KERNAL_SETLFS       = $ffba     ; Set logical file parameters
 KERNAL_SETNAM       = $ffbd     ; Set filename parameters
+KERNAL_OPEN         = $ffc0     ; Open logical file
+KERNAL_CLOSE        = $ffc3     ; Close logical file
+KERNAL_CHKIN        = $ffc6     ; Set input channel
+KERNAL_CLRCHN       = $ffcc     ; Restore default I/O channels
+KERNAL_CHRIN        = $ffcf     ; Read byte from input channel
 KERNAL_LOAD         = $ffd5     ; Load RAM from device
 KERNAL_SAVE         = $ffd8     ; Save RAM to device
-KERNAL_CLRCHN       = $ffcc     ; Restore default I/O channels
+KERNAL_GETIN        = $ffe4     ; Get character from keyboard buffer
+KERNAL_MSGFLG       = $009d     ; KERNAL message control flag ($80 = suppress errors)
 KERNAL_LAST_KEY     = $00c5     ; Matrix code of current pressed key ($40 = none)
 KERNAL_KEY_BUF_LEN  = $00c6     ; Number of characters currently in keyboard buffer
 KERNAL_SHIFT_FLAGS  = $028d     ; Shift/Ctrl/C= modifier flags (Bit 0 = Shift)
