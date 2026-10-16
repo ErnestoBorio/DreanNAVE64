@@ -267,36 +267,43 @@ sfx_play_start:
     rts
 
 ; ------------------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 ; 2. SFX_LASER: Player Laser Shot (Dedicated Voice 1)
-; Warm, mellow sci-fi laser beam:
-; Smooth Triangle wave diving from ~1800 Hz down to ~450 Hz over 4 frames (80ms).
-; Mellow timbre (no harsh high-harmonic pulse buzz) with reduced volume (Sustain = 7).
+; Classic Arcade Laser Gun ("Heroic Pew-Pew"):
+; Crisp, cutting 25% Pulse wave diving steeply from ~3120 Hz ($D0) down to
+; ~420 Hz ($1C) over 5 frames (100ms) with snappy decay.
+; Distinct high-tech arcade blaster bite with rich second/fourth harmonics.
 ; ------------------------------------------------------------------------------
 sfx_play_laser:
     lda #0
     sta SID_V1_CTRL             ; Gate off to reset envelope
     sta SID_V1_FREQ_LO
-    lda #$78                    ; Frame 0: ~1800 Hz (warm mid-range start)
+    lda #$04                    ; 25% Pulse Width (1024 / 4096)
+    sta SID_V1_PW_HI
+    lda #$00
+    sta SID_V1_PW_LO
+    lda #$d0                    ; Frame 0 attack: ~3120 Hz sharp laser transient
     sta SID_V1_FREQ_HI
     sta sfx_v1_pitch_hi
-    lda #$08                    ; Attack = 2ms, Decay = 300ms
+    lda #$00                    ; Attack = 2ms, Decay = 6ms
     sta SID_V1_AD
-    lda #$70                    ; Sustain = 7 (~45% volume, soft and pleasant)
+    lda #$b0                    ; Sustain level 11 (punchy presence, clean cutoff)
     sta SID_V1_SR
-    lda #(SID_TRIANGLE | SID_GATE) ; Smooth, rounded Triangle waveform (no harsh treble)
+    lda #(SID_PULSE | SID_GATE) ; Crisp, bright 25% pulse wave
     sta SID_V1_CTRL
 
     lda #SFX_LASER
     sta sfx_v1_id
-    lda #4                      ; 4 frames (80ms) duration
+    lda #5                      ; 5 frames (100ms) duration
     sta sfx_v1_timer
     rts
 
 ; ------------------------------------------------------------------------------
 ; 3. SFX_ENEMY_SHOT: Enemy Bullet Shot (Voice 2)
-; Heavy Plasma Sawtooth (Option 3):
-; Aggressive, full-spectrum Sawtooth wave diving from ~1800 Hz down to ~300 Hz
-; over 5 frames (100ms) with menacing arcade presence ($E0 sustain).
+; Alien Plasma Laser Gun ("Sinister Pew-Pew"):
+; Aggressive, full-spectrum Sawtooth wave diving from ~2520 Hz ($A8) down to
+; ~270 Hz ($12) over 5 frames (100ms) with menacing arcade presence ($D0 sustain).
+; Rich buzzing odd & even harmonic series instantly distinguished from player shot.
 ; Priority = 2 (cuts through routine explosions, re-triggers on rapid fire).
 ; ------------------------------------------------------------------------------
 sfx_play_enemy_shot:
@@ -310,14 +317,14 @@ sfx_play_enemy_shot:
     lda #0
     sta SID_V2_CTRL             ; Gate off to reset envelope
     sta SID_V2_FREQ_LO
-    lda #$78                    ; Frame 0 attack: ~1800 Hz heavy plasma attack
+    lda #$a8                    ; Frame 0 attack: ~2520 Hz alien plasma attack
     sta SID_V2_FREQ_HI
     sta sfx_v2_pitch_hi
     lda #$00                    ; Attack = 2ms, Decay = 6ms
     sta SID_V2_AD
-    lda #$e0                    ; Sustain level 14 (loud, aggressive, punchy)
+    lda #$d0                    ; Sustain level 13 (loud, aggressive, buzzing)
     sta SID_V2_SR
-    lda #(SID_SAWTOOTH | SID_GATE) ; Rich Sawtooth waveform
+    lda #(SID_SAWTOOTH | SID_GATE) ; Gritty, buzzing Sawtooth waveform
     sta SID_V2_CTRL
 
     lda #SFX_ENEMY_SHOT
@@ -1475,18 +1482,19 @@ bomb_freq_table:
 
 laser_freq_hi_table:
     !byte $00                   ; 0: expired / silence
-    !byte $1e                   ; 1: ~450 Hz tail
-    !byte $35                   ; 2: ~800 Hz mid-low
-    !byte $50                   ; 3: ~1200 Hz mid
-    !byte $78                   ; 4: ~1800 Hz initial warm zap
+    !byte $1c                   ; 1: ~420 Hz low resonant punch
+    !byte $34                   ; 2: ~780 Hz mid body
+    !byte $56                   ; 3: ~1290 Hz mid
+    !byte $8c                   ; 4: ~2100 Hz upper-mid
+    !byte $d0                   ; 5: ~3120 Hz initial sharp laser transient
 
 enemy_shot_freq_hi_table:
     !byte $00                   ; 0: expired / silence
-    !byte $14                   ; 1: ~300 Hz deep rumble tail
-    !byte $20                   ; 2: ~480 Hz low-mid
-    !byte $32                   ; 3: ~750 Hz mid
-    !byte $50                   ; 4: ~1200 Hz upper-mid
-    !byte $78                   ; 5: ~1800 Hz initial attack
+    !byte $12                   ; 1: ~270 Hz low alien buzz
+    !byte $24                   ; 2: ~540 Hz low-mid
+    !byte $42                   ; 3: ~990 Hz mid
+    !byte $6c                   ; 4: ~1620 Hz upper-mid
+    !byte $a8                   ; 5: ~2520 Hz initial alien attack
 
 ; ------------------------------------------------------------------------------
 ; State Variables & Channel Trackers
