@@ -819,6 +819,9 @@ hiscore_entry_update:
     jmp @skip_insert
 
 @valid_name:
+    ; Stop victory/game over anthem music before saving to prevent sustained audio drone during disk I/O
+    jsr sound_init
+
     ; Insert score into Top 10 table
     jsr hiscore_insert_score
 
@@ -1077,6 +1080,8 @@ hiscore_load:
 ;          Overwrites existing file or creates new file if not present.
 ; ==============================================================================
 hiscore_save:
+    ; Ensure SID audio is completely silenced before blocking KERNAL IEC disk serial bus I/O
+    jsr sound_init
     jsr hiscore_prepare_io
 
     ; Set file parameters: Logical file 1, Device 8, Secondary address 0
