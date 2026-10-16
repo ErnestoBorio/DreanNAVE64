@@ -24,7 +24,7 @@ NUM_POWERUP_TYPES   = 3
 POWERUP_INITIAL_DELAY   = 150   ; 150 frames = 3.0 seconds at 50 Hz PAL
 POWERUP_SPAWN_INTERVAL  = 350   ; 350 frames = 7.0 seconds at 50 Hz PAL
 POWERUP_STAGE_DURATION  = 250   ; 250 frames = 5.0 seconds at 50 Hz PAL
-BOMB_BOSS_DAMAGE        = 2     ; Smart Bomb deals 2 HP damage to bosses
+BOMB_BOSS_DAMAGE        = 3     ; Smart Bomb deals 3 HP damage to bosses (~30% health)
 
 BONUS_BOUND_MIN_X       = 124   ; Lower boundary of top 2/3 of screen (24..324 range)
 BONUS_BOUND_MAX_X_LO    = 49    ; Upper boundary of top 2/3: 256 + 49 = 305
