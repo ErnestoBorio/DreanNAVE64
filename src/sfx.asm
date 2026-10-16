@@ -282,27 +282,27 @@ sfx_play_laser:
     sta SID_V1_PW_HI
     lda #$00
     sta SID_V1_PW_LO
-    lda #$d0                    ; Frame 0 attack: ~3120 Hz sharp laser transient
+    lda #$f0                    ; Frame 0 attack: ~3600 Hz piercing laser zap
     sta SID_V1_FREQ_HI
     sta sfx_v1_pitch_hi
     lda #$00                    ; Attack = 2ms, Decay = 6ms
     sta SID_V1_AD
-    lda #$b0                    ; Sustain level 11 (punchy presence, clean cutoff)
+    lda #$e0                    ; Sustain level 14 (maximum punchy arcade volume)
     sta SID_V1_SR
     lda #(SID_PULSE | SID_GATE) ; Crisp, bright 25% pulse wave
     sta SID_V1_CTRL
 
     lda #SFX_LASER
     sta sfx_v1_id
-    lda #5                      ; 5 frames (100ms) duration
+    lda #3                      ; Snappy 3 frames (60ms) - classic Galaga arcade pew!
     sta sfx_v1_timer
     rts
 
 ; ------------------------------------------------------------------------------
 ; 3. SFX_ENEMY_SHOT: Enemy Bullet Shot (Voice 2)
 ; Alien Plasma Laser Gun ("Sinister Pew-Pew"):
-; Aggressive, full-spectrum Sawtooth wave diving from ~2520 Hz ($A8) down to
-; ~270 Hz ($12) over 5 frames (100ms) with menacing arcade presence ($D0 sustain).
+; Aggressive, full-spectrum Sawtooth wave diving from ~2760 Hz ($B8) down to
+; ~300 Hz ($14) over 4 frames (80ms) with menacing arcade presence ($E0 sustain).
 ; Rich buzzing odd & even harmonic series instantly distinguished from player shot.
 ; Priority = 2 (cuts through routine explosions, re-triggers on rapid fire).
 ; ------------------------------------------------------------------------------
@@ -317,19 +317,19 @@ sfx_play_enemy_shot:
     lda #0
     sta SID_V2_CTRL             ; Gate off to reset envelope
     sta SID_V2_FREQ_LO
-    lda #$a8                    ; Frame 0 attack: ~2520 Hz alien plasma attack
+    lda #$b8                    ; Frame 0 attack: ~2760 Hz alien plasma attack
     sta SID_V2_FREQ_HI
     sta sfx_v2_pitch_hi
     lda #$00                    ; Attack = 2ms, Decay = 6ms
     sta SID_V2_AD
-    lda #$d0                    ; Sustain level 13 (loud, aggressive, buzzing)
+    lda #$e0                    ; Sustain level 14 (loud, aggressive, buzzing)
     sta SID_V2_SR
     lda #(SID_SAWTOOTH | SID_GATE) ; Gritty, buzzing Sawtooth waveform
     sta SID_V2_CTRL
 
     lda #SFX_ENEMY_SHOT
     sta sfx_v2_id
-    lda #5                      ; 5 frames (100ms) duration
+    lda #4                      ; 4 frames (80ms) duration
     sta sfx_v2_timer
     lda #2                      ; Priority 2 (above explosions)
     sta sfx_v2_priority
@@ -1482,19 +1482,16 @@ bomb_freq_table:
 
 laser_freq_hi_table:
     !byte $00                   ; 0: expired / silence
-    !byte $1c                   ; 1: ~420 Hz low resonant punch
-    !byte $34                   ; 2: ~780 Hz mid body
-    !byte $56                   ; 3: ~1290 Hz mid
-    !byte $8c                   ; 4: ~2100 Hz upper-mid
-    !byte $d0                   ; 5: ~3120 Hz initial sharp laser transient
+    !byte $20                   ; 1: ~480 Hz punchy bass tail
+    !byte $64                   ; 2: ~1500 Hz rapid mid plunge
+    !byte $f0                   ; 3: ~3600 Hz piercing laser transient
 
 enemy_shot_freq_hi_table:
     !byte $00                   ; 0: expired / silence
-    !byte $12                   ; 1: ~270 Hz low alien buzz
-    !byte $24                   ; 2: ~540 Hz low-mid
-    !byte $42                   ; 3: ~990 Hz mid
-    !byte $6c                   ; 4: ~1620 Hz upper-mid
-    !byte $a8                   ; 5: ~2520 Hz initial alien attack
+    !byte $14                   ; 1: ~300 Hz low alien buzz
+    !byte $38                   ; 2: ~840 Hz mid drop
+    !byte $70                   ; 3: ~1680 Hz upper mid
+    !byte $b8                   ; 4: ~2760 Hz initial alien attack
 
 ; ------------------------------------------------------------------------------
 ; State Variables & Channel Trackers
