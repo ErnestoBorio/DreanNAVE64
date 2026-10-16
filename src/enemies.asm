@@ -1120,16 +1120,16 @@ enemies_spawn_boss_duel:
 @boss_death:
     lda #8                      ; Archetype 8: Death
     jsr enemy_setup_archetype_slot
-    ; Boss HP: 16 hits!
-    lda #16
+    ; Boss HP: 10 hits!
+    lda #10
     sta g_enemy_hp + 0
     rts
 
 @boss_eye:
     lda #7                      ; Archetype 7: The Eye
     jsr enemy_setup_archetype_slot
-    ; Boss HP: 20 hits!
-    lda #20
+    ; Boss HP: 10 hits!
+    lda #10
     sta g_enemy_hp + 0
     rts
 

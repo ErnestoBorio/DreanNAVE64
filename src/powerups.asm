@@ -24,6 +24,7 @@ NUM_POWERUP_TYPES   = 3
 POWERUP_INITIAL_DELAY   = 150   ; 150 frames = 3.0 seconds at 50 Hz PAL
 POWERUP_SPAWN_INTERVAL  = 350   ; 350 frames = 7.0 seconds at 50 Hz PAL
 POWERUP_STAGE_DURATION  = 250   ; 250 frames = 5.0 seconds at 50 Hz PAL
+BOMB_BOSS_DAMAGE        = 2     ; Smart Bomb deals 2 HP damage to bosses
 
 BONUS_BOUND_MIN_X       = 124   ; Lower boundary of top 2/3 of screen (24..324 range)
 BONUS_BOUND_MAX_X_LO    = 49    ; Upper boundary of top 2/3: 256 + 49 = 305
@@ -1035,13 +1036,37 @@ powerups_trigger_smart_bomb:
     lda #SFX_BOMB
     jsr sound_play_sfx
 
-    ; 3. Destroy all active living enemies
+    ; 3. Destroy all active living enemies (or deal 2 HP damage to boss in duel)
     ldx #0
 @bomb_enemy_loop:
     lda g_enemy_active, x
     beq @bomb_next_enemy
     lda g_enemy_exploding, x
     bne @bomb_next_enemy
+
+    ; Check if this is the boss during a boss duel (Slot 0 + g_boss_duel_active)
+    cpx #0
+    bne @bomb_kill_enemy
+    lda g_boss_duel_active
+    beq @bomb_kill_enemy
+
+    ; Boss hit by Smart Bomb: deal 2 HP damage instead of instant kill
+    lda g_enemy_hp + 0
+    sec
+    sbc #BOMB_BOSS_DAMAGE
+    bcc @boss_bomb_lethal
+    beq @boss_bomb_lethal
+    sta g_enemy_hp + 0
+
+    ; Flash boss white for hit feedback
+    lda #6
+    sta g_enemy_flash + 0
+    lda #COLOR_WHITE
+    sta g_enemy_color + 0
+    jmp @bomb_next_enemy
+
+@boss_bomb_lethal:
+@bomb_kill_enemy:
     txa
     pha
     jsr collisions_kill_enemy
