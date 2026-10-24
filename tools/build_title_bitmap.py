@@ -110,6 +110,42 @@ def parse_charset(filename):
                 current_char = None
     return charset
 
+MICRO_FONT_3X5 = {
+    '0': ["111", "101", "101", "101", "111"],
+    '1': ["010", "110", "010", "010", "111"],
+    '2': ["111", "001", "111", "100", "111"],
+    '3': ["111", "001", "111", "001", "111"],
+    '4': ["101", "101", "111", "001", "001"],
+    '5': ["111", "100", "111", "001", "111"],
+    '6': ["111", "100", "111", "101", "111"],
+    '7': ["111", "001", "010", "010", "010"],
+    '8': ["111", "101", "111", "101", "111"],
+    '9': ["111", "101", "111", "001", "111"],
+    'v': ["000", "101", "101", "101", "010"],
+    'V': ["101", "101", "101", "101", "010"],
+    '.': ["0", "0", "0", "0", "1"],
+    '-': ["000", "000", "111", "000", "000"],
+    '+': ["000", "010", "111", "010", "000"],
+    'r': ["000", "101", "110", "100", "100"],
+    'c': ["000", "011", "100", "100", "011"],
+    'b': ["100", "111", "101", "101", "111"],
+    'a': ["000", "010", "101", "111", "101"],
+    'p': ["000", "110", "101", "110", "100"],
+    'd': ["001", "111", "101", "101", "111"],
+    'e': ["000", "111", "110", "100", "111"],
+}
+
+def get_version(repo_root):
+    version_file = os.path.join(repo_root, 'VERSION')
+    if os.path.isfile(version_file):
+        with open(version_file, 'r') as f:
+            v = f.read().strip()
+            if v:
+                if not v.startswith('v') and not v.startswith('V'):
+                    v = 'v' + v
+                return v
+    return 'v1.0'
+
 def main():
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     logo_path = os.path.join(repo_root, 'assets', 'DreanNAVE64.png')
@@ -188,7 +224,45 @@ def main():
     # 6. "PRESS FIRE TO START" at Column 8, Rows 3..21 (19 chars, centered: (25-19)//2 = 3)
     draw_string(8, 3, str_to_codes('PRESS FIRE TO START'))
 
-    # Convert 320x200 pixels to C64 Hi-Res Bitmap Format (8000 bytes)
+    # 7. Version in bottom-right corner (3x5 micro font, very small and just readable)
+    version_str = get_version(repo_root)
+    ver_w = 0
+    for i, ch in enumerate(version_str):
+        glyph = MICRO_FONT_3X5.get(ch, ["000"] * 5)
+        gw = len(glyph[0])
+        ver_w += gw
+        if i < len(version_str) - 1:
+            ver_w += 1  # 1px spacing between chars
+
+    font_h = 5
+    # 8px margin from right edge, 8px margin from bottom edge
+    start_tx = (200 - 8) - ver_w
+    start_ty = (320 - 8) - font_h
+
+    def put_pixel_tate(tx, ty):
+        c64_y = tx
+        c64_x = 319 - ty
+        if 0 <= c64_x < 320 and 0 <= c64_y < 200:
+            pixels[c64_y][c64_x] = 1
+
+    curr_tx = start_tx
+    for ch in version_str:
+        glyph = MICRO_FONT_3X5.get(ch, ["000"] * 5)
+        gw = len(glyph[0])
+        gh = len(glyph)
+        for gy in range(gh):
+            for gx in range(gw):
+                if glyph[gy][gx] == '1':
+                    put_pixel_tate(curr_tx + gx, start_ty + gy)
+        curr_tx += gw + 1
+
+    # Also export version to src/version.asm for assembly code reference
+    version_asm = os.path.join(repo_root, 'src', 'version.asm')
+    with open(version_asm, 'w') as f:
+        f.write(f'''; Auto-generated from VERSION file - DO NOT EDIT MANUALLY
+GAME_VERSION_STRING:
+    !text "{version_str}", 0
+''')
     # Cell order: Row 0 (Cols 0..39), Row 1 (Cols 0..39), ..., Row 24 (Cols 0..39)
     # Inside each cell: 8 scanlines (s=0..7), Bit 7 = leftmost pixel (x % 8 = 0)
     bitmap = bytearray(8000)
