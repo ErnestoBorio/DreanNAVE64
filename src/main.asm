@@ -426,7 +426,6 @@ sid_music_data:
 !src "src/powerups.asm"
 !src "src/gamestate.asm"
 !src "src/title.asm"
-!src "src/version.asm"
 
 title_bitmap_data:
     !bin "assets/title_bitmap.bin"

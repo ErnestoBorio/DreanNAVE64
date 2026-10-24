@@ -2,7 +2,23 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-D64_TARGET="$SCRIPT_DIR/bin/drean_nave_64.d64"
+
+VERSION="v1.0"
+if [[ -f "$SCRIPT_DIR/VERSION" ]]; then
+    V_RAW=$(cat "$SCRIPT_DIR/VERSION" | tr -d '[:space:]')
+    if [[ -n "$V_RAW" ]]; then
+        if [[ "$V_RAW" == v* || "$V_RAW" == V* ]]; then
+            VERSION="$V_RAW"
+        else
+            VERSION="v$V_RAW"
+        fi
+    fi
+fi
+
+D64_TARGET="$SCRIPT_DIR/bin/drean_nave_64_${VERSION}.d64"
+if [[ ! -f "$D64_TARGET" && -f "$SCRIPT_DIR/bin/drean_nave_64.d64" ]]; then
+    D64_TARGET="$SCRIPT_DIR/bin/drean_nave_64.d64"
+fi
 TMP_HISCORE="/tmp/nave_hiscores_sync.prg"
 
 # Clean up any temporary hiscores file

@@ -29,8 +29,22 @@ if [ ! -f "$C1541_BIN" ]; then
     C1541_BIN="c1541"
 fi
 
+# Read version from VERSION file
+VERSION="v1.0"
+if [ -f "VERSION" ]; then
+    V_RAW=$(cat "VERSION" | tr -d '[:space:]')
+    if [ -n "$V_RAW" ]; then
+        if [[ "$V_RAW" == v* || "$V_RAW" == V* ]]; then
+            VERSION="$V_RAW"
+        else
+            VERSION="v$V_RAW"
+        fi
+    fi
+fi
+
 # Build D64 disk image with game PRG (fresh factory state without saved highscores)
-D64_TARGET="bin/drean_nave_64.d64"
+D64_FILENAME="drean_nave_64_${VERSION}.d64"
+D64_TARGET="bin/$D64_FILENAME"
 PRG_FILE="bin/drean_nave_64.prg"
 TMP_HISCORE="/tmp/nave_hiscores_sync.prg"
 
@@ -43,7 +57,10 @@ if command -v "$C1541_BIN" >/dev/null 2>&1 || [ -x "$C1541_BIN" ]; then
     "$C1541_BIN" -format "drean nave 64,dn" d64 "$D64_TARGET" \
                 -write "$PRG_FILE" "drean nave 64" >/dev/null
 
-    echo "==> Disk image created: $D64_TARGET"
+    # Also maintain a symlink to bin/drean_nave_64.d64 for compatibility with default tools
+    (cd bin && ln -sf "$D64_FILENAME" "drean_nave_64.d64")
+
+    echo "==> Disk image created: $D64_TARGET (symlinked as bin/drean_nave_64.d64)"
 else
     echo "==> Note: c1541 utility not found. Skipping D64 creation."
 fi

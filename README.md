@@ -35,10 +35,9 @@
 * **Authentic Commodore Disk Directory High Scores**:
   * Displays Top 10 pilot scores formatted as a Commodore 64 disk directory listing (`609 BLOCKS FREE.`, `READY.`, blinking block cursor).
   * Interactive 3-letter pilot initials entry with full keyboard support.
-  * Auto-persists to **Device 8** disk image (`@0:HIGHSCORES`).
+  * Auto-persists to **Device 8** disk image (`HIGHSCORES`).
 * **Automated D64 Disk Image Workflow**:
-  * Formats and builds `bin/drean_nave_64.d64` containing both the game binary and high scores.
-  * Preserves gameplay records across incremental builds.
+  * Formats and builds `bin/drean_nave_64_<version>.d64` (e.g. `drean_nave_64_v1.0.d64`, symlinked as `bin/drean_nave_64.d64`) containing the game binary and high scores table.
   * Auto-generates initial factory table on first boot if missing.
   * Dedicated script and VS Code task to reset scores back to factory defaults.
 
@@ -91,7 +90,7 @@ To build the standalone PRG and unified D64 disk image:
 
 Build outputs in `bin/`:
 * `bin/drean_nave_64.prg`: Standalone Commodore 64 binary executable.
-* `bin/drean_nave_64.d64`: Standard 1541 disk image (with autostart PRG & `highscores`).
+* `bin/drean_nave_64_<version>.d64` (e.g. `drean_nave_64_v1.0.d64`, symlinked to `drean_nave_64.d64`): Standard 1541 disk image (with autostart PRG & `highscores`).
 * `bin/vice.lbl` / `bin/drean_nave_64.vs`: Debug symbol tables for VICE and Retro Debugger.
 
 ### Launching Emulators
